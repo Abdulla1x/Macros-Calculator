@@ -1,3 +1,5 @@
+meal_data = dict()
+
 print("Are you calculating the macros of an ingredient or a meal?")
 selection = input("Enter 'I' for Ingredient or 'M' for meal: ")
 
@@ -12,6 +14,12 @@ if selection == 'M' or selection == 'm':
     total_protein = weight/serving_size*protein
 
     print("Calories: ", total_calories, "\nProtein: ", total_protein)
+
+    print("Do you want to save this meal?")
+    save = input("Enter 'Y' for yes or 'N' for no: ")
+    if save == 'Y' or save == 'y':
+        name = input("Enter the name of the meal: ")
+        meal_data[name] = (total_calories, total_protein)
 
 elif selection == 'I' or selection == 'i':
     terminate = False
@@ -36,4 +44,11 @@ elif selection == 'I' or selection == 'i':
             terminate = False
         elif addition == 'N' or addition == 'n':
             print("Total Calories: ", total_calories, "\nTotal Protein: ", total_protein)
+
+            print("Do you want to save this meal?")
+            save = input("Enter 'Y' for yes or 'N' for no: ")
+            if save == 'Y' or save == 'y':
+                name = input("Enter the name of the meal: ")
+                meal_data[name] = (total_calories, total_protein) 
+
             terminate = True
