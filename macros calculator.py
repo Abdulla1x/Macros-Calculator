@@ -1,9 +1,9 @@
 meal_data = dict()
 
-print("Are you calculating the macros of an ingredient or a meal?")
-selection = input("Enter 'I' for Ingredient or 'M' for meal: ")
+print("Do you want to calculate the macros of a single item or multiple items?")
+selection = input("Enter 'S' for single item or 'M' for multiple items: ")
 
-if selection == 'M' or selection == 'm':
+if selection == 'S' or selection == 's':
     
     weight = float(input("Enter the weight in grams: "))
     serving_size = float(input("Enter the serving size: "))
@@ -21,7 +21,7 @@ if selection == 'M' or selection == 'm':
         name = input("Enter the name of the meal: ")
         meal_data[name] = (total_calories, total_protein)
 
-elif selection == 'I' or selection == 'i':
+elif selection == 'M' or selection == 'm':
     terminate = False
     total_calories = 0
     total_protein = 0
