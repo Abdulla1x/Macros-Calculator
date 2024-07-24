@@ -77,16 +77,16 @@ elif selection == 'M' or selection == 'm':
             if save == 'Y' or save == 'y':
                 date = input("Enter the date in (Day-Month-Year) format: ")
                 name = input("Enter the name of the meal: ")
-            if date in meal_data: 
-                current_meal = meal_data[date]
-            else: 
-                current_meal = {}
+                if date in meal_data: 
+                    current_meal = meal_data[date]
+                else: 
+                    current_meal = {}
 
-            current_meal[name] = [total_calories, total_protein]
-            meal_data[date] = current_meal
-            print(meal_data)
+                current_meal[name] = [total_calories, total_protein]
+                meal_data[date] = current_meal
+                print(meal_data)
 
-            with open('Meal_Data.txt', 'w') as Output:
-                json.dump(meal_data, Output, indent=4)
+                with open('Meal_Data.txt', 'w') as Output:
+                    json.dump(meal_data, Output, indent=4)
 
             terminate = True
