@@ -1,71 +1,83 @@
 # 🥗 Macros Calculator
 
-A Python-based command-line application that helps users calculate and store the calories and protein content of their meals. Whether it's a single ingredient or a complete meal made of multiple ingredients, this tool ensures easy nutrition tracking with persistent data storage.
+A Python-based command-line application that helps users calculate, store, and analyze the calories and protein content of their meals. It supports both single ingredients and full meals, and now includes historical tracking, daily totals, and average intake analysis.
 
 ---
 
 ## 💡 Project Overview
 
-This project simplifies the process of tracking nutritional information for meals, especially for those with fitness or health-related goals. The app guides users through entering data and supports saving and retrieving historical records.
+Originally designed for calculating meal macros, this tool has evolved into a lightweight nutrition tracker. It now supports logging, reviewing, and analyzing nutritional data over time, helping users meet fitness or dietary goals.
 
 ---
 
 ## ✅ Features
 
 - **🔹 Single & Multiple Item Support**  
-  Calculate macros for a single ingredient or full meals.
+  Calculate macros for individual ingredients or full meals.
 
-- **🔹 Interactive Input with Error Handling**  
-  User-friendly prompts with checks for invalid input and division by zero.
-
-- **🔹 Calorie & Protein Calculation**  
-  Computes total calories and protein based on weight and serving size.
+- **🔹 Interactive CLI Menu**  
+  Choose from options to calculate macros, view saved meals, check totals, or get averages.
 
 - **🔹 Data Persistence**  
-  Saves meals by name and date in `Meal_Data.txt` using JSON format.
+  Saves meals and daily summaries locally in JSON files (`Meal_Data.txt`, `total_intake_data.txt`).
 
-- **🔹 Readable Output**  
-  Displays macros per item and total meal macros clearly.
+- **🔹 Daily Intake Calculation**  
+  View total calories and protein consumed per day.
+
+- **🔹 Average Intake Over Time**  
+  Enter a date range to calculate average calorie and protein intake.
+
+- **🔹 Overwrite Protection**  
+  Warns before overwriting previously saved data.
+
+- **🔹 Error Handling**  
+  Handles invalid input and edge cases like zero serving size.
 
 ---
 
 ## 🛠️ Technologies Used
 
 - Python 3  
-- JSON (for saving meal history)  
-- File Handling (read/write operations)  
-- Exception Handling (robust input checks)
+- JSON (for data storage)  
+- File Handling  
+- Exception Handling  
+- `datetime` module for date comparison
 
 ---
 
 ## 📁 Example Use Case
 
-1. Choose single or multiple ingredient input.  
-2. Enter weight, serving size, and macros per serving.  
-3. Instantly view calculated calories and protein.  
-4. Optionally save the meal with a custom name and date.  
-5. Data is stored locally and persistently.
+1. Run the program.
+2. Choose from menu:
+   - Calculate macros
+   - View stored meals
+   - Check daily total intake
+   - Calculate average intake over a date range
+3. Input relevant data.
+4. Save results if desired.
+5. View and manage saved history.
 
 ---
 
-## 🧠 What I Learned
+## 📘 What I Learned
 
-- Structuring a CLI app.  
-- Using `json` for data storage.  
-- Graceful error handling with `try-except`.  
-- Building a practical nutrition-tracking utility.
+- Building a structured CLI menu system  
+- Persistent storage using JSON  
+- Parsing and comparing dates with `datetime`  
+- Designing a functional, real-world nutrition tracker
 
 ---
 
 ## 📌 Future Improvements
 
 - GUI version (Tkinter or PyQt)  
-- Retrieve/view saved meal history  
-- Add support for carbs and fats  
-- Integrate with nutrition APIs
+- Nutrition API integration  
+- Track additional nutrients (carbs, fats, fiber)  
+- Export data to CSV or graphs
 
 ---
 
 ## 📂 File Structure
-- macros calculator.py     # Main application script
-- Meal_Data.txt            # JSON file storing saved meals
+- macros calculator.py     # Main script
+- Meal_Data.txt            # Stores meals by date and name
+- total_intake_data.txt    # Stores daily total calories/protein
