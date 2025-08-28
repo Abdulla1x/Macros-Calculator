@@ -34,6 +34,8 @@ def load_data():
     except ValueError: 
         pass
 
+    return meal_data, total_intake_data
+
 def save_meal(name, date, total_calories, total_protein):
     if date in meal_data: 
         current_meal = meal_data[date]
@@ -44,7 +46,7 @@ def save_meal(name, date, total_calories, total_protein):
     meal_data[date] = current_meal
     print(meal_data)
 
-    with open('Meal_Data.txt', 'w') as Output:
+    with open('Meal_Data.txt', 'w') as Output: 
         json.dump(meal_data, Output, indent=4)
 
 def format_float(value):
