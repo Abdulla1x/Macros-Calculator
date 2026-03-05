@@ -1,0 +1,13 @@
+# Database files
+macros.db
+
+# Local data files
+Meal_Data.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env
