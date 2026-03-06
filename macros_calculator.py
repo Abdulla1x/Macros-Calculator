@@ -74,7 +74,7 @@ def get_meals_by_date(date: str) -> List[Tuple]:
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "SELECT name, calories, protein FROM meals WHERE date = ?",
+        "SELECT id, name, calories, protein FROM meals WHERE date = ?",
         (date,)
     )
     results = cur.fetchall()
@@ -128,3 +128,14 @@ def get_average_between_dates(start_date: str, end_date: str) -> Tuple[float, fl
     conn.close()
 
     return round(avg_cal or 0, 2), round(avg_pro or 0, 2)
+
+
+def delete_meal(meal_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(                            
+        "DELETE FROM meals WHERE id = ?", 
+        (meal_id,)
+    )
+    conn.commit()
+    conn.close()

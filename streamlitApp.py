@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from datetime import date
+import time
 
 from macros_calculator import (
     init_db,
@@ -11,7 +12,8 @@ from macros_calculator import (
     get_meals_by_date,
     get_day_totals,
     get_daily_summary,
-    get_average_between_dates
+    get_average_between_dates,
+    delete_meal
 )
 
 # ======================================================
@@ -218,18 +220,49 @@ with tab3:
     if meals:
         st.markdown("### Meals")
         for meal in meals:
-            st.write(
-                f"• **{meal[0]}** — {meal[1]} kcal | {meal[2]} g protein"
-            )
+            meal_id, name, calories, protein = meal
+
+            col1, col2 = st.columns([4,1])
+
+            with col1:
+                st.write(f"**{name}** — {calories} kcal | {protein} g protein")
+
+            with col2:
+                confirm_key = f"confirm_delete_{meal_id}"
+
+                # If user clicked delete, ask for confirmation
+                if st.button("Delete", key=f"delete_{meal_id}"):
+                    st.session_state[confirm_key] = True
+
+                # Show confirmation buttons only if delete was clicked
+                if st.session_state.get(confirm_key):
+                    st.warning("Are you sure you want to delete this meal?")
+                    confirm_col, cancel_col = st.columns(2)
+
+                    with confirm_col:
+                        if st.button("Yes", key=f"yes_{meal_id}"):
+                            delete_meal(meal_id)
+                            st.success("Meal deleted!")
+                            time.sleep(1.5)  # Brief pause before hiding confirmation
+                            st.session_state[confirm_key] = False
+                            st.rerun()
+
+                    with cancel_col:
+                        if st.button("No", key=f"no_{meal_id}"):
+                            st.session_state[confirm_key] = False
+                            st.info("Deletion cancelled.")
+                            time.sleep(1.5)  # Brief pause before hiding confirmation
+                            st.rerun()
+
+        calories, protein = get_day_totals(selected_date.isoformat())
+        
+        st.markdown("### Daily Totals")
+        col1, col2 = st.columns(2)
+        col1.metric("Calories", calories)
+        col2.metric("Protein (g)", protein)
+
     else:
-        st.warning("No meals recorded for this date.")
-
-    calories, protein = get_day_totals(selected_date.isoformat())
-
-    st.markdown("### Daily Totals")
-    col1, col2 = st.columns(2)
-    col1.metric("Calories", calories)
-    col2.metric("Protein (g)", protein)
+        st.write("No meals recorded for this date.")
 
 
 # ======================================================
