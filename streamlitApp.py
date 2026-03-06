@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import streamlit as st
 from macros_calculator import load_data, save_meal
 
@@ -28,6 +27,7 @@ with tab1:
             date = st.date_input("Select date")
             name = st.text_input("Enter the name of the meal")
             save_meal(name, date, total_calories, total_protein) # Need to implement session state to store these values
+
 
     #elif option == "Calculate Macros for Multiple Items":
 =======
@@ -308,4 +308,3 @@ with tab4:
             st.metric("Avg Protein (g)", avg_pro)
     else:
         st.info("No analytics available yet.")
->>>>>>> master
