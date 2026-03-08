@@ -118,6 +118,8 @@ with tab1:
         if st.button("Save Meal", type="primary", key="save_single"):
             if st.session_state.last_result is None:
                 st.error("Please calculate macros before saving.")
+            if not meal_name.strip():
+                st.error("Please enter a meal name before saving.")
             else:
                 insert_meal(
                     meal_date.isoformat(),
@@ -192,6 +194,8 @@ with tab2:
         if st.button("Save Meal", type="primary", key="save_multi"):
             if st.session_state.last_result is None:
                 st.error("Please calculate before saving.")
+            elif not meal_name.strip():
+                st.error("Please enter a meal name before saving.")
             else:
                 insert_meal(
                     meal_date.isoformat(),
