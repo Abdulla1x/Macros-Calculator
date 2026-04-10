@@ -282,33 +282,226 @@ with tab4:
         df = pd.DataFrame(
             summary, columns=["Date", "Calories", "Protein"]
         )
-        df["Date"] = pd.to_datetime(df["Date"])
 
-        col1, col2 = st.columns([3, 2])
+        # ======================================================
+        # CLEAN & VALIDATE DATES
+        # ======================================================
 
-        with col1:
-            chart = alt.Chart(df).mark_line(point=True).encode(
-                x="Date:T",
-                y="Calories:Q",
-                tooltip=["Date", "Calories"]
-            ).properties(height=350)
-            st.altair_chart(chart, use_container_width=True)
+        df["Date"] = pd.to_datetime(
+            df["Date"],
+            format="mixed",
+            errors="coerce"
+        )
 
-        with col2:
-            st.markdown("### Average Intake")
+        invalid_rows = df[df["Date"].isna()]
 
+        if not invalid_rows.empty:
+            st.warning(f"⚠️ Found {len(invalid_rows)} invalid date entries.")
+
+            st.markdown("### ⚠️ Invalid Rows (Need Fixing)")
+            st.dataframe(invalid_rows)
+
+            invalid_csv = invalid_rows.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="⬇️ Download Invalid Rows",
+                data=invalid_csv,
+                file_name="invalid_rows_fix.csv",
+                mime="text/csv"
+            )
+
+            st.info("💡 Fix the 'date' column (YYYY-MM-DD) and re-upload.")
+
+        df = df.dropna(subset=["Date"])
+
+        if df.empty:
+            st.warning("No valid data available after cleaning.")
+            st.stop()
+
+        df = df.sort_values("Date")
+
+        # ======================================================
+        # DATE RANGE FILTER
+        # ======================================================
+
+        col_filter1, col_filter2 = st.columns(2)
+
+        with col_filter1:
             start = st.date_input(
-                "Start Date", value=df["Date"].min().date(), key="analytics_start"
+                "Start Date",
+                value=df["Date"].min().date(),
+                key="analytics_start"
             )
+
+        with col_filter2:
             end = st.date_input(
-                "End Date", value=df["Date"].max().date(), key="analytics_end"
+                "End Date",
+                value=df["Date"].max().date(),
+                key="analytics_end"
             )
 
-            avg_cal, avg_pro = get_average_between_dates(
-                start.isoformat(), end.isoformat()
-            )
+        filtered_df = df[
+            (df["Date"] >= pd.to_datetime(start)) &
+            (df["Date"] <= pd.to_datetime(end))
+        ]
 
-            st.metric("Avg Calories", avg_cal)
-            st.metric("Avg Protein (g)", avg_pro)
+        if filtered_df.empty:
+            st.warning("No data available for selected date range.")
+            st.stop()
+
+        # ======================================================
+        # SUMMARY METRICS
+        # ======================================================
+
+        colA, colB, colC, colD = st.columns(4)
+
+        colA.metric("Total Calories", int(filtered_df["Calories"].sum()))
+        colB.metric("Total Protein (g)", round(filtered_df["Protein"].sum(), 1))
+
+        avg_cal, avg_pro = get_average_between_dates(
+            start.isoformat(), end.isoformat()
+        )
+
+        colC.metric("Avg Calories", avg_cal)
+        colD.metric("Avg Protein (g)", avg_pro)
+
+        # ======================================================
+        # SEPARATE CHARTS FOR CALORIES AND PROTEIN
+        # ======================================================
+
+        st.markdown("### 📊 Calorie Intake Over Time")
+        calorie_chart = alt.Chart(filtered_df).mark_line(point=True).encode(
+            x=alt.X("Date:T", title="Date"),
+            y=alt.Y("Calories:Q", title="Calories"),
+            tooltip=[
+                alt.Tooltip("Date:T", title="Date"),
+                alt.Tooltip("Calories:Q", title="Calories")
+            ]
+        ).properties(height=350)
+        st.altair_chart(calorie_chart, use_container_width=True)
+
+        st.markdown("### 📊 Protein Intake Over Time")
+        protein_chart = alt.Chart(filtered_df).mark_line(point=True).encode(
+            x=alt.X("Date:T", title="Date"),
+            y=alt.Y("Protein:Q", title="Protein (g)"),
+            tooltip=[
+                alt.Tooltip("Date:T", title="Date"),
+                alt.Tooltip("Protein:Q", title="Protein (g)")
+            ]
+        ).properties(height=350)
+        st.altair_chart(protein_chart, use_container_width=True)
+
+        # ======================================================
+        # TABLE VIEW
+        # ======================================================
+
+        st.markdown("### 📋 Daily Intake Table")
+        st.dataframe(
+            filtered_df.style.format({
+                "Calories": "{:.0f}",
+                "Protein": "{:.1f}"
+            }),
+            use_container_width=True
+        )
+
     else:
         st.info("No analytics available yet.")
+
+    # ======================================================
+    # EXPORT DATA
+    # ======================================================
+
+    import sqlite3
+
+    st.markdown("### 📥 Export Data")
+
+    conn = sqlite3.connect("macros.db")
+    df_export = pd.read_sql_query("SELECT * FROM meals", conn)
+    conn.close()
+
+    if not df_export.empty:
+        csv_data = df_export.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="Download Full Backup",
+            data=csv_data,
+            file_name="macros_full_backup.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("No data available to export.")
+
+    # ======================================================
+    # IMPORT DATA
+    # ======================================================
+
+    st.markdown("### 📤 Import Data")
+
+    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+
+    if uploaded_file is not None:
+        df_import = pd.read_csv(uploaded_file)
+
+        st.write("Preview of uploaded data:")
+        st.dataframe(df_import)
+
+        df_import.columns = [col.lower() for col in df_import.columns]
+
+        if "date" in df_import.columns:
+            df_import["date"] = pd.to_datetime(
+                df_import["date"],
+                format="mixed",
+                errors="coerce"
+            )
+
+            invalid_dates = df_import["date"].isna().sum()
+            if invalid_dates > 0:
+                st.warning(f"{invalid_dates} rows had invalid dates and were removed.")
+
+            df_import = df_import.dropna(subset=["date"])
+            df_import["date"] = df_import["date"].dt.strftime("%Y-%m-%d")
+
+        required_columns = {"date", "name", "calories", "protein"}
+
+        if not required_columns.issubset(set(df_import.columns)):
+            st.error("Invalid CSV format. Required columns: date, name, calories, protein")
+        else:
+            if st.button("Import Data"):
+                conn = sqlite3.connect("macros.db")
+                cur = conn.cursor()
+
+                inserted = 0
+                skipped = 0
+                progress_bar = st.progress(0)
+
+                total_rows = len(df_import)
+
+                for i, row in df_import.iterrows():
+                    date = row["date"]
+                    name = row["name"]
+                    calories = row["calories"]
+                    protein = row["protein"]
+
+                    cur.execute("""
+                        SELECT COUNT(*) FROM meals
+                        WHERE date=? AND name=? AND calories=? AND protein=?
+                    """, (date, name, calories, protein))
+
+                    exists = cur.fetchone()[0]
+
+                    if not exists:
+                        cur.execute("""
+                            INSERT INTO meals (date, name, calories, protein)
+                            VALUES (?, ?, ?, ?)
+                        """, (date, name, calories, protein))
+                        inserted += 1
+                    else:
+                        skipped += 1
+
+                    progress_bar.progress((i + 1) / total_rows)
+
+                conn.commit()
+                conn.close()
+
+                st.success(f"Imported {inserted} meals, skipped {skipped} duplicates.")
+                st.rerun()
