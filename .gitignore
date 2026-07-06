@@ -4,13 +4,20 @@ __pycache__/
 
 # Virtual environments
 venv/
+.venv/
 .env
 
 # Database files
 macros.db
+*.db
 
-# Local data files
-Meal_Data.txt
+# Local data files (root only — legacy/Meal_Data.txt is tracked)
+/Meal_Data.txt
+
+# Node / frontend
+node_modules/
+frontend/dist/
+*.local
 
 # OS files
 .DS_Store
@@ -18,3 +25,8 @@ Thumbs.db
 
 # VS Code
 .vscode/
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
