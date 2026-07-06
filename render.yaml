@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: macros-calculator-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # Seed sample meals/foods on boot when the DB is empty — the free-tier
+      # filesystem is ephemeral, so the demo resets on every deploy/restart.
+      - key: SEED_DEMO_DATA
+        value: "1"
+      # Set this to your deployed frontend origin (comma-separated for several).
+      - key: CORS_ORIGINS
+        value: https://your-app.vercel.app
