@@ -62,3 +62,38 @@ export interface ImportResult {
   skipped_duplicates: number
   skipped_invalid: number
 }
+
+export type Confidence = 'high' | 'medium' | 'low'
+
+export interface AnalyzedItem {
+  name: string
+  portion_grams: number
+  calories: number
+  protein: number
+  carbs: number | null
+  fat: number | null
+  confidence: Confidence
+}
+
+export interface MacroRange {
+  low: number
+  estimate: number
+  high: number
+}
+
+export interface MealAnalysis {
+  meal_name: string
+  items: AnalyzedItem[]
+  assumptions: string[]
+  calories: MacroRange
+  protein: MacroRange
+  carbs: MacroRange | null
+  fat: MacroRange | null
+  confidence: Confidence
+  explanation: string
+  clarifying_question: string | null
+}
+
+export interface MealAnalysisResponse extends MealAnalysis {
+  analysis_id: number
+}

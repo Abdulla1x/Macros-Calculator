@@ -70,3 +70,45 @@ class ImportResult(BaseModel):
     inserted: int
     skipped_duplicates: int
     skipped_invalid: int
+
+
+# NOTE: no numeric Field constraints here — this schema is sent to the LLM as a
+# structured-output schema, and Gemini rejects JSON Schema numeric bounds
+# (exclusiveMinimum etc.). Values are reviewed by the user before saving anyway.
+class AnalyzedItem(BaseModel):
+    """One detected food, with macros for the estimated portion eaten."""
+    name: str
+    portion_grams: float
+    calories: float
+    protein: float
+    carbs: float | None = None
+    fat: float | None = None
+    confidence: Literal["high", "medium", "low"]
+
+
+class MacroRange(BaseModel):
+    low: float
+    estimate: float
+    high: float
+
+
+class MealAnalysis(BaseModel):
+    """Provider-neutral result of an AI meal analysis."""
+    meal_name: str
+    items: list[AnalyzedItem]
+    assumptions: list[str]
+    calories: MacroRange
+    protein: MacroRange
+    carbs: MacroRange | None = None
+    fat: MacroRange | None = None
+    confidence: Literal["high", "medium", "low"]
+    explanation: str
+    clarifying_question: str | None = None
+
+
+class MealAnalysisResponse(MealAnalysis):
+    analysis_id: int
+
+
+class AnalysisLink(BaseModel):
+    meal_id: int

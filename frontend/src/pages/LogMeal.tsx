@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
-import type { FoodCreate, Settings } from '../types'
+import MealAnalyzer from '../components/MealAnalyzer'
+import type { FoodCreate, MealAnalysisResponse, Settings } from '../types'
 
 interface Row {
   key: number
@@ -64,6 +65,7 @@ export default function LogMeal() {
   const [mealDate, setMealDate] = useState(new Date().toISOString().slice(0, 10))
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [analysisId, setAnalysisId] = useState<number | null>(null)
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => null)
@@ -84,6 +86,27 @@ export default function LogMeal() {
       fromLibrary: true,
       saveToLibrary: false,
     })
+  }
+
+  const applyAnalysis = (analysis: MealAnalysisResponse) => {
+    // AI macros are for the estimated portion, so weight == serving size and
+    // the existing scaling logic passes them through unchanged (factor = 1).
+    setRows(
+      analysis.items.map((item) => ({
+        ...emptyRow(),
+        name: item.name,
+        weight: String(item.portion_grams),
+        servingSize: String(item.portion_grams),
+        calories: String(item.calories),
+        protein: String(item.protein),
+        carbs: item.carbs == null ? '' : String(item.carbs),
+        fat: item.fat == null ? '' : String(item.fat),
+        saveToLibrary: false,
+      })),
+    )
+    setMealName((current) => current.trim() || analysis.meal_name)
+    setAnalysisId(analysis.analysis_id)
+    setMessage(null)
   }
 
   const validRows = rows.filter(rowIsValid)
@@ -115,7 +138,7 @@ export default function LogMeal() {
     setSaving(true)
     setMessage(null)
     try {
-      await api.createMeal({
+      const meal = await api.createMeal({
         date: mealDate,
         name: mealName.trim(),
         calories: Math.round(totals.calories * 100) / 100,
@@ -123,6 +146,12 @@ export default function LogMeal() {
         carbs: totals.carbs === null ? null : Math.round(totals.carbs * 100) / 100,
         fat: totals.fat === null ? null : Math.round(totals.fat * 100) / 100,
       })
+
+      // Best-effort: remember which AI analysis this meal came from.
+      if (analysisId !== null) {
+        await api.linkAnalysis(analysisId, meal.id).catch(() => null)
+        setAnalysisId(null)
+      }
 
       // Offer-to-cache: persist manually entered ingredients the user opted in on.
       await Promise.all(
@@ -165,6 +194,8 @@ export default function LogMeal() {
           Start typing an ingredient — your food library and Open Food Facts fill in the macros.
         </p>
       </header>
+
+      <MealAnalyzer settings={settings} onApply={applyAnalysis} />
 
       <section className="space-y-4">
         {rows.map((row, index) => (

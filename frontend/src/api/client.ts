@@ -4,6 +4,7 @@ import type {
   FoodCreate,
   ImportResult,
   Meal,
+  MealAnalysisResponse,
   MealCreate,
   OFFProduct,
   Settings,
@@ -62,6 +63,14 @@ export const api = {
     const query = params.toString()
     return request<AnalyticsSummary>(`/api/analytics/daily${query ? `?${query}` : ''}`)
   },
+
+  analyzeMeal: (form: FormData) =>
+    request<MealAnalysisResponse>('/api/ai/analyze', { method: 'POST', body: form }),
+  linkAnalysis: (analysisId: number, mealId: number) =>
+    request<void>(`/api/ai/analyses/${analysisId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ meal_id: mealId }),
+    }),
 
   exportUrl: `${API_BASE}/api/data/export`,
   importCsv: (file: File) => {

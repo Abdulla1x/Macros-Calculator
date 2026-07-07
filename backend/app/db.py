@@ -74,6 +74,17 @@ def init_db() -> None:
     """)
     cur.execute("INSERT OR IGNORE INTO settings (id) VALUES (1)")
 
+    # Log of AI meal analyses; groundwork for future learning from corrections.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_analyses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            user_text TEXT,
+            analysis_json TEXT NOT NULL,
+            meal_id INTEGER
+        )
+    """)
+
     _normalize_meal_dates(cur)
 
     conn.commit()
