@@ -92,6 +92,12 @@ Macros-Calculator
 ### Dashboard
 ![Dashboard](screenshots/dashboard.png)
 
+### AI meal analysis — photo + note → macro estimate with uncertainty
+![AI meal analysis](screenshots/logmeal-ai.png)
+
+### AI results prefill the meal editor for review before saving
+![AI analysis applied to the meal editor](screenshots/logmeal-ai-applied.png)
+
 ### Log a meal — food library auto-fill
 ![Log Meal](screenshots/logmeal.png)
 
