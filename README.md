@@ -10,7 +10,7 @@
 
 A full-stack nutrition tracking app: a **React + TypeScript** dashboard UI backed by a **FastAPI + SQLite** REST API.
 
-Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Track calories and protein (plus carbs and fat if you enable them), set daily goals, and watch progress rings and trend charts update as you log.
+Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Or skip typing entirely: **photograph your meal** (and/or describe it, with voice dictation) and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, and watch progress rings and trend charts update as you log.
 
 > **v2 rewrite:** this project started as a Streamlit app and was rebuilt with a decoupled frontend/backend architecture. The original app lives in [`legacy/`](legacy/).
 
@@ -22,6 +22,14 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Daily **progress rings** for each tracked macro vs. your goals
 - Today's meal list with inline delete
 - 7-day calorie trend sparkline
+
+### 🤖 AI meal analysis
+- **Photo → macros**: snap or upload a meal photo, optionally add a note (typed or dictated via the browser's Web Speech API — audio never leaves your device), and get an instant estimate
+- **Honest uncertainty**: results show a calorie/macro **range** (low–estimate–high), an overall confidence badge, and per-ingredient confidence dots — not a false-precision single number
+- **Editable assumptions**: the AI lists every assumption it made ("1 cup cooked rice ≈ 158 g"); tap one to correct it in the note and **refine** the estimate without starting over
+- **You stay in control**: detected ingredients prefill the normal meal editor, so you review and adjust everything before saving
+- Each analysis is logged to an `ai_analyses` table (photo discarded) as groundwork for future learning from your corrections
+- Powered by **Gemini 2.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change
 
 ### 🍽️ Smart meal logging
 - **Type-ahead food search**: ingredients you've logged before auto-fill their macros from a local SQLite food library
@@ -42,15 +50,15 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────┐         ┌──────────────────────┐        ┌────────────────┐
+┌─────────────────────┐         ┌──────────────────────┐        ┌─────────────────┐
 │  React SPA (Vite)   │  HTTP   │  FastAPI REST API    │        │ Open Food Facts │
 │  Tailwind, Recharts ├────────►│  /api/meals /foods   ├───────►│  public API     │
-│  React Router       │  JSON   │  /analytics /settings│  httpx │  (fallback)     │
-└─────────────────────┘         └──────────┬───────────┘        └────────────────┘
-                                           │ sqlite3
-                                     ┌─────▼─────┐
-                                     │ macros.db │  meals · foods · settings
-                                     └───────────┘
+│  React Router       │  JSON   │  /analytics /ai ...  │  httpx │  (fallback)     │
+└─────────────────────┘         └──────┬────────┬──────┘        └─────────────────┘
+                                       │ sqlite3│ google-genai   ┌─────────────────┐
+                                 ┌─────▼─────┐  └───────────────►│ Gemini 2.5 Flash│
+                                 │ macros.db │  meals · foods    │ (meal analysis) │
+                                 └───────────┘  settings · ai    └─────────────────┘
 ```
 
 ```
@@ -61,14 +69,17 @@ Macros-Calculator
 │   │   ├── db.py                # Schema, v1 migration, legacy date cleanup
 │   │   ├── calculations.py      # Macro scaling / totalling logic
 │   │   ├── schemas.py           # Pydantic models
-│   │   ├── routers/             # meals, foods, analytics, settings, data (CSV)
-│   │   └── services/off_client.py  # Open Food Facts client
-│   ├── tests/                   # pytest suite (25 tests)
+│   │   ├── routers/             # meals, foods, analytics, settings, data (CSV), ai
+│   │   └── services/
+│   │       ├── off_client.py    # Open Food Facts client
+│   │       └── meal_ai.py       # AI meal analysis (only provider-aware module)
+│   ├── tests/                   # pytest suite (38 tests)
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
 │       ├── api/client.ts        # Typed API client
-│       ├── components/          # Layout, MacroRing, FoodAutocomplete
+│       ├── components/          # Layout, MacroRing, FoodAutocomplete, MealAnalyzer
+│       ├── hooks/               # useDictation (Web Speech API)
 │       └── pages/               # Dashboard, LogMeal, Analytics, Settings
 ├── legacy/                      # Original Streamlit app (v1)
 └── render.yaml                  # Render deployment blueprint
@@ -109,6 +120,17 @@ uvicorn app.main:app --reload --port 8000
 
 API docs: http://localhost:8000/docs
 
+**AI meal analysis (optional):** set `GEMINI_API_KEY` before starting the backend
+(get a free key at [Google AI Studio](https://aistudio.google.com/apikey)):
+
+```bash
+GEMINI_API_KEY=your-key uvicorn app.main:app --reload --port 8000
+```
+
+Without a key the rest of the app works normally and the analyze endpoint returns
+a clear 503. `MEAL_AI_MODEL` overrides the default model (`gemini-2.5-flash`).
+Keep the key in your environment or an untracked `.env` — never commit it.
+
 On first start the backend migrates an existing v1 `macros.db` automatically
 (adds carbs/fat columns, normalizes legacy date formats — no data is lost).
 
@@ -136,6 +158,8 @@ python -m pytest
 **Backend → [Render](https://render.com)** — the included [`render.yaml`](render.yaml) deploys
 `backend/` as a web service. Set `CORS_ORIGINS` to your frontend URL. `SEED_DEMO_DATA=1`
 seeds sample data because the free-tier disk is ephemeral (demo data resets on redeploys).
+Add `GEMINI_API_KEY` as a secret environment variable in the Render dashboard to enable
+AI meal analysis.
 
 **Frontend → [Vercel](https://vercel.com)** — import the repo, set the root directory to
 `frontend/`, and add an environment variable `VITE_API_URL=https://<your-render-service>.onrender.com`.
@@ -151,6 +175,8 @@ seeds sample data because the free-tier disk is ephemeral (demo data resets on r
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | POST | `/api/foods` | Save/update a cached food |
+| POST | `/api/ai/analyze` | AI meal analysis from photo and/or text (multipart) |
+| PATCH | `/api/ai/analyses/{id}` | Link an analysis to the meal it was saved as |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals + tracked-macro toggles |
 | GET/POST | `/api/data/export` · `/api/data/import` | CSV backup / restore |
@@ -159,6 +185,8 @@ seeds sample data because the free-tier disk is ephemeral (demo data resets on r
 
 ## 📈 Future improvements
 
+- Learn from user corrections to AI analyses (the `ai_analyses` log is the groundwork)
+- Upgrade the analysis model (provider is isolated in `services/meal_ai.py`)
 - Meal editing
 - Barcode scanning via the Open Food Facts barcode API
 - Weekly/monthly goal summaries and streaks
