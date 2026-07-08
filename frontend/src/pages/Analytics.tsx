@@ -41,7 +41,21 @@ export default function Analytics() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
   const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+
+  async function handleExport() {
+    setExportError('')
+    setExporting(true)
+    try {
+      await api.downloadExport()
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => null)
@@ -187,13 +201,13 @@ export default function Analytics() {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="mb-3 font-semibold">Backup & restore</h3>
         <div className="flex flex-wrap items-center gap-3">
-          <a
-            href={api.exportUrl}
-            download
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300"
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
-            ⬇️ Export all meals (CSV)
-          </a>
+            {exporting ? 'Exporting…' : '⬇️ Export all meals (CSV)'}
+          </button>
           <button
             onClick={() => fileInput.current?.click()}
             disabled={importing}
@@ -216,6 +230,7 @@ export default function Analytics() {
           </p>
         )}
         {importError && <p className="mt-3 text-sm text-rose-400">{importError}</p>}
+        {exportError && <p className="mt-3 text-sm text-rose-400">{exportError}</p>}
         <p className="mt-2 text-xs text-slate-500">
           CSV columns: date, name, calories, protein (carbs and fat optional).
         </p>

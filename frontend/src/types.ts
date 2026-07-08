@@ -1,3 +1,14 @@
+export interface User {
+  id: number
+  email: string
+}
+
+export interface TokenResponse {
+  access_token: string
+  token_type: 'bearer'
+  user: User
+}
+
 export interface Settings {
   calorie_goal: number
   protein_goal: number
