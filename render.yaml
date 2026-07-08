@@ -4,12 +4,23 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Migrations run before the server starts (single instance, no race).
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      # Seed sample meals/foods on boot when the DB is empty — the free-tier
-      # filesystem is ephemeral, so the demo resets on every deploy/restart.
-      - key: SEED_DEMO_DATA
-        value: "1"
+      # Neon Postgres connection string, as postgresql+psycopg://...?sslmode=require
+      # Set in the Render dashboard (never committed).
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # Gemini API key for AI meal analysis (optional; feature 503s without it).
+      - key: GEMINI_API_KEY
+        sync: false
+      # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
+      - key: AI_DAILY_LIMIT
+        value: "20"
       # Set this to your deployed frontend origin (comma-separated for several).
       - key: CORS_ORIGINS
         value: https://your-app.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.14.4"

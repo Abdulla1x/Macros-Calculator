@@ -4,11 +4,13 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6?logo=typescript&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
-![SQLite](https://img.shields.io/badge/Database-SQLite-green)
+![Postgres](https://img.shields.io/badge/Database-PostgreSQL-4169e1?logo=postgresql&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-A full-stack nutrition tracking app: a **React + TypeScript** dashboard UI backed by a **FastAPI + SQLite** REST API.
+A full-stack, **multi-user** nutrition tracking app: a **React + TypeScript** dashboard UI (installable as a PWA) backed by a **FastAPI + SQLAlchemy** REST API on **PostgreSQL**.
+
+Sign up with an email and password and get your own private meal log, food library, goals, and AI analyses — every API endpoint is scoped to the authenticated user.
 
 Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Or skip typing entirely: **photograph your meal** (and/or describe it, with voice dictation) and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, and watch progress rings and trend charts update as you log.
 
@@ -17,6 +19,12 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ---
 
 ## ✨ Features
+
+### 🔐 Accounts & privacy
+- **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry)
+- **Per-user everything**: meals, food library, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
+- **Per-user AI quota** (default 20 analyses/day) so one user can't exhaust the shared Gemini quota
+- No password reset yet — an email-based reset flow is on the roadmap
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
@@ -51,29 +59,33 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ```
 ┌─────────────────────┐         ┌──────────────────────┐        ┌─────────────────┐
-│  React SPA (Vite)   │  HTTP   │  FastAPI REST API    │        │ Open Food Facts │
-│  Tailwind, Recharts ├────────►│  /api/meals /foods   ├───────►│  public API     │
-│  React Router       │  JSON   │  /analytics /ai ...  │  httpx │  (fallback)     │
-└─────────────────────┘         └──────┬────────┬──────┘        └─────────────────┘
-                                       │ sqlite3│ google-genai   ┌─────────────────┐
-                                 ┌─────▼─────┐  └───────────────►│ Gemini 2.5 Flash│
-                                 │ macros.db │  meals · foods    │ (meal analysis) │
-                                 └───────────┘  settings · ai    └─────────────────┘
+│  React SPA / PWA    │  HTTP   │  FastAPI REST API    │        │ Open Food Facts │
+│  Tailwind, Recharts ├────────►│  /api/auth /meals    ├───────►│  public API     │
+│  React Router       │ Bearer  │  /foods /ai ...      │  httpx │  (fallback)     │
+└─────────────────────┘  JWT    └──────┬────────┬──────┘        └─────────────────┘
+                                       │SQLAlchemy  google-genai ┌─────────────────┐
+                                ┌──────▼──────┐ └───────────────►│ Gemini 2.5 Flash│
+                                │  PostgreSQL │ users · meals    │ (meal analysis) │
+                                │ (Neon)/SQLite│ foods · settings└─────────────────┘
+                                └─────────────┘ ai_analyses
 ```
 
 ```
 Macros-Calculator
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app, CORS, startup migration + demo seed
-│   │   ├── db.py                # Schema, v1 migration, legacy date cleanup
+│   │   ├── main.py              # FastAPI app, CORS, lifespan
+│   │   ├── db.py                # SQLAlchemy engine + session dependency
+│   │   ├── models.py            # ORM models (users, meals, foods, settings, ai_analyses)
+│   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
 │   │   ├── calculations.py      # Macro scaling / totalling logic
 │   │   ├── schemas.py           # Pydantic models
 │   │   ├── routers/             # meals, foods, analytics, settings, data (CSV), ai
 │   │   └── services/
 │   │       ├── off_client.py    # Open Food Facts client
 │   │       └── meal_ai.py       # AI meal analysis (only provider-aware module)
-│   ├── tests/                   # pytest suite (38 tests)
+│   ├── alembic/                 # Database migrations (Postgres)
+│   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
@@ -137,8 +149,15 @@ Without a key the rest of the app works normally and the analyze endpoint return
 a clear 503. `MEAL_AI_MODEL` overrides the default model (`gemini-2.5-flash`).
 Keep the key in your environment or an untracked `.env` — never commit it.
 
-On first start the backend migrates an existing v1 `macros.db` automatically
-(adds carbs/fat columns, normalizes legacy date formats — no data is lost).
+Local development needs no database setup: with `DATABASE_URL` unset the backend
+uses a repo-root SQLite file and creates the schema itself. Point `DATABASE_URL`
+at Postgres (and set `JWT_SECRET`) for a production-like run — the schema is then
+managed by Alembic (`alembic upgrade head`). All env vars are documented in
+[`backend/.env.example`](backend/.env.example).
+
+**Migrating from the single-user version:** the old `macros.db` isn't read by
+the multi-user schema. Export your meals as CSV from the old app (or keep the
+file), create an account, and use **Analytics → Import meals (CSV)**.
 
 ### 2. Frontend (React)
 
@@ -161,21 +180,39 @@ python -m pytest
 
 ## ☁️ Deployment
 
+**Database → [Neon](https://neon.tech)** (free tier) — create a project, copy the
+connection string, and rewrite its scheme for SQLAlchemy:
+`postgresql+psycopg://USER:PASSWORD@HOST/DB?sslmode=require`. That's the value for
+`DATABASE_URL`. (Plain Postgres — a `pg_dump` moves you anywhere later.)
+
 **Backend → [Render](https://render.com)** — the included [`render.yaml`](render.yaml) deploys
-`backend/` as a web service. Set `CORS_ORIGINS` to your frontend URL. `SEED_DEMO_DATA=1`
-seeds sample data because the free-tier disk is ephemeral (demo data resets on redeploys).
-Add `GEMINI_API_KEY` as a secret environment variable in the Render dashboard to enable
-AI meal analysis.
+`backend/` as a web service; the start command runs `alembic upgrade head` before the
+server boots, so the schema is created/updated on deploy. In the Render dashboard set:
+- `DATABASE_URL` — the Neon string above
+- `GEMINI_API_KEY` — optional, enables AI meal analysis
+- `CORS_ORIGINS` — your exact frontend origin (scheme included, no trailing slash)
+
+`JWT_SECRET` is auto-generated by the blueprint. Rotating it logs every user out —
+that's also the emergency kill switch for leaked tokens.
 
 **Frontend → [Vercel](https://vercel.com)** — import the repo, set the root directory to
 `frontend/`, and add an environment variable `VITE_API_URL=https://<your-render-service>.onrender.com`.
+
+> Free-tier note: Render spins down after idle (~30 s cold start) and Neon autosuspends
+> (~1 s resume). The login page mentions this so first-time users don't bounce.
 
 ---
 
 ## 🔌 API overview
 
+All endpoints except `/api/health` and `/api/auth/signup|login` require an
+`Authorization: Bearer <token>` header and operate only on the caller's data.
+
 | Method | Endpoint | Description |
 |---|---|---|
+| POST | `/api/auth/signup` | Create an account → JWT + user |
+| POST | `/api/auth/login` | Log in → JWT + user |
+| GET | `/api/auth/me` | Current user (token check) |
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
 | DELETE | `/api/meals/{id}` | Delete a meal |
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
@@ -193,10 +230,10 @@ AI meal analysis.
 
 - Learn from user corrections to AI analyses (the `ai_analyses` log is the groundwork)
 - Upgrade the analysis model (provider is isolated in `services/meal_ai.py`)
+- Password reset / email verification (Resend or similar + purpose-claim tokens)
 - Meal editing
 - Barcode scanning via the Open Food Facts barcode API
 - Weekly/monthly goal summaries and streaks
-- Multi-user support with authentication
 - Frontend component tests (Vitest + Testing Library)
 
 ---
