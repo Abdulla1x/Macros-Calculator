@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import router as auth_router
+from .auth.security import get_jwt_secret
 from .db import get_engine
 from .models import Base
 from .routers import ai, analytics, data, foods, meals, settings
@@ -13,6 +15,7 @@ DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_jwt_secret()  # fail fast in production if JWT_SECRET is missing
     # SQLite (dev/tests) gets its schema from the models directly; Postgres
     # schema is owned by Alembic (`alembic upgrade head` in the start command).
     engine = get_engine()
@@ -31,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router.router)
 app.include_router(meals.router)
 app.include_router(foods.router)
 app.include_router(analytics.router)
