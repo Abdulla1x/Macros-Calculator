@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import Meal
+from ..models import Meal, User
 from ..schemas import AnalyticsSummary, DayTotals
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 def daily_summary(
     start: date_type | None = None,
     end: date_type | None = None,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Per-day macro totals, plus totals and daily averages over the range."""
@@ -26,6 +28,7 @@ def daily_summary(
             func.sum(Meal.carbs).label("carbs"),
             func.sum(Meal.fat).label("fat"),
         )
+        .where(Meal.user_id == user.id)
         .group_by(Meal.date)
         .order_by(Meal.date)
     )

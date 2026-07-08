@@ -9,8 +9,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import Meal
+from ..models import Meal, User
 from ..schemas import ImportResult
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -20,8 +21,10 @@ ACCEPTED_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y")
 
 
 @router.get("/export")
-def export_csv(db: Session = Depends(get_db)):
-    rows = db.scalars(select(Meal).order_by(Meal.date, Meal.id)).all()
+def export_csv(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.scalars(
+        select(Meal).where(Meal.user_id == user.id).order_by(Meal.date, Meal.id)
+    ).all()
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -61,7 +64,11 @@ def _parse_float(raw, required: bool) -> tuple[float | None, bool]:
 
 
 @router.post("/import", response_model=ImportResult)
-async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
+async def import_csv(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     content = (await file.read()).decode("utf-8-sig", errors="replace")
     reader = csv.DictReader(io.StringIO(content))
     if reader.fieldnames is None:
@@ -92,6 +99,7 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
 
         duplicate = db.scalars(
             select(Meal.id).where(
+                Meal.user_id == user.id,
                 Meal.date == date,
                 Meal.name == name,
                 Meal.calories == calories,
@@ -103,8 +111,8 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
             continue
 
         db.add(
-            Meal(date=date, name=name, calories=calories, protein=protein,
-                 carbs=carbs, fat=fat)
+            Meal(user_id=user.id, date=date, name=name, calories=calories,
+                 protein=protein, carbs=carbs, fat=fat)
         )
         db.flush()
         inserted += 1

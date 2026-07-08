@@ -37,10 +37,7 @@ class Meal(Base):
     __tablename__ = "meals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # TODO(multi-user): tightened to NOT NULL once auth lands.
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     date: Mapped[date_type] = mapped_column(Date)
     name: Mapped[str] = mapped_column(String(200))
     calories: Mapped[float] = mapped_column(Float)
@@ -55,9 +52,7 @@ class Food(Base):
     __tablename__ = "foods"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
     serving_size: Mapped[float] = mapped_column(Float)
     calories: Mapped[float] = mapped_column(Float)
@@ -80,8 +75,9 @@ Index("uq_foods_user_lower_name", Food.user_id, func.lower(Food.name), unique=Tr
 class Setting(Base):
     __tablename__ = "settings"
 
-    # TODO(multi-user): becomes a ForeignKey("users.id") once auth lands.
-    user_id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
     calorie_goal: Mapped[float] = mapped_column(Float, default=2000)
     protein_goal: Mapped[float] = mapped_column(Float, default=150)
     carbs_goal: Mapped[float] = mapped_column(Float, default=250)
@@ -94,7 +90,7 @@ class AIAnalysis(Base):
     __tablename__ = "ai_analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(
+    user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

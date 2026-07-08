@@ -1,17 +1,16 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import Setting
+from ..models import Setting, User
 from ..schemas import Settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# Placeholder single-tenant key until auth lands (Phase 3 scopes this per user).
-LEGACY_USER_ID = 1
-
 
 def _get_or_create(db: Session, user_id: int) -> Setting:
+    # Signup creates the row; this covers accounts that predate that behavior.
     row = db.get(Setting, user_id)
     if row is None:
         row = Setting(user_id=user_id)
@@ -21,13 +20,17 @@ def _get_or_create(db: Session, user_id: int) -> Setting:
 
 
 @router.get("", response_model=Settings)
-def get_settings(db: Session = Depends(get_db)):
-    return _get_or_create(db, LEGACY_USER_ID)
+def get_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _get_or_create(db, user.id)
 
 
 @router.put("", response_model=Settings)
-def update_settings(settings: Settings, db: Session = Depends(get_db)):
-    row = _get_or_create(db, LEGACY_USER_ID)
+def update_settings(
+    settings: Settings,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = _get_or_create(db, user.id)
     row.calorie_goal = settings.calorie_goal
     row.protein_goal = settings.protein_goal
     row.carbs_goal = settings.carbs_goal
