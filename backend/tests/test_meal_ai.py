@@ -1,7 +1,10 @@
 import io
 import json
 
-from app.db import get_connection
+from sqlalchemy.orm import Session
+
+from app.db import get_engine
+from app.models import AIAnalysis
 from app.schemas import AnalyzedItem, MacroRange, MealAnalysis
 from app.services import meal_ai
 from app.services.meal_ai import _build_contents
@@ -59,16 +62,11 @@ def test_analyze_success_returns_analysis_and_persists(client, monkeypatch):
     assert len(body["items"]) == 2
     assert isinstance(body["analysis_id"], int)
 
-    conn = get_connection()
-    try:
-        row = conn.execute(
-            "SELECT * FROM ai_analyses WHERE id = ?", (body["analysis_id"],)
-        ).fetchone()
-    finally:
-        conn.close()
-    assert row["user_text"] == "chicken and rice"
-    assert json.loads(row["analysis_json"])["meal_name"] == "Chicken & Rice"
-    assert row["meal_id"] is None
+    with Session(get_engine()) as session:
+        row = session.get(AIAnalysis, body["analysis_id"])
+        assert row.user_text == "chicken and rice"
+        assert json.loads(row.analysis_json)["meal_name"] == "Chicken & Rice"
+        assert row.meal_id is None
 
 
 def test_analyze_passes_image_and_prior_to_service(client, monkeypatch):
@@ -145,14 +143,9 @@ def test_link_analysis_sets_meal_id(client, monkeypatch):
     )
     assert response.status_code == 204
 
-    conn = get_connection()
-    try:
-        row = conn.execute(
-            "SELECT meal_id FROM ai_analyses WHERE id = ?", (analysis_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    assert row["meal_id"] == meal["id"]
+    with Session(get_engine()) as session:
+        row = session.get(AIAnalysis, analysis_id)
+        assert row.meal_id == meal["id"]
 
 
 def test_link_analysis_404_for_unknown_id(client):

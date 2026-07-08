@@ -1,8 +1,10 @@
 """AI meal analysis: photo and/or text in, structured macro estimate out."""
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
-from ..db import get_connection
+from ..db import get_db
+from ..models import AIAnalysis
 from ..schemas import AnalysisLink, MealAnalysis, MealAnalysisResponse
 from ..services import meal_ai
 
@@ -16,6 +18,7 @@ async def analyze(
     image: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
     prior_analysis: str | None = Form(default=None),
+    db: Session = Depends(get_db),
 ):
     text = (text or "").strip() or None
     if image is None and text is None:
@@ -52,31 +55,18 @@ async def analyze(
             detail="AI analysis failed. Try again or enter macros manually.",
         )
 
-    conn = get_connection()
-    try:
-        cur = conn.execute(
-            "INSERT INTO ai_analyses (user_text, analysis_json) VALUES (?, ?)",
-            (text, analysis.model_dump_json()),
-        )
-        conn.commit()
-        analysis_id = cur.lastrowid
-    finally:
-        conn.close()
+    record = AIAnalysis(user_text=text, analysis_json=analysis.model_dump_json())
+    db.add(record)
+    db.commit()
 
-    return MealAnalysisResponse(**analysis.model_dump(), analysis_id=analysis_id)
+    return MealAnalysisResponse(**analysis.model_dump(), analysis_id=record.id)
 
 
 @router.patch("/analyses/{analysis_id}", status_code=204)
-def link_analysis(analysis_id: int, link: AnalysisLink):
+def link_analysis(analysis_id: int, link: AnalysisLink, db: Session = Depends(get_db)):
     """Attach the saved meal's id to an analysis (best-effort, from the client)."""
-    conn = get_connection()
-    try:
-        cur = conn.execute(
-            "UPDATE ai_analyses SET meal_id = ? WHERE id = ?",
-            (link.meal_id, analysis_id),
-        )
-        conn.commit()
-        if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Analysis not found")
-    finally:
-        conn.close()
+    record = db.get(AIAnalysis, analysis_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    record.meal_id = link.meal_id
+    db.commit()

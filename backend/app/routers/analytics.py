@@ -1,48 +1,48 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from ..db import get_connection
+from ..db import get_db
+from ..models import Meal
 from ..schemas import AnalyticsSummary, DayTotals
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 @router.get("/daily", response_model=AnalyticsSummary)
-def daily_summary(start: date_type | None = None, end: date_type | None = None):
+def daily_summary(
+    start: date_type | None = None,
+    end: date_type | None = None,
+    db: Session = Depends(get_db),
+):
     """Per-day macro totals, plus totals and daily averages over the range."""
-    query = """
-        SELECT date,
-               SUM(calories) AS calories,
-               SUM(protein) AS protein,
-               SUM(carbs) AS carbs,
-               SUM(fat) AS fat
-        FROM meals
-    """
-    conditions, params = [], []
+    stmt = (
+        select(
+            Meal.date,
+            func.sum(Meal.calories).label("calories"),
+            func.sum(Meal.protein).label("protein"),
+            func.sum(Meal.carbs).label("carbs"),
+            func.sum(Meal.fat).label("fat"),
+        )
+        .group_by(Meal.date)
+        .order_by(Meal.date)
+    )
     if start is not None:
-        conditions.append("date >= ?")
-        params.append(start.isoformat())
+        stmt = stmt.where(Meal.date >= start)
     if end is not None:
-        conditions.append("date <= ?")
-        params.append(end.isoformat())
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY date ORDER BY date"
+        stmt = stmt.where(Meal.date <= end)
 
-    conn = get_connection()
-    try:
-        rows = conn.execute(query, params).fetchall()
-    finally:
-        conn.close()
+    rows = db.execute(stmt).all()
 
     days = [
         DayTotals(
-            date=row["date"],
-            calories=round(row["calories"] or 0, 2),
-            protein=round(row["protein"] or 0, 2),
-            carbs=None if row["carbs"] is None else round(row["carbs"], 2),
-            fat=None if row["fat"] is None else round(row["fat"], 2),
+            date=row.date,
+            calories=round(row.calories or 0, 2),
+            protein=round(row.protein or 0, 2),
+            carbs=None if row.carbs is None else round(row.carbs, 2),
+            fat=None if row.fat is None else round(row.fat, 2),
         )
         for row in rows
     ]

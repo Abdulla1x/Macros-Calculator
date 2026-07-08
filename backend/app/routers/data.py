@@ -1,12 +1,16 @@
 """CSV export/import of the meals table."""
 import csv
 import io
+from datetime import date as date_type
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from ..db import get_connection
+from ..db import get_db
+from ..models import Meal
 from ..schemas import ImportResult
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -16,19 +20,16 @@ ACCEPTED_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y")
 
 
 @router.get("/export")
-def export_csv():
-    conn = get_connection()
-    try:
-        rows = conn.execute(
-            "SELECT date, name, calories, protein, carbs, fat FROM meals ORDER BY date, id"
-        ).fetchall()
-    finally:
-        conn.close()
+def export_csv(db: Session = Depends(get_db)):
+    rows = db.scalars(select(Meal).order_by(Meal.date, Meal.id)).all()
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(CSV_COLUMNS)
-    writer.writerows([tuple(row) for row in rows])
+    writer.writerows(
+        (row.date.isoformat(), row.name, row.calories, row.protein, row.carbs, row.fat)
+        for row in rows
+    )
     buffer.seek(0)
 
     return StreamingResponse(
@@ -38,11 +39,11 @@ def export_csv():
     )
 
 
-def _parse_date(raw: str) -> str | None:
+def _parse_date(raw: str) -> date_type | None:
     raw = raw.strip()
     for fmt in ACCEPTED_DATE_FORMATS:
         try:
-            return datetime.strptime(raw, fmt).date().isoformat()
+            return datetime.strptime(raw, fmt).date()
         except ValueError:
             continue
     return None
@@ -60,7 +61,7 @@ def _parse_float(raw, required: bool) -> tuple[float | None, bool]:
 
 
 @router.post("/import", response_model=ImportResult)
-async def import_csv(file: UploadFile):
+async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
     content = (await file.read()).decode("utf-8-sig", errors="replace")
     reader = csv.DictReader(io.StringIO(content))
     if reader.fieldnames is None:
@@ -75,40 +76,39 @@ async def import_csv(file: UploadFile):
         )
 
     inserted = skipped_duplicates = skipped_invalid = 0
-    conn = get_connection()
-    try:
-        for row in reader:
-            row = {(k or "").strip().lower(): v for k, v in row.items()}
+    for row in reader:
+        row = {(k or "").strip().lower(): v for k, v in row.items()}
 
-            date = _parse_date(row.get("date") or "")
-            name = (row.get("name") or "").strip()
-            calories, cal_ok = _parse_float(row.get("calories"), required=True)
-            protein, pro_ok = _parse_float(row.get("protein"), required=True)
-            carbs, carbs_ok = _parse_float(row.get("carbs"), required=False)
-            fat, fat_ok = _parse_float(row.get("fat"), required=False)
+        date = _parse_date(row.get("date") or "")
+        name = (row.get("name") or "").strip()
+        calories, cal_ok = _parse_float(row.get("calories"), required=True)
+        protein, pro_ok = _parse_float(row.get("protein"), required=True)
+        carbs, carbs_ok = _parse_float(row.get("carbs"), required=False)
+        fat, fat_ok = _parse_float(row.get("fat"), required=False)
 
-            if not (date and name and cal_ok and pro_ok and carbs_ok and fat_ok):
-                skipped_invalid += 1
-                continue
+        if not (date and name and cal_ok and pro_ok and carbs_ok and fat_ok):
+            skipped_invalid += 1
+            continue
 
-            duplicate = conn.execute(
-                """SELECT 1 FROM meals
-                   WHERE date = ? AND name = ? AND calories = ? AND protein = ?""",
-                (date, name, calories, protein),
-            ).fetchone()
-            if duplicate:
-                skipped_duplicates += 1
-                continue
-
-            conn.execute(
-                """INSERT INTO meals (date, name, calories, protein, carbs, fat)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (date, name, calories, protein, carbs, fat),
+        duplicate = db.scalars(
+            select(Meal.id).where(
+                Meal.date == date,
+                Meal.name == name,
+                Meal.calories == calories,
+                Meal.protein == protein,
             )
-            inserted += 1
-        conn.commit()
-    finally:
-        conn.close()
+        ).first()
+        if duplicate is not None:
+            skipped_duplicates += 1
+            continue
+
+        db.add(
+            Meal(date=date, name=name, calories=calories, protein=protein,
+                 carbs=carbs, fat=fat)
+        )
+        db.flush()
+        inserted += 1
+    db.commit()
 
     return ImportResult(
         inserted=inserted,

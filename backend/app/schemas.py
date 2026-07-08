@@ -1,7 +1,7 @@
 from datetime import date as date_type
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MealCreate(BaseModel):
@@ -14,6 +14,8 @@ class MealCreate(BaseModel):
 
 
 class Meal(MealCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
 
 
@@ -28,6 +30,8 @@ class FoodCreate(BaseModel):
 
 
 class Food(FoodCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
 
 
@@ -44,6 +48,8 @@ class OFFProduct(BaseModel):
 
 
 class Settings(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     calorie_goal: float = Field(gt=0)
     protein_goal: float = Field(gt=0)
     carbs_goal: float = Field(gt=0)
