@@ -2,6 +2,7 @@ services:
   - type: web
     name: macros-calculator-api
     runtime: python
+    plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     # Migrations run before the server starts (single instance, no race).

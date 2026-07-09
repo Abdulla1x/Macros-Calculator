@@ -8,6 +8,8 @@
 ![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
+**🔗 Live app: [macros-calculator-mu.vercel.app](https://macros-calculator-mu.vercel.app)** — sign up and start logging. (Free-tier hosting: the first request after idle can take ~30–60 s.)
+
 A full-stack, **multi-user** nutrition tracking app: a **React + TypeScript** dashboard UI (installable as a PWA) backed by a **FastAPI + SQLAlchemy** REST API on **PostgreSQL**.
 
 Sign up with an email and password and get your own private meal log, food library, goals, and AI analyses — every API endpoint is scoped to the authenticated user.

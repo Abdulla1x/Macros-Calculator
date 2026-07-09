@@ -1,8 +1,8 @@
 """AI meal analysis via Google Gemini.
 
 This is the ONLY provider-aware module: routers and the frontend depend on the
-provider-neutral MealAnalysis schema, so switching providers later (e.g. to
-Claude) means rewriting this file and changing env vars, nothing else.
+provider-neutral MealAnalysis schema, so switching providers later means
+rewriting this file and changing env vars, nothing else.
 """
 import os
 
