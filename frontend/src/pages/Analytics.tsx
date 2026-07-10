@@ -9,14 +9,13 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
+import { localIsoDate } from '../lib/dates'
 import type { AnalyticsSummary, ImportResult, Settings } from '../types'
-
-const isoDate = (date: Date) => date.toISOString().slice(0, 10)
 
 const defaultStart = () => {
   const date = new Date()
   date.setDate(date.getDate() - 29)
-  return isoDate(date)
+  return localIsoDate(date)
 }
 
 interface MacroChart {
@@ -36,7 +35,7 @@ const macroCharts: MacroChart[] = [
 export default function Analytics() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [start, setStart] = useState(defaultStart)
-  const [end, setEnd] = useState(isoDate(new Date()))
+  const [end, setEnd] = useState(localIsoDate())
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')

@@ -11,8 +11,9 @@ venv/
 macros.db
 *.db
 
-# Local data files (root only — legacy/Meal_Data.txt is tracked)
+# Local data files (legacy/Meal_Data.txt is tracked)
 /Meal_Data.txt
+legacy/Meal_Data.csv
 
 # Node / frontend
 node_modules/

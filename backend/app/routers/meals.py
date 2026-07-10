@@ -49,6 +49,28 @@ def create_meal(
     return row
 
 
+@router.put("/{meal_id}", response_model=Meal)
+def update_meal(
+    meal_id: int,
+    meal: MealCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = db.scalars(
+        select(MealRow).where(MealRow.id == meal_id, MealRow.user_id == user.id)
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    row.date = meal.date
+    row.name = meal.name.strip()
+    row.calories = meal.calories
+    row.protein = meal.protein
+    row.carbs = meal.carbs
+    row.fat = meal.fat
+    db.commit()
+    return row
+
+
 @router.delete("/{meal_id}", status_code=204)
 def delete_meal(
     meal_id: int,

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
-import type { FoodCreate, MealAnalysisResponse, Settings } from '../types'
+import { localIsoDate } from '../lib/dates'
+import type { FoodCreate, Meal, MealAnalysisResponse, Settings } from '../types'
 
 interface Row {
   key: number
@@ -44,6 +46,21 @@ const rowIsValid = (row: Row) => {
   )
 }
 
+// Ingredients aren't persisted with a meal, so editing loads the stored totals
+// as one pass-through row: weight == serving size, so factor = 1 and the
+// macros come through unchanged (same trick applyAnalysis uses).
+const rowFromMeal = (meal: Meal): Row => ({
+  ...emptyRow(),
+  name: meal.name,
+  weight: '100',
+  servingSize: '100',
+  calories: String(meal.calories),
+  protein: String(meal.protein),
+  carbs: meal.carbs == null ? '' : String(meal.carbs),
+  fat: meal.fat == null ? '' : String(meal.fat),
+  saveToLibrary: false,
+})
+
 const rowTotals = (row: Row) => {
   const factor = Number(row.weight) / Number(row.servingSize)
   const scale = (value: string) => {
@@ -59,10 +76,15 @@ const rowTotals = (row: Row) => {
 }
 
 export default function LogMeal() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  // Set when the dashboard's edit button navigated here; absent on a normal log.
+  const editMeal = (location.state as { editMeal?: Meal } | null)?.editMeal ?? null
+
   const [settings, setSettings] = useState<Settings | null>(null)
   const [rows, setRows] = useState<Row[]>([emptyRow()])
   const [mealName, setMealName] = useState('')
-  const [mealDate, setMealDate] = useState(new Date().toISOString().slice(0, 10))
+  const [mealDate, setMealDate] = useState(localIsoDate())
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
@@ -70,6 +92,15 @@ export default function LogMeal() {
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => null)
   }, [])
+
+  // Covers both mount and in-place navigation (edit → "Log a meal" and back).
+  useEffect(() => {
+    setRows(editMeal ? [rowFromMeal(editMeal)] : [emptyRow()])
+    setMealName(editMeal?.name ?? '')
+    setMealDate(editMeal?.date ?? localIsoDate())
+    setAnalysisId(null)
+    setMessage(null)
+  }, [editMeal])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -138,14 +169,17 @@ export default function LogMeal() {
     setSaving(true)
     setMessage(null)
     try {
-      const meal = await api.createMeal({
+      const payload = {
         date: mealDate,
         name: mealName.trim(),
         calories: Math.round(totals.calories * 100) / 100,
         protein: Math.round(totals.protein * 100) / 100,
         carbs: totals.carbs === null ? null : Math.round(totals.carbs * 100) / 100,
         fat: totals.fat === null ? null : Math.round(totals.fat * 100) / 100,
-      })
+      }
+      const meal = editMeal
+        ? await api.updateMeal(editMeal.id, payload)
+        : await api.createMeal(payload)
 
       // Best-effort: remember which AI analysis this meal came from.
       if (analysisId !== null) {
@@ -170,6 +204,10 @@ export default function LogMeal() {
           ),
       )
 
+      if (editMeal) {
+        navigate('/', { replace: true })
+        return
+      }
       setMessage({ kind: 'success', text: `Saved "${mealName.trim()}" ✓` })
       setRows([emptyRow()])
       setMealName('')
@@ -189,9 +227,11 @@ export default function LogMeal() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Log a meal</h2>
+        <h2 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h2>
         <p className="text-sm text-slate-400">
-          Start typing an ingredient — your food library and Open Food Facts fill in the macros.
+          {editMeal
+            ? 'Adjust the details below — saving updates the existing entry.'
+            : 'Start typing an ingredient — your food library and Open Food Facts fill in the macros.'}
         </p>
       </header>
 
@@ -378,7 +418,7 @@ export default function LogMeal() {
             disabled={saving}
             className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
           >
-            {saving ? 'Saving…' : 'Save meal'}
+            {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
           </button>
         </div>
 

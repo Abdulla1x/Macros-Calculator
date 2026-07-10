@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db import dispose_engine
 from app.main import app
+from app.rate_limit import limiter
 
 TEST_PASSWORD = "test-password-123"
 
@@ -15,6 +16,9 @@ _user_counter = itertools.count(1)
 def _test_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("JWT_SECRET", "test-secret-0123456789abcdef0123456789abcdef")
+    # All TestClient requests share one fake IP, so the per-IP auth rate limit
+    # would trip across tests. Tests that exercise it re-enable it explicitly.
+    limiter.enabled = False
     dispose_engine()
     yield
     dispose_engine()

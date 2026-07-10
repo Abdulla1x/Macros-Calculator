@@ -1,13 +1,16 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from .auth import router as auth_router
 from .auth.security import get_jwt_secret
 from .db import get_engine
 from .models import Base
+from .rate_limit import limiter
 from .routers import ai, analytics, data, foods, meals, settings
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
@@ -25,6 +28,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Macros Calculator API", version="3.0.0", lifespan=lifespan)
+
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    # A `detail` body so the frontend surfaces this like any other API error.
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many attempts. Please wait a minute and try again."},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

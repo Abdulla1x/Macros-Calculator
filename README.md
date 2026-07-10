@@ -23,14 +23,14 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ## ✨ Features
 
 ### 🔐 Accounts & privacy
-- **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry)
+- **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login/signup
 - **Per-user everything**: meals, food library, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Per-user AI quota** (default 20 analyses/day) so one user can't exhaust the shared Gemini quota
 - No password reset yet — an email-based reset flow is on the roadmap
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
-- Today's meal list with inline delete
+- Today's meal list with inline edit and delete
 - 7-day calorie trend sparkline
 
 ### 🤖 AI meal analysis
@@ -233,7 +233,6 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 - Learn from user corrections to AI analyses (the `ai_analyses` log is the groundwork)
 - Upgrade the analysis model (provider is isolated in `services/meal_ai.py`)
 - Password reset / email verification (Resend or similar + purpose-claim tokens)
-- Meal editing
 - Barcode scanning via the Open Food Facts barcode API
 - Weekly/monthly goal summaries and streaks
 - Frontend component tests (Vitest + Testing Library)

@@ -9,4 +9,5 @@ alembic>=1.16
 psycopg[binary]>=3.2.10
 pyjwt>=2.10
 pwdlib[argon2]>=0.2
+slowapi>=0.1.9
 email-validator>=2.0

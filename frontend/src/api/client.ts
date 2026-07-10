@@ -73,6 +73,8 @@ export const api = {
     request<Meal[]>(`/api/meals${date ? `?date=${date}` : ''}`),
   createMeal: (meal: MealCreate) =>
     request<Meal>('/api/meals', { method: 'POST', body: JSON.stringify(meal) }),
+  updateMeal: (id: number, meal: MealCreate) =>
+    request<Meal>(`/api/meals/${id}`, { method: 'PUT', body: JSON.stringify(meal) }),
   deleteMeal: (id: number) =>
     request<void>(`/api/meals/${id}`, { method: 'DELETE' }),
 

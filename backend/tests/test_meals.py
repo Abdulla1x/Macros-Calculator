@@ -37,6 +37,33 @@ def test_rejects_negative_and_blank(client):
     assert client.post("/api/meals", json=_sample(name="")).status_code == 422
 
 
+def test_update_meal(client):
+    meal_id = client.post("/api/meals", json=_sample()).json()["id"]
+
+    response = client.put(
+        f"/api/meals/{meal_id}",
+        json=_sample(date="2026-07-03", name="  Chicken & Quinoa ", calories=610, fat=None),
+    )
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["id"] == meal_id
+    assert updated["date"] == "2026-07-03"
+    assert updated["name"] == "Chicken & Quinoa"
+    assert updated["calories"] == 610
+    assert updated["fat"] is None
+
+    # The update moved the meal, not copied it.
+    assert client.get("/api/meals", params={"date": "2026-07-01"}).json() == []
+    assert [m["id"] for m in client.get("/api/meals").json()] == [meal_id]
+
+
+def test_update_meal_validates_and_404s(client):
+    meal_id = client.post("/api/meals", json=_sample()).json()["id"]
+    assert client.put(f"/api/meals/{meal_id}", json=_sample(calories=-5)).status_code == 422
+    assert client.put(f"/api/meals/{meal_id}", json=_sample(name="")).status_code == 422
+    assert client.put("/api/meals/99999", json=_sample()).status_code == 404
+
+
 def test_delete_meal(client):
     meal_id = client.post("/api/meals", json=_sample()).json()["id"]
     assert client.delete(f"/api/meals/{meal_id}").status_code == 204

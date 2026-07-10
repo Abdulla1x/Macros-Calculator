@@ -3,22 +3,21 @@ import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
+import { localIsoDate } from '../lib/dates'
 import type { AnalyticsSummary, Meal, Settings } from '../types'
-
-const isoDate = (date: Date) => date.toISOString().slice(0, 10)
 
 export default function Dashboard() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const today = isoDate(new Date())
+  const today = localIsoDate()
 
   const load = useCallback(() => {
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 6)
     api.getMeals(today).then(setMeals).catch(() => setMeals([]))
-    api.getAnalytics(isoDate(weekAgo), today).then(setWeek).catch(() => setWeek(null))
+    api.getAnalytics(localIsoDate(weekAgo), today).then(setWeek).catch(() => setWeek(null))
   }, [today])
 
   useEffect(() => {
@@ -126,13 +125,23 @@ export default function Dashboard() {
                       </button>
                     </span>
                   ) : (
-                    <button
-                      onClick={() => setConfirmDelete(meal.id)}
-                      className="text-xs text-slate-500 hover:text-rose-400"
-                      title="Delete meal"
-                    >
-                      ✕
-                    </button>
+                    <span className="flex items-center gap-3">
+                      <Link
+                        to="/log"
+                        state={{ editMeal: meal }}
+                        className="text-xs text-slate-500 hover:text-emerald-400"
+                        title="Edit meal"
+                      >
+                        ✎
+                      </Link>
+                      <button
+                        onClick={() => setConfirmDelete(meal.id)}
+                        className="text-xs text-slate-500 hover:text-rose-400"
+                        title="Delete meal"
+                      >
+                        ✕
+                      </button>
+                    </span>
                   )}
                 </li>
               ))}

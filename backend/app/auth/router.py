@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Setting, User
+from ..rate_limit import LOGIN_LIMIT, SIGNUP_LIMIT, limiter
 from ..schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
 from .deps import get_current_user
 from .security import create_access_token, hash_password, verify_password
@@ -24,7 +25,8 @@ def _token_response(user: User) -> TokenResponse:
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
-def signup(body: SignupRequest, db: Session = Depends(get_db)):
+@limiter.limit(SIGNUP_LIMIT)
+def signup(request: Request, body: SignupRequest, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
     user = User(email=email, password_hash=hash_password(body.password))
     db.add(user)
@@ -39,7 +41,8 @@ def signup(body: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit(LOGIN_LIMIT)
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
     user = db.scalars(select(User).where(func.lower(User.email) == email)).first()
     if user is None:

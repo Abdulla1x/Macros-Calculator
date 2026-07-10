@@ -29,6 +29,15 @@ def test_cannot_delete_another_users_meal(client, client_b):
     assert [m["id"] for m in client.get("/api/meals").json()] == [a_meal["id"]]
 
 
+def test_cannot_update_another_users_meal(client, client_b):
+    a_meal = client.post("/api/meals", json=MEAL_A).json()
+
+    hijack = client_b.put(f"/api/meals/{a_meal['id']}", json=MEAL_B)
+    assert hijack.status_code == 404
+    # A's meal is untouched.
+    assert client.get("/api/meals").json()[0]["name"] == "Alpha Meal"
+
+
 def test_food_library_is_scoped(client, client_b):
     a_food = client.post("/api/foods", json=FOOD_A).json()
 

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.security import get_jwt_secret
 from app.main import app
+from app.rate_limit import limiter
 from tests.conftest import TEST_PASSWORD
 
 
@@ -53,6 +54,25 @@ def test_login_wrong_password_and_unknown_email_are_identical(anon_client):
     assert wrong_pw.json() == unknown.json()
 
 
+def test_login_is_rate_limited_per_ip(anon_client):
+    signup(anon_client, "ratelimited@example.com")
+    limiter.reset()
+    limiter.enabled = True
+    try:
+        attempts = [
+            login(anon_client, "ratelimited@example.com", "wrong-password-1")
+            for _ in range(11)
+        ]
+        assert all(r.status_code == 401 for r in attempts[:10])
+        assert attempts[10].status_code == 429
+        assert "Too many attempts" in attempts[10].json()["detail"]
+        # The right password is also throttled — the limit is per IP, not per outcome.
+        assert login(anon_client, "ratelimited@example.com").status_code == 429
+    finally:
+        limiter.enabled = False
+        limiter.reset()
+
+
 def test_garbage_token_rejected(client):
     client.headers["Authorization"] = "Bearer not.a.token"
     assert client.get("/api/meals").status_code == 401
@@ -88,6 +108,7 @@ def test_token_for_deleted_user_rejected(anon_client):
 PROTECTED_ENDPOINTS = [
     ("GET", "/api/meals"),
     ("POST", "/api/meals"),
+    ("PUT", "/api/meals/1"),
     ("DELETE", "/api/meals/1"),
     ("GET", "/api/foods"),
     ("GET", "/api/foods/search?q=a"),
