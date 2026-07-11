@@ -1,6 +1,6 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,8 @@ def daily_summary(
     db: Session = Depends(get_db),
 ):
     """Per-day macro totals, plus totals and daily averages over the range."""
+    if start is not None and end is not None and start > end:
+        raise HTTPException(status_code=422, detail="start must not be after end")
     stmt = (
         select(
             Meal.date,
@@ -50,11 +52,23 @@ def daily_summary(
         for row in rows
     ]
 
+    # Averages are per day *in the range*, so unlogged days count as zero and
+    # every macro shares one denominator. Without explicit bounds the range is
+    # the span of logged days; an end date in the future is clamped to today
+    # so it can't dilute the average.
+    if days:
+        range_start = start if start is not None else days[0].date
+        range_end = end if end is not None else days[-1].date
+        range_end = min(range_end, date_type.today())
+        range_days = max((range_end - range_start).days + 1, 1)
+    else:
+        range_days = 0
+
     totals: dict[str, float] = {}
     averages: dict[str, float] = {}
     for macro in ("calories", "protein", "carbs", "fat"):
         values = [v for day in days if (v := getattr(day, macro)) is not None]
         totals[macro] = round(sum(values), 2)
-        averages[macro] = round(sum(values) / len(values), 2) if values else 0.0
+        averages[macro] = round(sum(values) / range_days, 2) if range_days else 0.0
 
     return AnalyticsSummary(days=days, totals=totals, averages=averages)

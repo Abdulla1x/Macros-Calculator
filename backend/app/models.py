@@ -31,6 +31,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Tokens issued before this moment are rejected (see auth/deps.py), so
+    # changing the password revokes any previously leaked token. Stored with
+    # second precision so a token minted in the same request stays valid.
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class Meal(Base):

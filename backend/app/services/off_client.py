@@ -34,13 +34,15 @@ def _per_serving(nutriments: dict, serving_quantity: float | None) -> OFFProduct
     if calories is None or protein is None:
         return None
 
+    carbs = num(f"carbohydrates{suffix}")
+    fat = num(f"fat{suffix}")
     return OFFProduct(
         name="",  # filled by caller
         serving_size=round(serving_size, 2),
         calories=round(calories, 2),
         protein=round(protein, 2),
-        carbs=(c := num(f"carbohydrates{suffix}")) and round(c, 2),
-        fat=(f := num(f"fat{suffix}")) and round(f, 2),
+        carbs=None if carbs is None else round(carbs, 2),
+        fat=None if fat is None else round(fat, 2),
     )
 
 

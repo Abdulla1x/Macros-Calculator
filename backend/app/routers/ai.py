@@ -39,8 +39,9 @@ def _analyses_today(db: Session, user_id: int) -> int:
 @router.post("/analyze", response_model=MealAnalysisResponse)
 async def analyze(
     image: UploadFile | None = File(default=None),
-    text: str | None = Form(default=None),
-    prior_analysis: str | None = Form(default=None),
+    # Length caps bound what can be relayed to the paid Gemini API.
+    text: str | None = Form(default=None, max_length=2_000),
+    prior_analysis: str | None = Form(default=None, max_length=20_000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -53,16 +54,6 @@ async def analyze(
         raise HTTPException(
             status_code=503,
             detail="AI analysis is not configured on the server (GEMINI_API_KEY).",
-        )
-
-    limit = _daily_limit()
-    if _analyses_today(db, user.id) >= limit:
-        raise HTTPException(
-            status_code=429,
-            detail=(
-                f"Daily AI analysis limit reached ({limit}/day). "
-                "Try again tomorrow or enter macros manually."
-            ),
         )
 
     prior: MealAnalysis | None = None
@@ -81,18 +72,37 @@ async def analyze(
             raise HTTPException(status_code=413, detail="Image too large (max 5 MB).")
         image_mime = image.content_type
 
+    # Reserve a quota slot *before* the slow provider call: lock the user row
+    # (a no-op on SQLite, which serializes writes anyway) so concurrent
+    # requests can't both pass the count check, then commit the reservation.
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    limit = _daily_limit()
+    if _analyses_today(db, user.id) >= limit:
+        db.rollback()
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Daily AI analysis limit reached ({limit}/day). "
+                "Try again tomorrow or enter macros manually."
+            ),
+        )
+    record = AIAnalysis(user_id=user.id, user_text=text, analysis_json="")
+    db.add(record)
+    db.commit()
+
     try:
         analysis = await meal_ai.analyze_meal(image_bytes, image_mime, text, prior)
     except Exception:
+        # Refund the reserved slot — a provider failure shouldn't count
+        # against the user's daily limit.
+        db.delete(record)
+        db.commit()
         raise HTTPException(
             status_code=502,
             detail="AI analysis failed. Try again or enter macros manually.",
         )
 
-    record = AIAnalysis(
-        user_id=user.id, user_text=text, analysis_json=analysis.model_dump_json()
-    )
-    db.add(record)
+    record.analysis_json = analysis.model_dump_json()
     db.commit()
 
     return MealAnalysisResponse(**analysis.model_dump(), analysis_id=record.id)

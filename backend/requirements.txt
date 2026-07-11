@@ -1,13 +1,16 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-httpx>=0.27
-python-multipart>=0.0.9
-google-genai>=1.0
-pytest>=8.0
-sqlalchemy>=2.0.43
-alembic>=1.16
-psycopg[binary]>=3.2.10
-pyjwt>=2.10
-pwdlib[argon2]>=0.2
-slowapi>=0.1.9
-email-validator>=2.0
+# Pinned for reproducible deploys (Render installs from this file on every
+# build). Bump deliberately; python-multipart must stay >= 0.0.18
+# (CVE-2024-53981).
+fastapi==0.139.0
+uvicorn[standard]==0.50.0
+httpx==0.28.1
+python-multipart==0.0.32
+google-genai==2.10.0
+pytest==9.1.1
+sqlalchemy==2.0.51
+alembic==1.18.5
+psycopg[binary]==3.3.4
+pyjwt==2.13.0
+pwdlib[argon2]==0.3.0
+slowapi==0.1.10
+email-validator==2.3.0

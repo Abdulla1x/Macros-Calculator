@@ -25,10 +25,13 @@ def get_current_user(
     if credentials is None:
         raise _unauthorized()
     try:
-        user_id = decode_token(credentials.credentials)
+        user_id, issued_at = decode_token(credentials.credentials)
     except jwt.InvalidTokenError:
         raise _unauthorized()
     user = db.get(User, user_id)
     if user is None:
+        raise _unauthorized()
+    # Changing the password revokes every token issued before the change.
+    if user.password_changed_at is not None and issued_at < user.password_changed_at:
         raise _unauthorized()
     return user

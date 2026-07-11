@@ -48,15 +48,21 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(claims, get_jwt_secret(), algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> int:
-    """Returns the user id, or raises jwt.InvalidTokenError."""
+def decode_token(token: str) -> tuple[int, datetime]:
+    """Returns (user id, issued-at as naive UTC), or raises jwt.InvalidTokenError.
+
+    issued-at lets callers reject tokens minted before the user's last
+    password change (see auth/deps.py).
+    """
     claims = jwt.decode(
         token,
         get_jwt_secret(),
         algorithms=[ALGORITHM],
-        options={"require": ["exp", "sub"]},
+        options={"require": ["exp", "sub", "iat"]},
     )
     try:
-        return int(claims["sub"])
+        user_id = int(claims["sub"])
+        issued_at = datetime.fromtimestamp(claims["iat"], tz=timezone.utc)
     except (TypeError, ValueError):
-        raise jwt.InvalidTokenError("Malformed subject claim")
+        raise jwt.InvalidTokenError("Malformed subject or iat claim")
+    return user_id, issued_at.replace(tzinfo=None)

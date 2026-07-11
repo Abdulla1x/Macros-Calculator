@@ -43,8 +43,14 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ORIGINS", DEFAULT_ORIGINS).split(","),
-    allow_credentials=True,
+    # strip() tolerates "a, b" spacing in the env var; a stray space would
+    # otherwise silently break origin matching. Auth is Bearer-header based,
+    # not cookies, so allow_credentials stays off.
+    allow_origins=[
+        origin.strip()
+        for origin in (os.environ.get("CORS_ORIGINS") or DEFAULT_ORIGINS).split(",")
+        if origin.strip()
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

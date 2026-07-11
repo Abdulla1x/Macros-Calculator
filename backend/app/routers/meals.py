@@ -1,6 +1,6 @@
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,16 +16,18 @@ router = APIRouter(prefix="/api/meals", tags=["meals"])
 @router.get("", response_model=list[Meal])
 def list_meals(
     date: date_type | None = None,
+    limit: int = Query(default=500, ge=1, le=1000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    stmt = (
-        select(MealRow)
-        .where(MealRow.user_id == user.id)
-        .order_by(MealRow.date, MealRow.id)
-    )
+    stmt = select(MealRow).where(MealRow.user_id == user.id)
     if date is not None:
-        stmt = stmt.where(MealRow.date == date)
+        # A single day is naturally bounded; keep insertion order.
+        stmt = stmt.where(MealRow.date == date).order_by(MealRow.date, MealRow.id)
+    else:
+        # Undated queries would otherwise return the whole history — cap them
+        # at the most recent `limit` meals.
+        stmt = stmt.order_by(MealRow.date.desc(), MealRow.id.desc()).limit(limit)
     return db.scalars(stmt).all()
 
 
