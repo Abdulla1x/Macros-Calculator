@@ -33,16 +33,29 @@ const emptyRow = (): Row => ({
   saveToLibrary: true,
 })
 
-const num = (value: string) => (value.trim() === '' ? null : Number(value))
+// Non-numeric input ("abc", "1e999") becomes null, not NaN — NaN would pass
+// validation and then serialize as null in the payload, silently corrupting
+// the meal.
+const num = (value: string) => {
+  if (value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 const rowIsValid = (row: Row) => {
   const weight = num(row.weight)
   const serving = num(row.servingSize)
+  const calories = num(row.calories)
+  const protein = num(row.protein)
+  const carbs = num(row.carbs)
+  const fat = num(row.fat)
   return (
     weight !== null && weight > 0 &&
     serving !== null && serving > 0 &&
-    num(row.calories) !== null &&
-    num(row.protein) !== null
+    calories !== null && calories >= 0 &&
+    protein !== null && protein >= 0 &&
+    (row.carbs.trim() === '' || (carbs !== null && carbs >= 0)) &&
+    (row.fat.trim() === '' || (fat !== null && fat >= 0))
   )
 }
 
@@ -159,6 +172,10 @@ export default function LogMeal() {
       setMessage({ kind: 'error', text: 'Please enter a meal name.' })
       return
     }
+    if (!mealDate) {
+      setMessage({ kind: 'error', text: 'Please pick a date.' })
+      return
+    }
     if (validRows.length === 0) {
       setMessage({
         kind: 'error',
@@ -187,20 +204,25 @@ export default function LogMeal() {
         setAnalysisId(null)
       }
 
-      // Offer-to-cache: persist manually entered ingredients the user opted in on.
+      // Offer-to-cache: persist manually entered ingredients the user opted
+      // in on. Best-effort — the meal is already saved, and a failed library
+      // write must not surface as "Saving failed" (which would invite a
+      // duplicate re-save).
       await Promise.all(
         validRows
           .filter((row) => !row.fromLibrary && row.saveToLibrary && row.name.trim())
           .map((row) =>
-            api.saveFood({
-              name: row.name.trim(),
-              serving_size: Number(row.servingSize),
-              calories: Number(row.calories),
-              protein: Number(row.protein),
-              carbs: num(row.carbs),
-              fat: num(row.fat),
-              source: 'user',
-            }),
+            api
+              .saveFood({
+                name: row.name.trim(),
+                serving_size: Number(row.servingSize),
+                calories: Number(row.calories),
+                protein: Number(row.protein),
+                carbs: num(row.carbs),
+                fat: num(row.fat),
+                source: 'user',
+              })
+              .catch(() => null),
           ),
       )
 

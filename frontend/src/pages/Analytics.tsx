@@ -37,6 +37,7 @@ export default function Analytics() {
   const [start, setStart] = useState(defaultStart)
   const [end, setEnd] = useState(localIsoDate())
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
   const [importing, setImporting] = useState(false)
@@ -61,7 +62,23 @@ export default function Analytics() {
   }, [])
 
   useEffect(() => {
-    api.getAnalytics(start, end).then(setSummary).catch(() => setSummary(null))
+    // The stale flag stops an out-of-order response for a previous range from
+    // overwriting the current one.
+    let stale = false
+    setLoadError(null)
+    api
+      .getAnalytics(start, end)
+      .then((result) => {
+        if (!stale) setSummary(result)
+      })
+      .catch((err) => {
+        if (stale) return
+        setSummary(null)
+        setLoadError(err instanceof Error ? err.message : 'Could not load analytics.')
+      })
+    return () => {
+      stale = true
+    }
   }, [start, end])
 
   // Hide optional charts when untracked or when no day in range has data
@@ -191,6 +208,10 @@ export default function Analytics() {
             </table>
           </section>
         </>
+      ) : loadError ? (
+        <p className="rounded-xl border border-rose-900/60 bg-slate-900 p-6 text-center text-sm text-rose-300">
+          {loadError}
+        </p>
       ) : (
         <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
           No meals in this date range yet.

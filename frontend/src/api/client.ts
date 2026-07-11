@@ -68,6 +68,19 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<User>('/api/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<TokenResponse>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    }),
+  deleteAccount: (password: string) =>
+    request<void>('/api/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    }),
 
   getMeals: (date?: string) =>
     request<Meal[]>(`/api/meals${date ? `?date=${date}` : ''}`),
@@ -120,6 +133,18 @@ export const api = {
     const link = document.createElement('a')
     link.href = url
     link.download = 'macros_backup.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  },
+  downloadExportAll: async () => {
+    const data = await request<unknown>('/api/data/export/all')
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'macros_full_export.json'
     link.click()
     URL.revokeObjectURL(url)
   },

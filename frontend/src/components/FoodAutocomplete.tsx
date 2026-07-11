@@ -32,18 +32,27 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
       setOffResults(null)
       return
     }
+    // `stale` stops a slow response for a previous query from overwriting the
+    // current results (the timer only guards the debounce, not the fetch).
+    let stale = false
     const timer = setTimeout(() => {
       api
         .searchFoods(value.trim())
         .then((results) => {
+          if (stale) return
           setLocalResults(results)
           setOffResults(null)
           setOffError(null)
           setOpen(true)
         })
-        .catch(() => setLocalResults([]))
+        .catch(() => {
+          if (!stale) setLocalResults([])
+        })
     }, 250)
-    return () => clearTimeout(timer)
+    return () => {
+      stale = true
+      clearTimeout(timer)
+    }
   }, [value])
 
   useEffect(() => {

@@ -170,6 +170,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         </p>
       </div>
 
+      <p className="mt-2 text-xs text-slate-500">
+        Your photo and description are sent to Google Gemini for analysis.
+      </p>
+
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 
       {analysis && (

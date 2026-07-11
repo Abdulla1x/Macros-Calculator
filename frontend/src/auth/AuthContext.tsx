@@ -16,6 +16,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string) => Promise<void>
   logout: () => void
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
+  deleteAccount: (password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -51,8 +53,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      // The backend revokes all previous tokens and returns a fresh one;
+      // storing it keeps this session logged in.
+      const response = await api.changePassword(currentPassword, newPassword)
+      setToken(response.access_token)
+      setUser(response.user)
+    },
+    [],
+  )
+
+  const deleteAccount = useCallback(async (password: string) => {
+    await api.deleteAccount(password)
+    clearToken()
+    setUser(null)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, signup, logout, changePassword, deleteAccount }}
+    >
       {children}
     </AuthContext.Provider>
   )

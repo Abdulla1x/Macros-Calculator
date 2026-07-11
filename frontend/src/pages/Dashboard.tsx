@@ -11,12 +11,30 @@ export default function Dashboard() {
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const today = localIsoDate()
+  const [error, setError] = useState<string | null>(null)
+  const [today, setToday] = useState(localIsoDate)
+
+  // Refresh the date when the tab regains focus, so a session left open past
+  // midnight doesn't keep showing yesterday. Same-string updates are no-ops.
+  useEffect(() => {
+    const refresh = () => setToday(localIsoDate())
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
 
   const load = useCallback(() => {
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 6)
-    api.getMeals(today).then(setMeals).catch(() => setMeals([]))
+    setError(null)
+    // A failed load must not masquerade as an empty day.
+    api.getMeals(today).then(setMeals).catch(() => {
+      setMeals([])
+      setError("Couldn't load your meals — check your connection and try again.")
+    })
     api.getAnalytics(localIsoDate(weekAgo), today).then(setWeek).catch(() => setWeek(null))
   }, [today])
 
@@ -26,8 +44,14 @@ export default function Dashboard() {
   }, [load])
 
   const remove = async (id: number) => {
-    await api.deleteMeal(id)
-    setConfirmDelete(null)
+    try {
+      await api.deleteMeal(id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed — try again.')
+      return
+    } finally {
+      setConfirmDelete(null)
+    }
     load()
   }
 
@@ -99,10 +123,20 @@ export default function Dashboard() {
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3">
           <h3 className="mb-3 font-semibold">Today's meals</h3>
-          {meals.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">
-              Nothing logged yet — <Link to="/log" className="text-emerald-400 hover:underline">log your first meal</Link>.
+          {error && (
+            <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+              {error}{' '}
+              <button onClick={load} className="underline hover:text-rose-200">
+                Retry
+              </button>
             </p>
+          )}
+          {meals.length === 0 ? (
+            !error && (
+              <p className="py-6 text-center text-sm text-slate-500">
+                Nothing logged yet — <Link to="/log" className="text-emerald-400 hover:underline">log your first meal</Link>.
+              </p>
+            )
           ) : (
             <ul className="divide-y divide-slate-800">
               {meals.map((meal) => (
