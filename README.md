@@ -26,7 +26,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login/signup
 - **Per-user everything**: meals, food library, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Per-user AI quota** (default 20 analyses/day) so one user can't exhaust the shared Gemini quota
-- No password reset yet — an email-based reset flow is on the roadmap
+- **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
+- No password *reset* yet (forgot-password email flow) — on the roadmap
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
@@ -215,6 +216,8 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 | POST | `/api/auth/signup` | Create an account → JWT + user |
 | POST | `/api/auth/login` | Log in → JWT + user |
 | GET | `/api/auth/me` | Current user (token check) |
+| POST | `/api/auth/change-password` | Rotate password; revokes older tokens, returns a fresh one |
+| DELETE | `/api/auth/account` | Permanently delete the account and all its data |
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
 | DELETE | `/api/meals/{id}` | Delete a meal |
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
@@ -225,6 +228,7 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals + tracked-macro toggles |
 | GET/POST | `/api/data/export` · `/api/data/import` | CSV backup / restore |
+| GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 
 ---
 

@@ -7,6 +7,7 @@ services:
     buildCommand: pip install -r requirements.txt
     # Migrations run before the server starts (single instance, no race).
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
       # Neon Postgres connection string, as postgresql+psycopg://...?sslmode=require
       # Set in the Render dashboard (never committed).
@@ -20,8 +21,10 @@ services:
       # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
       - key: AI_DAILY_LIMIT
         value: "20"
-      # Set this to your deployed frontend origin (comma-separated for several).
+      # Your deployed frontend origin(s), comma-separated. Set in the Render
+      # dashboard — a committed placeholder would silently block the real
+      # frontend if left unedited.
       - key: CORS_ORIGINS
-        value: https://your-app.vercel.app
+        sync: false
       - key: PYTHON_VERSION
         value: "3.14.4"

@@ -1,6 +1,10 @@
+import asyncio
 import io
 import json
+from types import SimpleNamespace
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
@@ -127,6 +131,28 @@ def test_analyze_maps_provider_errors_to_502(client, monkeypatch):
     assert response.status_code == 502
 
 
+def test_analyze_rejects_overlong_text(client, monkeypatch):
+    configure(monkeypatch)
+    response = client.post("/api/ai/analyze", data={"text": "x" * 2_001})
+    assert response.status_code == 422
+
+
+def test_provider_failure_refunds_the_quota_slot(client, monkeypatch):
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+
+    async def boom(image_bytes, image_mime, text, prior_analysis=None):
+        raise RuntimeError("provider down")
+
+    configure(monkeypatch, boom)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 502
+
+    # The failed call must not count against the daily limit...
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+    # ...but the successful one does.
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
+
+
 def test_link_analysis_sets_meal_id(client, monkeypatch):
     configure(monkeypatch)
     analysis_id = client.post(
@@ -169,3 +195,36 @@ def test_build_contents_includes_prior_for_refinement():
     parts = _build_contents(None, None, "I only ate half", SAMPLE)
     assert "Previous analysis to refine" in parts[0]
     assert "I only ate half" in parts[0]
+
+
+# --- analyze_meal's response handling (fake genai client, no network) -------
+
+def _install_fake_provider(monkeypatch, response):
+    async def generate_content(**_kwargs):
+        return response
+
+    fake_client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    )
+    monkeypatch.setattr(meal_ai.genai, "Client", lambda api_key=None: fake_client)
+
+
+def test_analyze_meal_uses_sdk_parsed_object(monkeypatch):
+    _install_fake_provider(monkeypatch, SimpleNamespace(parsed=SAMPLE, text=None))
+    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+    assert result is SAMPLE
+
+
+def test_analyze_meal_falls_back_to_raw_json_text(monkeypatch):
+    # Some SDK versions leave .parsed unset and only give raw JSON text.
+    response = SimpleNamespace(parsed=None, text=SAMPLE.model_dump_json())
+    _install_fake_provider(monkeypatch, response)
+    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+    assert result.meal_name == "Chicken & Rice"
+    assert result.calories.estimate == 583
+
+
+def test_analyze_meal_raises_on_empty_provider_response(monkeypatch):
+    _install_fake_provider(monkeypatch, SimpleNamespace(parsed=None, text=None))
+    with pytest.raises(ValidationError):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))

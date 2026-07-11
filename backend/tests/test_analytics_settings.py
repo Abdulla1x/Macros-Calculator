@@ -17,8 +17,9 @@ def test_daily_summary_totals_and_averages(client):
     }
     assert summary["totals"]["calories"] == 1400
     assert summary["averages"]["calories"] == 700
-    # carbs average only over days that have carbs data
-    assert summary["averages"]["carbs"] == 80
+    # Every macro averages over the same denominator (days in range), so a
+    # macro logged on only some days is not inflated.
+    assert summary["averages"]["carbs"] == 40
 
 
 def test_daily_summary_range_filter(client):
@@ -30,6 +31,31 @@ def test_daily_summary_range_filter(client):
         "/api/analytics/daily", params={"start": "2026-07-01", "end": "2026-07-04"}
     ).json()
     assert [day["date"] for day in summary["days"]] == ["2026-07-01"]
+
+
+def test_daily_summary_empty_when_no_meals(client):
+    summary = client.get("/api/analytics/daily").json()
+    assert summary["days"] == []
+    assert summary["averages"] == {
+        "calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0,
+    }
+
+
+def test_daily_summary_rejects_inverted_range(client):
+    response = client.get(
+        "/api/analytics/daily", params={"start": "2026-07-10", "end": "2026-07-01"}
+    )
+    assert response.status_code == 422
+
+
+def test_daily_summary_averages_count_unlogged_days_in_range(client):
+    _add_meal(client, "2026-07-01", 800, 60)
+
+    summary = client.get(
+        "/api/analytics/daily", params={"start": "2026-07-01", "end": "2026-07-04"}
+    ).json()
+    # One logged day out of four in range → the average reflects all four.
+    assert summary["averages"]["calories"] == 200
 
 
 def test_settings_defaults_and_update(client):
@@ -45,3 +71,14 @@ def test_settings_defaults_and_update(client):
     }
     assert client.put("/api/settings", json=updated).json() == updated
     assert client.get("/api/settings").json() == updated
+
+
+def test_settings_reject_non_positive_goals(client):
+    valid = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    for field in ("calorie_goal", "protein_goal", "carbs_goal", "fat_goal"):
+        for bad in (-100, 0):
+            response = client.put("/api/settings", json={**valid, field: bad})
+            assert response.status_code == 422, f"{field}={bad} was accepted"

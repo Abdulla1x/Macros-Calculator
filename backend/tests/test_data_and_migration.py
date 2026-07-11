@@ -38,3 +38,25 @@ def test_import_rejects_missing_columns(client):
         "/api/data/import", files={"file": ("bad.csv", "foo,bar\n1,2\n", "text/csv")}
     )
     assert response.status_code == 400
+
+
+def test_import_rejects_oversized_file(client):
+    huge = "date,name,calories,protein\n" + ("x" * (1024 * 1024))
+    response = client.post(
+        "/api/data/import", files={"file": ("huge.csv", huge, "text/csv")}
+    )
+    assert response.status_code == 413
+
+
+def test_import_dedupe_considers_carbs_and_fat(client):
+    csv_content = (
+        "date,name,calories,protein,carbs,fat\n"
+        "2026-07-01,Bowl,400,30,50,10\n"
+        "2026-07-01,Bowl,400,30,20,25\n"  # same cal/protein, different carbs/fat
+        "2026-07-01,Bowl,400,30,50,10\n"  # true duplicate of row 1
+    )
+    result = client.post(
+        "/api/data/import", files={"file": ("data.csv", csv_content, "text/csv")}
+    ).json()
+    assert result["inserted"] == 2
+    assert result["skipped_duplicates"] == 1

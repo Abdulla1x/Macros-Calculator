@@ -129,7 +129,7 @@ def main() -> None:
         response = client.delete(f"/api/foods/{a_food_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's food id -> 404")
         response = client.patch(
-            f"/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
+            "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
         check(response.status_code == 404, "B PATCH unknown analysis -> 404")
 

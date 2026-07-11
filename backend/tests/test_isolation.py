@@ -1,5 +1,5 @@
 """Cross-tenant isolation: two users must never see or modify each other's data."""
-from tests.test_meal_ai import SAMPLE, configure
+from tests.test_meal_ai import configure
 
 MEAL_A = {"date": "2026-07-01", "name": "Alpha Meal", "calories": 500, "protein": 40}
 MEAL_B = {"date": "2026-07-01", "name": "Beta Meal", "calories": 300, "protein": 20}

@@ -2,10 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
-from fastapi.testclient import TestClient
 
 from app.auth.security import get_jwt_secret
-from app.main import app
 from app.rate_limit import limiter
 from tests.conftest import TEST_PASSWORD
 
@@ -119,7 +117,10 @@ PROTECTED_ENDPOINTS = [
     ("GET", "/api/settings"),
     ("PUT", "/api/settings"),
     ("GET", "/api/data/export"),
+    ("GET", "/api/data/export/all"),
     ("POST", "/api/data/import"),
+    ("POST", "/api/auth/change-password"),
+    ("DELETE", "/api/auth/account"),
     ("POST", "/api/ai/analyze"),
     ("PATCH", "/api/ai/analyses/1"),
     ("GET", "/api/auth/me"),

@@ -69,3 +69,18 @@ def test_delete_meal(client):
     assert client.delete(f"/api/meals/{meal_id}").status_code == 204
     assert client.delete(f"/api/meals/{meal_id}").status_code == 404
     assert client.get("/api/meals", params={"date": "2026-07-01"}).json() == []
+
+
+def test_list_rejects_malformed_date(client):
+    assert client.get("/api/meals", params={"date": "garbage"}).status_code == 422
+    assert client.get("/api/meals", params={"date": "2026-13-40"}).status_code == 422
+
+
+def test_undated_list_is_capped_and_newest_first(client):
+    for day in ("2026-07-01", "2026-07-02", "2026-07-03"):
+        client.post("/api/meals", json=_sample(date=day, name=f"Meal {day}"))
+
+    meals = client.get("/api/meals", params={"limit": 2}).json()
+    assert [m["date"] for m in meals] == ["2026-07-03", "2026-07-02"]
+    assert client.get("/api/meals", params={"limit": 0}).status_code == 422
+    assert client.get("/api/meals", params={"limit": 5000}).status_code == 422
