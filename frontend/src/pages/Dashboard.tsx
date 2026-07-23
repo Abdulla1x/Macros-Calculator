@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
-import { localIsoDate } from '../lib/dates'
+import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import type { AnalyticsSummary, Meal, Settings } from '../types'
 
 export default function Dashboard() {
@@ -12,12 +12,20 @@ export default function Dashboard() {
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [today, setToday] = useState(localIsoDate)
+  const [viewedDate, setViewedDate] = useState(localIsoDate)
+  const todayRef = useRef(localIsoDate())
+  const realToday = localIsoDate()
+  const isToday = viewedDate === realToday
 
-  // Refresh the date when the tab regains focus, so a session left open past
-  // midnight doesn't keep showing yesterday. Same-string updates are no-ops.
+  // When the tab regains focus past midnight, roll the view forward — but only
+  // if the user is still on "today", so a day they deliberately navigated to
+  // isn't clobbered. Same-string updates are no-ops.
   useEffect(() => {
-    const refresh = () => setToday(localIsoDate())
+    const refresh = () => {
+      const now = localIsoDate()
+      setViewedDate((prev) => (prev === todayRef.current ? now : prev))
+      todayRef.current = now
+    }
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     return () => {
@@ -27,16 +35,17 @@ export default function Dashboard() {
   }, [])
 
   const load = useCallback(() => {
-    const weekAgo = new Date()
-    weekAgo.setDate(weekAgo.getDate() - 6)
+    const today = localIsoDate()
     setError(null)
     // A failed load must not masquerade as an empty day.
-    api.getMeals(today).then(setMeals).catch(() => {
+    api.getMeals(viewedDate).then(setMeals).catch(() => {
       setMeals([])
       setError("Couldn't load your meals — check your connection and try again.")
     })
-    api.getAnalytics(localIsoDate(weekAgo), today).then(setWeek).catch(() => setWeek(null))
-  }, [today])
+    // The 7-day trend stays anchored to the real today, independent of the day
+    // being viewed.
+    api.getAnalytics(addDays(today, -6), today).then(setWeek).catch(() => setWeek(null))
+  }, [viewedDate])
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch(() => null)
@@ -65,18 +74,56 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Today</h2>
-          <p className="text-sm text-slate-400">
-            {new Date().toLocaleDateString(undefined, {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setViewedDate((d) => addDays(d, -1))}
+              className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-2 text-slate-300 hover:bg-slate-800"
+              title="Previous day"
+              aria-label="Previous day"
+            >
+              ◀
+            </button>
+            <button
+              onClick={() => setViewedDate((d) => addDays(d, 1))}
+              disabled={isToday}
+              className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-2 text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Next day"
+              aria-label="Next day"
+            >
+              ▶
+            </button>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold">
+                {isToday
+                  ? 'Today'
+                  : parseIsoDate(viewedDate).toLocaleDateString(undefined, { weekday: 'long' })}
+              </h2>
+              {!isToday && (
+                <button
+                  onClick={() => setViewedDate(localIsoDate())}
+                  className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
+                >
+                  Jump to today
+                </button>
+              )}
+            </div>
+            <input
+              type="date"
+              value={viewedDate}
+              max={realToday}
+              onChange={(e) => e.target.value && setViewedDate(e.target.value)}
+              style={{ colorScheme: 'dark' }}
+              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-sm text-slate-400"
+              aria-label="Pick a date"
+            />
+          </div>
         </div>
         <Link
           to="/log"
+          state={{ logDate: viewedDate }}
           className="rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
         >
           + Log a meal
@@ -122,7 +169,14 @@ export default function Dashboard() {
 
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3">
-          <h3 className="mb-3 font-semibold">Today's meals</h3>
+          <h3 className="mb-3 font-semibold">
+            {isToday
+              ? "Today's meals"
+              : `Meals · ${parseIsoDate(viewedDate).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}`}
+          </h3>
           {error && (
             <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
               {error}{' '}
@@ -134,7 +188,7 @@ export default function Dashboard() {
           {meals.length === 0 ? (
             !error && (
               <p className="py-6 text-center text-sm text-slate-500">
-                Nothing logged yet — <Link to="/log" className="text-emerald-400 hover:underline">log your first meal</Link>.
+                Nothing logged yet — <Link to="/log" state={{ logDate: viewedDate }} className="text-emerald-400 hover:underline">log your first meal</Link>.
               </p>
             )
           ) : (
