@@ -93,6 +93,9 @@ export default function LogMeal() {
   const location = useLocation()
   // Set when the dashboard's edit button navigated here; absent on a normal log.
   const editMeal = (location.state as { editMeal?: Meal } | null)?.editMeal ?? null
+  // Set when navigating from a dashboard day-view, so a new meal defaults to the
+  // day being viewed rather than today.
+  const logDate = (location.state as { logDate?: string } | null)?.logDate ?? null
 
   const [settings, setSettings] = useState<Settings | null>(null)
   const [rows, setRows] = useState<Row[]>([emptyRow()])
@@ -110,10 +113,10 @@ export default function LogMeal() {
   useEffect(() => {
     setRows(editMeal ? [rowFromMeal(editMeal)] : [emptyRow()])
     setMealName(editMeal?.name ?? '')
-    setMealDate(editMeal?.date ?? localIsoDate())
+    setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
     setMessage(null)
-  }, [editMeal])
+  }, [editMeal, logDate])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -402,6 +405,7 @@ export default function LogMeal() {
             <input
               type="date"
               value={mealDate}
+              max={localIsoDate()}
               onChange={(e) => setMealDate(e.target.value)}
               className={inputClass}
             />
