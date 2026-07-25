@@ -4,7 +4,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
+# Importing the provider's errors is fine *here*: these tests exist to prove
+# meal_ai.py translates them, so nothing else has to know they exist.
+from google.genai import errors as genai_errors
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
@@ -35,7 +37,8 @@ SAMPLE = MealAnalysis(
 )
 
 
-async def fake_analyze(image_bytes, image_mime, text, prior_analysis=None):
+# **kwargs absorbs audio_bytes/audio_mime, which the router passes by keyword.
+async def fake_analyze(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
     return SAMPLE
 
 
@@ -76,10 +79,10 @@ def test_analyze_success_returns_analysis_and_persists(client, monkeypatch):
 def test_analyze_passes_image_and_prior_to_service(client, monkeypatch):
     captured = {}
 
-    async def capture(image_bytes, image_mime, text, prior_analysis=None):
+    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
         captured.update(
             image_bytes=image_bytes, image_mime=image_mime,
-            text=text, prior=prior_analysis,
+            text=text, prior=prior_analysis, **kwargs,
         )
         return SAMPLE
 
@@ -94,6 +97,51 @@ def test_analyze_passes_image_and_prior_to_service(client, monkeypatch):
     assert captured["image_mime"] == "image/jpeg"
     assert captured["text"] == "I only ate half"
     assert captured["prior"].meal_name == "Chicken & Rice"
+
+
+def test_analyze_accepts_audio_only(client, monkeypatch):
+    """A voice note with no photo and no typed text is a complete request."""
+    configure(monkeypatch)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"audio": ("note.webm", io.BytesIO(b"fake-audio"), "audio/webm")},
+    )
+    assert response.status_code == 200
+
+
+def test_analyze_passes_audio_to_service(client, monkeypatch):
+    captured = {}
+
+    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+        captured.update(kwargs)
+        return SAMPLE
+
+    configure(monkeypatch, capture)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"audio": ("note.webm", io.BytesIO(b"fake-audio"), "audio/webm")},
+    )
+    assert response.status_code == 200
+    assert captured["audio_bytes"] == b"fake-audio"
+    assert captured["audio_mime"] == "audio/webm"
+
+
+def test_analyze_rejects_non_audio_upload(client, monkeypatch):
+    configure(monkeypatch)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"audio": ("notes.txt", io.BytesIO(b"hello"), "text/plain")},
+    )
+    assert response.status_code == 415
+
+
+def test_analyze_rejects_oversized_audio(client, monkeypatch):
+    configure(monkeypatch)
+    big = io.BytesIO(b"x" * (10 * 1024 * 1024 + 1))
+    response = client.post(
+        "/api/ai/analyze", files={"audio": ("note.webm", big, "audio/webm")}
+    )
+    assert response.status_code == 413
 
 
 def test_analyze_rejects_invalid_prior(client, monkeypatch):
@@ -123,7 +171,7 @@ def test_analyze_rejects_oversized_image(client, monkeypatch):
 
 
 def test_analyze_maps_provider_errors_to_502(client, monkeypatch):
-    async def boom(image_bytes, image_mime, text, prior_analysis=None):
+    async def boom(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
         raise RuntimeError("provider down")
 
     configure(monkeypatch, boom)
@@ -140,7 +188,7 @@ def test_analyze_rejects_overlong_text(client, monkeypatch):
 def test_provider_failure_refunds_the_quota_slot(client, monkeypatch):
     monkeypatch.setenv("AI_DAILY_LIMIT", "1")
 
-    async def boom(image_bytes, image_mime, text, prior_analysis=None):
+    async def boom(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
         raise RuntimeError("provider down")
 
     configure(monkeypatch, boom)
@@ -191,6 +239,18 @@ def test_build_contents_defaults_to_photo_instruction():
     assert parts[1] == "Analyze the meal in the photo."
 
 
+def test_build_contents_audio_only():
+    parts = _build_contents(None, None, None, None, b"audio", "audio/webm")
+    assert len(parts) == 2
+    assert parts[1] == "Analyze the meal described in the audio."
+
+
+def test_build_contents_image_and_audio():
+    parts = _build_contents(b"img", "image/png", None, None, b"audio", "audio/webm")
+    assert len(parts) == 3
+    assert parts[2] == "Analyze the meal in the photo, using the spoken description."
+
+
 def test_build_contents_includes_prior_for_refinement():
     parts = _build_contents(None, None, "I only ate half", SAMPLE)
     assert "Previous analysis to refine" in parts[0]
@@ -226,5 +286,76 @@ def test_analyze_meal_falls_back_to_raw_json_text(monkeypatch):
 
 def test_analyze_meal_raises_on_empty_provider_response(monkeypatch):
     _install_fake_provider(monkeypatch, SimpleNamespace(parsed=None, text=None))
-    with pytest.raises(ValidationError):
+    with pytest.raises(meal_ai.MealAIBadResponse):
         asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+
+
+# --- provider errors are translated to the neutral MealAIError hierarchy ----
+# The router must never see a google.genai symbol; meal_ai.py owns that mapping.
+
+def _install_failing_provider(monkeypatch, exc):
+    async def generate_content(**_kwargs):
+        raise exc
+
+    fake_client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    )
+    monkeypatch.setattr(meal_ai.genai, "Client", lambda api_key=None: fake_client)
+
+
+@pytest.mark.parametrize(
+    "code,expected",
+    [
+        (429, meal_ai.MealAIRateLimited),
+        # A retired model id lands here — the failure that took the app down.
+        (400, meal_ai.MealAIBadRequest),
+        (404, meal_ai.MealAIBadRequest),
+    ],
+)
+def test_client_errors_map_to_neutral_exceptions(monkeypatch, code, expected):
+    _install_failing_provider(
+        monkeypatch, genai_errors.ClientError(code, {"error": {"message": "nope"}})
+    )
+    with pytest.raises(expected):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+
+def test_server_errors_map_to_unavailable(monkeypatch):
+    _install_failing_provider(
+        monkeypatch, genai_errors.ServerError(503, {"error": {"message": "down"}})
+    )
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+
+def test_unexpected_errors_map_to_unavailable(monkeypatch):
+    _install_failing_provider(monkeypatch, RuntimeError("socket exploded"))
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+
+# --- the router turns those into distinguishable statuses, refunding quota ---
+
+@pytest.mark.parametrize(
+    "exc,status",
+    [
+        (meal_ai.MealAIRateLimited("busy"), 429),
+        (meal_ai.MealAIUnavailable("down"), 503),
+        (meal_ai.MealAIBadRequest("retired model"), 502),
+        (meal_ai.MealAIBadResponse("garbage"), 502),
+    ],
+)
+def test_provider_errors_map_to_status_and_refund_quota(
+    client, monkeypatch, exc, status
+):
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+
+    async def boom(*_args, **_kwargs):
+        raise exc
+
+    configure(monkeypatch, boom)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == status
+
+    # The slot must be refunded no matter which failure occurred.
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
