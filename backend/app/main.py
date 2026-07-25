@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,14 @@ from .rate_limit import limiter
 from .routers import ai, analytics, data, foods, meals, settings
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+
+# Without this the root logger has no handler under uvicorn, and app logs fall
+# through to logging's unformatted lastResort stream. Provider failures in
+# services/meal_ai.py are only diagnosable if they actually reach the logs.
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager

@@ -14,7 +14,7 @@ A full-stack, **multi-user** nutrition tracking app: a **React + TypeScript** da
 
 Sign up with an email and password and get your own private meal log, food library, goals, and AI analyses — every API endpoint is scoped to the authenticated user.
 
-Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Or skip typing entirely: **photograph your meal** (and/or describe it, with voice dictation) and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, and watch progress rings and trend charts update as you log.
+Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Or skip the form entirely: **describe your meal, record a voice note, or photograph it** — any one is enough — and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, and watch progress rings and trend charts update as you log.
 
 > **v2 rewrite:** this project started as a Streamlit app and was rebuilt with a decoupled frontend/backend architecture. The original app lives in [`legacy/`](legacy/).
 
@@ -35,12 +35,12 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - 7-day calorie trend sparkline
 
 ### 🤖 AI meal analysis
-- **Photo → macros**: snap or upload a meal photo, optionally add a note (typed or dictated via the browser's Web Speech API — audio never leaves your device), and get an instant estimate
+- **Describe it, speak it, or shoot it**: type a description, record a voice note, or snap a photo — any one on its own produces an estimate, and combining them sharpens it. Voice notes are sent to Gemini, which transcribes and analyzes them in one pass; the transcript is shown back so you can spot a misheard ingredient
 - **Honest uncertainty**: results show a calorie/macro **range** (low–estimate–high), an overall confidence badge, and per-ingredient confidence dots — not a false-precision single number
 - **Editable assumptions**: the AI lists every assumption it made ("1 cup cooked rice ≈ 158 g"); tap one to correct it in the note and **refine** the estimate without starting over
 - **You stay in control**: detected ingredients prefill the normal meal editor, so you review and adjust everything before saving
-- Each analysis is logged to an `ai_analyses` table (photo discarded) as groundwork for future learning from your corrections
-- Powered by **Gemini 2.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change
+- Each analysis is logged to an `ai_analyses` table (photo and audio discarded) as groundwork for future learning from your corrections
+- Powered by **Gemini 3.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change. Google retires models on a schedule, so the id is overridable at runtime via `MEAL_AI_MODEL` (no deploy needed) and provider failures are logged with the reason
 
 ### 🍽️ Smart meal logging
 - **Type-ahead food search**: ingredients you've logged before auto-fill their macros from a local SQLite food library
@@ -67,7 +67,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 │  React Router       │ Bearer  │  /foods /ai ...      │  httpx │  (fallback)     │
 └─────────────────────┘  JWT    └──────┬────────┬──────┘        └─────────────────┘
                                        │SQLAlchemy  google-genai ┌─────────────────┐
-                                ┌──────▼──────┐ └───────────────►│ Gemini 2.5 Flash│
+                                ┌──────▼──────┐ └───────────────►│ Gemini 3.5 Flash│
                                 │  PostgreSQL │ users · meals    │ (meal analysis) │
                                 │ (Neon)/SQLite│ foods · settings└─────────────────┘
                                 └─────────────┘ ai_analyses
@@ -94,7 +94,7 @@ Macros-Calculator
 │   └── src/
 │       ├── api/client.ts        # Typed API client
 │       ├── components/          # Layout, MacroRing, FoodAutocomplete, MealAnalyzer
-│       ├── hooks/               # useDictation (Web Speech API)
+│       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes)
 │       └── pages/               # Dashboard, LogMeal, Analytics, Settings
 ├── legacy/                      # Original Streamlit app (v1)
 └── render.yaml                  # Render deployment blueprint
@@ -107,7 +107,7 @@ Macros-Calculator
 ### Dashboard
 ![Dashboard](screenshots/dashboard.png)
 
-### AI meal analysis — photo + note → macro estimate with uncertainty
+### AI meal analysis — photo, voice, or text → macro estimate with uncertainty
 ![AI meal analysis](screenshots/logmeal-ai.png)
 
 ### AI results prefill the meal editor for review before saving
@@ -149,7 +149,7 @@ GEMINI_API_KEY=your-key uvicorn app.main:app --reload --port 8000
 ```
 
 Without a key the rest of the app works normally and the analyze endpoint returns
-a clear 503. `MEAL_AI_MODEL` overrides the default model (`gemini-2.5-flash`).
+a clear 503. `MEAL_AI_MODEL` overrides the default model (`gemini-3.5-flash`).
 Keep the key in your environment or an untracked `.env` — never commit it.
 
 Local development needs no database setup: with `DATABASE_URL` unset the backend
@@ -193,6 +193,7 @@ connection string, and rewrite its scheme for SQLAlchemy:
 server boots, so the schema is created/updated on deploy. In the Render dashboard set:
 - `DATABASE_URL` — the Neon string above
 - `GEMINI_API_KEY` — optional, enables AI meal analysis
+- `MEAL_AI_MODEL` — optional, overrides the default Gemini model without a redeploy
 - `CORS_ORIGINS` — your exact frontend origin (scheme included, no trailing slash)
 
 `JWT_SECRET` is auto-generated by the blueprint. Rotating it logs every user out —
@@ -223,7 +224,7 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | POST | `/api/foods` | Save/update a cached food |
-| POST | `/api/ai/analyze` | AI meal analysis from photo and/or text (multipart) |
+| POST | `/api/ai/analyze` | AI meal analysis from any of photo, audio, text (multipart) |
 | PATCH | `/api/ai/analyses/{id}` | Link an analysis to the meal it was saved as |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals + tracked-macro toggles |

@@ -141,6 +141,9 @@ class MealAnalysis(BaseModel):
     fat: MacroRange | None = None
     confidence: Literal["high", "medium", "low"]
     explanation: str
+    # What the model heard, when the user recorded a voice note. Lets the UI
+    # show it back so a misheard word is visible before the macros are trusted.
+    transcript: str | None = None
     clarifying_question: str | None = None
 
 

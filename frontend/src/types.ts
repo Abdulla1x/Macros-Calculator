@@ -102,6 +102,8 @@ export interface MealAnalysis {
   fat: MacroRange | null
   confidence: Confidence
   explanation: string
+  /** What the model heard, when a voice note was sent. Null otherwise. */
+  transcript: string | null
   clarifying_question: string | null
 }
 

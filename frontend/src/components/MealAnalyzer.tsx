@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { useDictation } from '../hooks/useDictation'
+import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
 
 interface Props {
@@ -32,9 +32,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [error, setError] = useState<string | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
-  const dictation = useDictation((transcript) => {
-    setNote((current) => (current ? `${current} ${transcript}` : transcript))
-  })
+  const audio = useAudioRecorder()
 
   useEffect(() => {
     if (!file) {
@@ -47,8 +45,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   }, [file])
 
   const analyze = async (refine: boolean) => {
-    if (!file && !note.trim()) {
-      setError('Add a photo or describe the meal first.')
+    if (!file && !audio.blob && !note.trim()) {
+      setError('Describe the meal, record a voice note, or add a photo first.')
       return
     }
     setAnalyzing(true)
@@ -56,6 +54,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     try {
       const form = new FormData()
       if (file) form.append('image', file)
+      if (audio.blob) form.append('audio', audio.blob, 'voice-note.webm')
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form))
@@ -83,7 +82,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         onClick={() => setExpanded(true)}
         className="w-full rounded-xl border border-dashed border-slate-700 py-3 text-sm text-slate-400 hover:border-emerald-500 hover:text-emerald-300"
       >
-        📷 Analyze a meal with AI — photo, description, or both
+        ✨ Estimate macros with AI — describe it, speak it, or snap a photo
       </button>
     )
   }
@@ -100,9 +99,25 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         </button>
       </div>
 
+      <p className="mb-3 text-xs text-slate-400">
+        Any one of these is enough — combine them for a sharper estimate.
+      </p>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
-          <span className="mb-1 block text-xs text-slate-400">Meal photo (optional)</span>
+          <span className="mb-1 block text-xs text-slate-400">Describe it</span>
+          <textarea
+            ref={noteRef}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            placeholder={'e.g. "Grilled chicken with ~1 tbsp olive oil, I only ate half the rice"'}
+            className={inputClass}
+          />
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs text-slate-400">Meal photo</span>
           <input
             type="file"
             accept="image/*"
@@ -118,35 +133,36 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             />
           )}
         </label>
+      </div>
 
-        <label className="block text-sm">
-          <span className="mb-1 flex items-center justify-between text-xs text-slate-400">
-            Describe it (optional)
-            {dictation.supported && (
+      {audio.supported && (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={audio.toggle}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+              audio.recording
+                ? 'animate-pulse border-rose-500/50 bg-rose-500/10 text-rose-300'
+                : 'border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300'
+            }`}
+          >
+            🎤 {audio.recording ? 'Stop recording' : 'Record a voice note'}
+          </button>
+          {audio.blob && !audio.recording && (
+            <span className="flex items-center gap-2 text-xs text-slate-400">
+              Voice note ready
               <button
                 type="button"
-                onClick={dictation.toggle}
-                title={dictation.listening ? 'Stop dictation' : 'Dictate'}
-                className={`rounded px-1.5 py-0.5 text-sm ${
-                  dictation.listening
-                    ? 'animate-pulse bg-rose-500/20 text-rose-300'
-                    : 'hover:bg-slate-800'
-                }`}
+                onClick={audio.clear}
+                className="text-slate-500 underline hover:text-rose-300"
               >
-                🎤
+                discard
               </button>
-            )}
-          </span>
-          <textarea
-            ref={noteRef}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={4}
-            placeholder={'e.g. "Grilled chicken with ~1 tbsp olive oil, I only ate half the rice"'}
-            className={inputClass}
-          />
-        </label>
-      </div>
+            </span>
+          )}
+          {audio.error && <span className="text-xs text-rose-400">{audio.error}</span>}
+        </div>
+      )}
 
       <div className="mt-3 flex items-center gap-3">
         <button
@@ -171,7 +187,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       </div>
 
       <p className="mt-2 text-xs text-slate-500">
-        Your photo and description are sent to Google Gemini for analysis.
+        Your photo, voice note, and description are sent to Google Gemini for analysis.
       </p>
 
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
@@ -220,6 +236,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           </p>
 
           <p className="mt-2 text-xs text-slate-400">{analysis.explanation}</p>
+
+          {analysis.transcript && (
+            <p className="mt-2 text-xs text-slate-500 italic">
+              🎙️ Heard: “{analysis.transcript}”
+            </p>
+          )}
 
           {analysis.clarifying_question && (
             <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">

@@ -18,6 +18,11 @@ services:
       # Gemini API key for AI meal analysis (optional; feature 503s without it).
       - key: GEMINI_API_KEY
         sync: false
+      # Gemini model id. Committed (not sync: false) so the deployed model is
+      # visible here, but editable in the dashboard to swap models without a
+      # deploy when Google retires one.
+      - key: MEAL_AI_MODEL
+        value: gemini-3.5-flash
       # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
       - key: AI_DAILY_LIMIT
         value: "20"
