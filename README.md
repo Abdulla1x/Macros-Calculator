@@ -206,6 +206,8 @@ that's also the emergency kill switch for leaked tokens.
 > while the same key works fine from a machine outside those countries. `render.yaml`
 > pins `region: ohio`; put the Neon project in the matching region (`AWS US East 2`)
 > so database round-trips stay local. The paid tier has no such restriction.
+> This one took three days to diagnose — the write-up is in
+> [`docs/incident-2026-07-gemini-eea-region.md`](docs/incident-2026-07-gemini-eea-region.md).
 
 **Frontend → [Vercel](https://vercel.com)** — import the repo, set the root directory to
 `frontend/`, and add an environment variable `VITE_API_URL=https://<your-render-service>.onrender.com`.
@@ -254,6 +256,17 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 - Barcode scanning via the Open Food Facts barcode API
 - Weekly/monthly goal summaries and streaks
 - Frontend component tests (Vitest + Testing Library)
+
+---
+
+## 🔍 Engineering notes
+
+- [**AI meal analysis down for three days**](docs/incident-2026-07-gemini-eea-region.md) — a
+  post-mortem. The feature failed for every input; the API key was valid, the model existed,
+  and the deployed code worked fine from a laptop. Six hypotheses were eliminated before the
+  real one: Gemini's free tier is geo-blocked in the EEA, and the backend was hosted in
+  Frankfurt. Covers the diagnosis, the region migration, what remains unproven, and the two
+  further failures the migration caused.
 
 ---
 
