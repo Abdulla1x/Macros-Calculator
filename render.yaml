@@ -30,6 +30,15 @@ services:
       # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
       - key: AI_DAILY_LIMIT
         value: "20"
+      # Voice notes get their own allowance so speaking a meal doesn't cost
+      # twice what typing it does.
+      - key: AI_TRANSCRIBE_DAILY_LIMIT
+        value: "40"
+      # Ceiling across all users and both call kinds. The per-user caps bound
+      # one account; this bounds the app, so mass signups can't drain the free
+      # quota. Keep below the provider's daily allowance (~1500/day free tier).
+      - key: AI_GLOBAL_DAILY_LIMIT
+        value: "500"
       # Your deployed frontend origin(s), comma-separated. Set in the Render
       # dashboard — a committed placeholder would silently block the real
       # frontend if left unedited.

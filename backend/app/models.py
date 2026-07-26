@@ -103,3 +103,10 @@ class AIAnalysis(Base):
     meal_id: Mapped[int | None] = mapped_column(
         ForeignKey("meals.id", ondelete="SET NULL")
     )
+    # Every row is one billable provider call, which is what the daily caps
+    # count. "transcription" rows carry the transcript in user_text and an
+    # empty analysis_json; filter on kind == "analysis" when mining this table
+    # for corrections to learn from.
+    kind: Mapped[str] = mapped_column(
+        String(20), default="analysis", server_default="analysis"
+    )

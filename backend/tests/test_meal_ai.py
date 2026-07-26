@@ -47,6 +47,22 @@ def configure(monkeypatch, fake=fake_analyze):
     monkeypatch.setattr(meal_ai, "analyze_meal", fake)
 
 
+async def fake_transcribe(audio_bytes, audio_mime):
+    return "I had a hundred grams of broasted chicken thighs"
+
+
+def configure_transcribe(monkeypatch, fake=fake_transcribe):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(meal_ai, "transcribe_audio", fake)
+
+
+def post_voice_note(client, data=b"fake-audio", mime="audio/webm"):
+    return client.post(
+        "/api/ai/transcribe",
+        files={"audio": ("note.webm", io.BytesIO(data), mime)},
+    )
+
+
 def test_analyze_requires_photo_or_text(client, monkeypatch):
     configure(monkeypatch)
     response = client.post("/api/ai/analyze", data={"text": "   "})
@@ -342,12 +358,12 @@ def test_unexpected_errors_map_to_unavailable(monkeypatch):
         (meal_ai.MealAIRateLimited("busy"), 429),
         (meal_ai.MealAIUnavailable("down"), 503),
         (meal_ai.MealAIBadRequest("retired model"), 502),
-        (meal_ai.MealAIBadResponse("garbage"), 502),
     ],
 )
-def test_provider_errors_map_to_status_and_refund_quota(
+def test_failures_before_inference_refund_the_quota_slot(
     client, monkeypatch, exc, status
 ):
+    """Provider refused or was unreachable: nothing billed, so nothing spent."""
     monkeypatch.setenv("AI_DAILY_LIMIT", "1")
 
     async def boom(*_args, **_kwargs):
@@ -356,6 +372,141 @@ def test_provider_errors_map_to_status_and_refund_quota(
     configure(monkeypatch, boom)
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == status
 
-    # The slot must be refunded no matter which failure occurred.
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+
+def test_unusable_output_still_spends_the_quota_slot(client, monkeypatch):
+    """The model ran and burned tokens; only its output was unusable.
+
+    Refunding here would make input that reliably produces garbage an uncapped
+    free path to the provider, which is the one failure mode the daily caps
+    exist to prevent.
+    """
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+
+    async def boom(*_args, **_kwargs):
+        raise meal_ai.MealAIBadResponse("garbage")
+
+    configure(monkeypatch, boom)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 502
+
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
+
+
+# --- /api/ai/transcribe: a voice note becomes editable text before analysis ---
+
+def test_transcribe_returns_text(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    response = post_voice_note(client)
+    assert response.status_code == 200
+    assert response.json() == {
+        "transcript": "I had a hundred grams of broasted chicken thighs"
+    }
+
+
+def test_transcribe_requires_audio(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    assert client.post("/api/ai/transcribe").status_code == 422
+
+
+def test_transcribe_returns_503_when_unconfigured(client, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    assert post_voice_note(client).status_code == 503
+
+
+def test_transcribe_rejects_non_audio_upload(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    assert post_voice_note(client, mime="text/plain").status_code == 415
+
+
+def test_transcribe_rejects_oversized_audio(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    assert post_voice_note(client, data=b"x" * (10 * 1024 * 1024 + 1)).status_code == 413
+
+
+def test_transcribe_persists_what_was_heard(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    assert post_voice_note(client).status_code == 200
+    with Session(get_engine()) as db:
+        record = db.query(AIAnalysis).filter_by(kind="transcription").one()
+        assert record.user_text == "I had a hundred grams of broasted chicken thighs"
+        assert record.analysis_json == ""
+
+
+def test_silent_recording_is_a_422_and_still_spends_the_slot(client, monkeypatch):
+    """The model listened either way, so silence-on-a-loop isn't free."""
+    monkeypatch.setenv("AI_TRANSCRIBE_DAILY_LIMIT", "1")
+
+    async def no_speech(*_args, **_kwargs):
+        raise meal_ai.MealAIBadResponse("nothing heard")
+
+    configure_transcribe(monkeypatch, no_speech)
+    assert post_voice_note(client).status_code == 422
+
+    configure_transcribe(monkeypatch)
+    assert post_voice_note(client).status_code == 429
+
+
+def test_transcribe_refunds_the_slot_when_the_provider_is_down(client, monkeypatch):
+    monkeypatch.setenv("AI_TRANSCRIBE_DAILY_LIMIT", "1")
+
+    async def down(*_args, **_kwargs):
+        raise meal_ai.MealAIUnavailable("down")
+
+    configure_transcribe(monkeypatch, down)
+    assert post_voice_note(client).status_code == 503
+
+    configure_transcribe(monkeypatch)
+    assert post_voice_note(client).status_code == 200
+
+
+def test_transcriptions_have_their_own_daily_allowance(client, monkeypatch):
+    """Speaking a meal shouldn't cost an analysis; the budgets are separate."""
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+    monkeypatch.setenv("AI_TRANSCRIBE_DAILY_LIMIT", "1")
+    configure(monkeypatch)
+    configure_transcribe(monkeypatch)
+
+    assert post_voice_note(client).status_code == 200
+    # The transcription used its own budget, so the analysis is still available.
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+    # ...and each is now independently exhausted.
+    assert post_voice_note(client).status_code == 429
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
+
+
+# --- the global cap: what bounds spend when per-user limits aren't enough ---
+
+def test_global_cap_rejects_once_the_shared_budget_is_gone(client, monkeypatch):
+    """Per-user limits bound one account; this bounds the whole app.
+
+    Without it, signing up repeatedly multiplies the per-user allowance without
+    limit — the free tier's quota drains, or a paid key runs up a bill.
+    """
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "2")
+    configure(monkeypatch)
+
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+    response = client.post("/api/ai/analyze", data={"text": "pizza"})
+    assert response.status_code == 503
+    assert "shared daily AI quota" in response.json()["detail"]
+
+
+def test_global_cap_counts_transcriptions_too(client, monkeypatch):
+    """Both endpoints hit the same provider, so both draw on the same ceiling."""
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "1")
+    configure(monkeypatch)
+    configure_transcribe(monkeypatch)
+
+    assert post_voice_note(client).status_code == 200
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 503
+
+
+def test_global_cap_does_not_fire_below_the_limit(client, monkeypatch):
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "500")
     configure(monkeypatch)
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200

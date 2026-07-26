@@ -151,5 +151,11 @@ class MealAnalysisResponse(MealAnalysis):
     analysis_id: int
 
 
+class TranscriptionResponse(BaseModel):
+    """A voice note turned into text the user can edit before analysing."""
+
+    transcript: str
+
+
 class AnalysisLink(BaseModel):
     meal_id: int

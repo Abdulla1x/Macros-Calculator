@@ -9,6 +9,7 @@ import type {
   OFFProduct,
   Settings,
   TokenResponse,
+  Transcription,
   User,
 } from '../types'
 import { clearToken, getToken } from '../auth/token'
@@ -115,6 +116,8 @@ export const api = {
 
   analyzeMeal: (form: FormData) =>
     request<MealAnalysisResponse>('/api/ai/analyze', { method: 'POST', body: form }),
+  transcribeVoiceNote: (form: FormData) =>
+    request<Transcription>('/api/ai/transcribe', { method: 'POST', body: form }),
   linkAnalysis: (analysisId: number, mealId: number) =>
     request<void>(`/api/ai/analyses/${analysisId}`, {
       method: 'PATCH',

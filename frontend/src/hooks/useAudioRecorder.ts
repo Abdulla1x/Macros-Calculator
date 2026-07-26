@@ -9,9 +9,11 @@ import { useEffect, useRef, useState } from 'react'
 export function useAudioRecorder() {
   const [recording, setRecording] = useState(false)
   const [blob, setBlob] = useState<Blob | null>(null)
+  const [durationMs, setDurationMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<BlobPart[]>([])
+  const startedAtRef = useRef(0)
 
   const supported =
     typeof window !== 'undefined' &&
@@ -43,11 +45,13 @@ export function useAudioRecorder() {
       if (event.data.size > 0) chunksRef.current.push(event.data)
     }
     recorder.onstop = () => {
+      setDurationMs(Date.now() - startedAtRef.current)
       setBlob(new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' }))
       stopTracks()
       setRecording(false)
     }
     recorderRef.current = recorder
+    startedAtRef.current = Date.now()
     recorder.start()
     setRecording(true)
   }
@@ -64,5 +68,5 @@ export function useAudioRecorder() {
     setError(null)
   }
 
-  return { supported, recording, blob, error, toggle, clear }
+  return { supported, recording, blob, durationMs, error, toggle, clear }
 }

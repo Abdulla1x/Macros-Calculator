@@ -110,3 +110,8 @@ export interface MealAnalysis {
 export interface MealAnalysisResponse extends MealAnalysis {
   analysis_id: number
 }
+
+/** A voice note turned into text, for the user to edit before analysing. */
+export interface Transcription {
+  transcript: string
+}

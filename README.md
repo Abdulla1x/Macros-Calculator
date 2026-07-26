@@ -25,7 +25,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### 🔐 Accounts & privacy
 - **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login/signup
 - **Per-user everything**: meals, food library, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
-- **Per-user AI quota** (default 20 analyses/day) so one user can't exhaust the shared Gemini quota
+- **Layered AI quotas**: 20 analyses + 40 voice notes per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All three are env-tunable
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - No password *reset* yet (forgot-password email flow) — on the roadmap
 
@@ -35,7 +35,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - 7-day calorie trend sparkline
 
 ### 🤖 AI meal analysis
-- **Describe it, speak it, or shoot it**: type a description, record a voice note, or snap a photo — any one on its own produces an estimate, and combining them sharpens it. Voice notes are sent to Gemini, which transcribes and analyzes them in one pass; the transcript is shown back so you can spot a misheard ingredient
+- **Describe it, speak it, or shoot it**: type a description, record a voice note, or snap a photo — either a description or a photo produces an estimate on its own, and combining them sharpens it
+- **Voice notes become editable text**: a recording is transcribed by Gemini straight into the description box *before* anything is estimated, so a misheard ingredient is a typo you fix rather than a wrong number you have to catch afterwards
 - **Honest uncertainty**: results show a calorie/macro **range** (low–estimate–high), an overall confidence badge, and per-ingredient confidence dots — not a false-precision single number
 - **Editable assumptions**: the AI lists every assumption it made ("1 cup cooked rice ≈ 158 g"); tap one to correct it in the note and **refine** the estimate without starting over
 - **You stay in control**: detected ingredients prefill the normal meal editor, so you review and adjust everything before saving
@@ -236,6 +237,7 @@ All endpoints except `/api/health` and `/api/auth/signup|login` require an
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | POST | `/api/foods` | Save/update a cached food |
 | POST | `/api/ai/analyze` | AI meal analysis from any of photo, audio, text (multipart) |
+| POST | `/api/ai/transcribe` | Voice note (multipart audio) → editable text |
 | PATCH | `/api/ai/analyses/{id}` | Link an analysis to the meal it was saved as |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals + tracked-macro toggles |

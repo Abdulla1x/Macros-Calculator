@@ -29,10 +29,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [note, setNote] = useState('')
   const [analysis, setAnalysis] = useState<MealAnalysisResponse | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
   const audio = useAudioRecorder()
+  const { blob: recording, durationMs, clear: clearRecording } = audio
 
   useEffect(() => {
     if (!file) {
@@ -44,8 +46,59 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     return () => URL.revokeObjectURL(url)
   }, [file])
 
+  // Transcribe the moment a recording lands, rather than sending the audio
+  // along with the analysis: the text drops into the box below where it can be
+  // corrected first, so a misheard ingredient is a typo to fix instead of a
+  // wrong number to notice afterwards.
+  useEffect(() => {
+    if (!recording) return
+
+    // An accidental tap on the mic produces a fraction of a second of silence,
+    // and the model will confidently transcribe that as a stray word rather
+    // than nothing. Cheaper to catch here than to send it and let the user
+    // wonder where "one" came from.
+    if (durationMs < 500) {
+      setError('That recording was too short — hold the button while you speak.')
+      clearRecording()
+      return
+    }
+
+    let cancelled = false
+
+    const transcribe = async () => {
+      setTranscribing(true)
+      setError(null)
+      try {
+        const form = new FormData()
+        form.append('audio', recording, 'voice-note.webm')
+        const { transcript } = await api.transcribeVoiceNote(form)
+        if (cancelled) return
+        setNote((current) =>
+          current.trim() ? `${current.trim()} ${transcript}` : transcript,
+        )
+        noteRef.current?.focus()
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Could not transcribe that')
+        }
+      } finally {
+        if (!cancelled) {
+          setTranscribing(false)
+          // Either way the recording is spent — dropping it lets the user just
+          // record again instead of having to discard a failed one first.
+          clearRecording()
+        }
+      }
+    }
+
+    void transcribe()
+    return () => {
+      cancelled = true
+    }
+  }, [recording, durationMs, clearRecording])
+
   const analyze = async (refine: boolean) => {
-    if (!file && !audio.blob && !note.trim()) {
+    if (!file && !note.trim()) {
       setError('Describe the meal, record a voice note, or add a photo first.')
       return
     }
@@ -54,7 +107,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     try {
       const form = new FormData()
       if (file) form.append('image', file)
-      if (audio.blob) form.append('audio', audio.blob, 'voice-note.webm')
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form))
@@ -100,7 +152,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       </div>
 
       <p className="mb-3 text-xs text-slate-400">
-        Any one of these is enough — combine them for a sharper estimate.
+        A description or a photo is enough — combine them for a sharper estimate.
+        The mic writes into the description, so you can fix anything it mishears.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -140,7 +193,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           <button
             type="button"
             onClick={audio.toggle}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+            disabled={transcribing}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-60 ${
               audio.recording
                 ? 'animate-pulse border-rose-500/50 bg-rose-500/10 text-rose-300'
                 : 'border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300'
@@ -148,16 +202,9 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           >
             🎤 {audio.recording ? 'Stop recording' : 'Record a voice note'}
           </button>
-          {audio.blob && !audio.recording && (
-            <span className="flex items-center gap-2 text-xs text-slate-400">
-              Voice note ready
-              <button
-                type="button"
-                onClick={audio.clear}
-                className="text-slate-500 underline hover:text-rose-300"
-              >
-                discard
-              </button>
+          {transcribing && (
+            <span className="text-xs text-slate-400">
+              Transcribing — the text will appear above, ready to edit…
             </span>
           )}
           {audio.error && <span className="text-xs text-rose-400">{audio.error}</span>}
@@ -167,7 +214,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={() => analyze(false)}
-          disabled={analyzing}
+          disabled={analyzing || transcribing}
           className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
         >
           {analyzing ? 'Analyzing…' : analysis ? 'Analyze again' : 'Analyze'}
@@ -175,7 +222,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         {analysis && (
           <button
             onClick={() => analyze(true)}
-            disabled={analyzing}
+            disabled={analyzing || transcribing}
             className="rounded-lg border border-slate-700 px-5 py-2 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
             Refine with my note
@@ -236,12 +283,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           </p>
 
           <p className="mt-2 text-xs text-slate-400">{analysis.explanation}</p>
-
-          {analysis.transcript && (
-            <p className="mt-2 text-xs text-slate-500 italic">
-              🎙️ Heard: “{analysis.transcript}”
-            </p>
-          )}
 
           {analysis.clarifying_question && (
             <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">

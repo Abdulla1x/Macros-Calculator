@@ -7,6 +7,7 @@ nothing else.
 """
 import logging
 import os
+from contextlib import contextmanager
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -85,6 +86,45 @@ Rules:
   rather than starting over, and keep facts the user already corrected.
 """
 
+TRANSCRIPTION_PROMPT = """\
+Transcribe the speech in this audio.
+
+- Output only the transcription: no preamble, commentary, or quotation marks.
+- Keep the speaker's own words and units ("a hundred grams", "two slices").
+- Write food names the way they are conventionally spelled.
+- If there is no intelligible speech, output nothing at all.
+"""
+
+
+@contextmanager
+def _provider_errors(model: str):
+    """Translate provider exceptions into the neutral hierarchy, logging why.
+
+    This is the only place the provider's own words are recorded — callers get
+    a MealAIError with no google.genai types attached, so the router stays
+    provider-agnostic.
+    """
+    try:
+        yield
+    except genai_errors.ClientError as exc:
+        # 4xx is our side: exhausted quota, or a request/config the API refuses
+        # (invalid key, retired model id, a region where the free tier isn't
+        # offered).
+        logger.exception(
+            "Gemini rejected the request (model=%s, code=%s)", model, exc.code
+        )
+        if exc.code == 429:
+            raise MealAIRateLimited(str(exc)) from exc
+        raise MealAIBadRequest(str(exc)) from exc
+    except genai_errors.ServerError as exc:
+        logger.exception("Gemini server error (model=%s, code=%s)", model, exc.code)
+        raise MealAIUnavailable(str(exc)) from exc
+    except MealAIError:
+        raise
+    except Exception as exc:
+        logger.exception("Gemini call failed (model=%s)", model)
+        raise MealAIUnavailable(str(exc)) from exc
+
 
 def _env(name: str) -> str:
     """Read an env var, tolerating how dashboards mangle pasted values.
@@ -156,7 +196,7 @@ async def analyze_meal(
 ) -> MealAnalysis:
     model = _env(MODEL_ENV) or DEFAULT_MODEL
     client = genai.Client(api_key=_env(API_KEY_ENV))
-    try:
+    with _provider_errors(model):
         response = await client.aio.models.generate_content(
             model=model,
             contents=_build_contents(
@@ -170,20 +210,6 @@ async def analyze_meal(
                 temperature=0.2,
             ),
         )
-    except genai_errors.ClientError as exc:
-        # 4xx is our side: exhausted quota, or a request/config the API refuses
-        # (invalid key, retired model id). Log the provider's own words — this
-        # is the only place the real reason exists.
-        logger.exception("Gemini rejected the request (model=%s, code=%s)", model, exc.code)
-        if exc.code == 429:
-            raise MealAIRateLimited(str(exc)) from exc
-        raise MealAIBadRequest(str(exc)) from exc
-    except genai_errors.ServerError as exc:
-        logger.exception("Gemini server error (model=%s, code=%s)", model, exc.code)
-        raise MealAIUnavailable(str(exc)) from exc
-    except Exception as exc:
-        logger.exception("Gemini call failed (model=%s)", model)
-        raise MealAIUnavailable(str(exc)) from exc
 
     # response.parsed is populated when the SDK validated the schema itself;
     # fall back to validating the raw JSON text.
@@ -206,3 +232,41 @@ async def analyze_meal(
             model, finish, len(raw),
         )
         raise MealAIBadResponse("Model returned no usable JSON.") from exc
+
+
+async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
+    """A voice note in, plain text out — no estimating, no JSON.
+
+    Kept separate from analyze_meal so the transcript can be shown and edited
+    *before* it reaches the estimate: a misheard ingredient is then a typo the
+    user fixes, rather than a wrong number they have to notice afterwards.
+    """
+    model = _env(MODEL_ENV) or DEFAULT_MODEL
+    client = genai.Client(api_key=_env(API_KEY_ENV))
+    with _provider_errors(model):
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=[
+                types.Part.from_bytes(
+                    data=audio_bytes, mime_type=audio_mime or "audio/webm"
+                ),
+                TRANSCRIPTION_PROMPT,
+            ],
+            # Transcription has one right answer; don't let it paraphrase.
+            config=types.GenerateContentConfig(temperature=0.0),
+        )
+
+    try:
+        text = (response.text or "").strip()
+    except Exception:  # safety-blocked responses raise on .text
+        text = ""
+    if not text:
+        # Usually silence or an inaudible recording, but a safety block lands
+        # here too — record which, since the user only sees "nothing heard".
+        candidates = getattr(response, "candidates", None)
+        finish = candidates[0].finish_reason if candidates else None
+        logger.error(
+            "Gemini returned no transcript (model=%s, finish_reason=%s)", model, finish
+        )
+        raise MealAIBadResponse("No speech was recognised in the recording.")
+    return text
