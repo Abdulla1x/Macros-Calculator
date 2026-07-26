@@ -3,6 +3,10 @@ services:
     name: macros-calculator-api
     runtime: python
     plan: free
+    # Must stay outside the EEA/UK/CH: Gemini's free tier is geo-blocked there
+    # and every analysis fails with 400 FAILED_PRECONDITION. Keep this in the
+    # same region as the Neon project so DB round-trips stay local.
+    region: ohio
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     # Migrations run before the server starts (single instance, no race).
