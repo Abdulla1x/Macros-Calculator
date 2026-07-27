@@ -1,26 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** Containers Gemini documents support for, best first.
- *
- * Chrome/Android record WebM and Safari records MP4 by default; neither is on
- * Gemini's list, so a browser that can produce one of these is asked to. The
- * list is a preference, not a requirement — see `pickMimeType`. */
-const PREFERRED_MIME_TYPES = ['audio/ogg', 'audio/aac', 'audio/flac', 'audio/wav']
-
-/** The first container this browser can actually record that Gemini accepts.
- *
- * Returns undefined to mean "use the browser default", which is the honest
- * answer when nothing on the list is supported: MediaRecorder then labels the
- * blob with whatever it really produced. We never claim a format we didn't
- * record — passing MP4-wrapped AAC off as `audio/aac` would turn a legible
- * failure into a silent one. */
-export function pickMimeType(): string | undefined {
-  if (typeof window === 'undefined' || !window.MediaRecorder?.isTypeSupported) {
-    return undefined
-  }
-  return PREFERRED_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type))
-}
-
 // Extensions that don't match their mime subtype.
 const EXTENSION_OVERRIDES: Record<string, string> = {
   mpeg: 'mp3',
@@ -78,18 +57,9 @@ export function useAudioRecorder() {
       setError('Microphone access was blocked. Allow it, or type a description instead.')
       return
     }
-    // isTypeSupported can still be optimistic about what the platform encoder
-    // will accept, so a rejected preference falls back to the default rather
-    // than losing the recording.
-    const preferred = pickMimeType()
-    let recorder: MediaRecorder
-    try {
-      recorder = preferred
-        ? new MediaRecorder(stream, { mimeType: preferred })
-        : new MediaRecorder(stream)
-    } catch {
-      recorder = new MediaRecorder(stream)
-    }
+    // The browser default is deliberate. Chromium can only record WebM or MP4
+    // anyway, and the WebM it produces is what Gemini is known to accept.
+    const recorder = new MediaRecorder(stream)
     chunksRef.current = []
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data)

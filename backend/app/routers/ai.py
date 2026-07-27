@@ -90,24 +90,17 @@ def _provider_http_error(exc: Exception) -> HTTPException:
     )
 
 
-def _bare_mime(content_type: str | None) -> str | None:
-    """Drop mime parameters, keeping just `type/subtype`.
-
-    MediaRecorder reports its format as `audio/webm;codecs=opus`, and Gemini
-    wants a bare mime type — the parameterized form is rejected. Normalizing in
-    one place covers both media kinds and both AI endpoints. Returns None for a
-    missing or empty value so callers fall back to their own default.
-    """
-    bare = (content_type or "").split(";")[0].strip().lower()
-    return bare or None
-
-
 async def _read_media(
     upload: UploadFile, kind: str, max_bytes: int, a_noun: str, noun: str
 ) -> tuple[bytes, str | None]:
-    """Validate one uploaded media file and return its bytes plus mime type."""
-    mime = _bare_mime(upload.content_type)
-    if mime and not mime.startswith(f"{kind}/"):
+    """Validate one uploaded media file and return its bytes plus mime type.
+
+    The browser's content type is forwarded verbatim, parameters included.
+    MediaRecorder sends `audio/webm;codecs=opus` and Gemini accepts it — that
+    is the form running in production. Stripping the codecs parameter would
+    substitute a value never tested against the live provider.
+    """
+    if upload.content_type and not upload.content_type.startswith(f"{kind}/"):
         raise HTTPException(status_code=415, detail=f"File must be {a_noun}.")
     data = await upload.read()
     if len(data) > max_bytes:
@@ -115,7 +108,7 @@ async def _read_media(
             status_code=413,
             detail=f"{noun} too large (max {max_bytes // (1024 * 1024)} MB).",
         )
-    return data, mime
+    return data, upload.content_type
 
 
 def _calls_today(
