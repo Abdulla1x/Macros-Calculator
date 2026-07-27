@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import AIAnalysis
+from app.routers.ai import _bare_mime
 from app.schemas import AnalyzedItem, MacroRange, MealAnalysis
 from app.services import meal_ai
 from app.services.meal_ai import _build_contents
@@ -140,6 +141,16 @@ def test_analyze_passes_audio_to_service(client, monkeypatch):
     assert response.status_code == 200
     assert captured["audio_bytes"] == b"fake-audio"
     assert captured["audio_mime"] == "audio/webm"
+
+
+def test_analyze_rejects_parameterized_non_audio_upload(client, monkeypatch):
+    """Stripping mime parameters must not widen what gets through the 415."""
+    configure(monkeypatch)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"audio": ("notes.txt", io.BytesIO(b"hello"), "text/plain;charset=utf-8")},
+    )
+    assert response.status_code == 415
 
 
 def test_analyze_rejects_non_audio_upload(client, monkeypatch):
@@ -475,6 +486,73 @@ def test_transcriptions_have_their_own_daily_allowance(client, monkeypatch):
     # ...and each is now independently exhausted.
     assert post_voice_note(client).status_code == 429
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
+
+
+# --- mime normalization: MediaRecorder's codecs parameter must not reach Gemini
+# MediaRecorder labels its output `audio/webm;codecs=opus`. Gemini wants a bare
+# type and rejects the parameterized form, so _read_media strips it centrally.
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("audio/webm;codecs=opus", "audio/webm"),
+        ("audio/ogg; codecs=opus", "audio/ogg"),
+        ("audio/mp4;codecs=mp4a.40.2", "audio/mp4"),
+        ("AUDIO/WEBM", "audio/webm"),
+        ("audio/wav", "audio/wav"),
+        # No usable value: callers fall back to their own default.
+        ("", None),
+        (None, None),
+        (";codecs=opus", None),
+    ],
+)
+def test_bare_mime_strips_parameters(raw, expected):
+    assert _bare_mime(raw) == expected
+
+
+def test_analyze_forwards_a_bare_audio_mime(client, monkeypatch):
+    captured = {}
+
+    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+        captured.update(kwargs)
+        return SAMPLE
+
+    configure(monkeypatch, capture)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"audio": ("note.webm", io.BytesIO(b"fake-audio"), "audio/webm;codecs=opus")},
+    )
+    assert response.status_code == 200
+    assert captured["audio_mime"] == "audio/webm"
+
+
+def test_transcribe_forwards_a_bare_audio_mime(client, monkeypatch):
+    captured = {}
+
+    async def capture(audio_bytes, audio_mime):
+        captured["audio_mime"] = audio_mime
+        return "two eggs on toast"
+
+    configure_transcribe(monkeypatch, capture)
+    assert post_voice_note(client, mime="audio/ogg;codecs=opus").status_code == 200
+    assert captured["audio_mime"] == "audio/ogg"
+
+
+def test_image_mime_is_normalized_too(client, monkeypatch):
+    """One helper serves both media kinds, so photos get the same treatment."""
+    captured = {}
+
+    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+        captured["image_mime"] = image_mime
+        return SAMPLE
+
+    configure(monkeypatch, capture)
+    response = client.post(
+        "/api/ai/analyze",
+        files={"image": ("meal.jpg", io.BytesIO(b"fake-jpeg"), "image/jpeg; charset=binary")},
+    )
+    assert response.status_code == 200
+    assert captured["image_mime"] == "image/jpeg"
 
 
 # --- the global cap: what bounds spend when per-user limits aren't enough ---

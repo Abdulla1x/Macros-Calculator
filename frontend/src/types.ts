@@ -3,6 +3,10 @@ export interface User {
   email: string
 }
 
+export interface HealthStatus {
+  status: string
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: 'bearer'
@@ -114,4 +118,18 @@ export interface MealAnalysisResponse extends MealAnalysis {
 /** A voice note turned into text, for the user to edit before analysing. */
 export interface Transcription {
   transcript: string
+}
+
+/** A release note. `id` is stable — it's what we store once it's dismissed. */
+export interface Announcement {
+  id: string
+  date: string
+  title: string
+  body: string
+}
+
+export interface Announcements {
+  /** Live outage/maintenance notice from the server env; usually null. */
+  banner: string | null
+  items: Announcement[]
 }

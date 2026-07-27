@@ -227,9 +227,12 @@ async def analyze_meal(
         # getattr: never let the diagnostic itself throw and mask the real error.
         candidates = getattr(response, "candidates", None)
         finish = candidates[0].finish_reason if candidates else None
+        # audio_mime/audio_bytes are here because a mislabelled container is
+        # indistinguishable from any other bad response from the client side.
         logger.error(
-            "Gemini returned an unusable response (model=%s, finish_reason=%s, chars=%d)",
-            model, finish, len(raw),
+            "Gemini returned an unusable response (model=%s, finish_reason=%s, "
+            "chars=%d, audio_mime=%s, audio_bytes=%s)",
+            model, finish, len(raw), audio_mime, len(audio_bytes or b""),
         )
         raise MealAIBadResponse("Model returned no usable JSON.") from exc
 
@@ -265,8 +268,13 @@ async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
         # here too — record which, since the user only sees "nothing heard".
         candidates = getattr(response, "candidates", None)
         finish = candidates[0].finish_reason if candidates else None
+        # The mime and byte count separate "the browser sent a container Gemini
+        # couldn't read" from "the recording really was silent" — the two look
+        # identical to the user, and only one of them is our bug.
         logger.error(
-            "Gemini returned no transcript (model=%s, finish_reason=%s)", model, finish
+            "Gemini returned no transcript (model=%s, finish_reason=%s, "
+            "audio_mime=%s, audio_bytes=%d)",
+            model, finish, audio_mime, len(audio_bytes),
         )
         raise MealAIBadResponse("No speech was recognised in the recording.")
     return text

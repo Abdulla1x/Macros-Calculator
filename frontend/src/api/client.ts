@@ -1,7 +1,9 @@
 import type {
   AnalyticsSummary,
+  Announcements,
   Food,
   FoodCreate,
+  HealthStatus,
   ImportResult,
   Meal,
   MealAnalysisResponse,
@@ -58,6 +60,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  health: () => request<HealthStatus>('/api/health'),
+  // Public: no auth header needed, so the status banner also works logged out.
+  getAnnouncements: () => request<Announcements>('/api/announcements'),
+
   signup: (email: string, password: string) =>
     request<TokenResponse>('/api/auth/signup', {
       method: 'POST',

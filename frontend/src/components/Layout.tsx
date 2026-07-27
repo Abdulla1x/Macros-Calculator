@@ -1,5 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { useAnnouncements } from '../hooks/useAnnouncements'
+import AnnouncementsModal from './AnnouncementsModal'
+import StatusBanner from './StatusBanner'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: '📊' },
@@ -10,6 +13,8 @@ const links = [
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  // One fetch feeds both the banner and the modal.
+  const announcements = useAnnouncements()
   return (
     <div className="min-h-screen md:flex">
       <aside className="border-b border-slate-800 bg-slate-900/60 md:flex md:min-h-screen md:w-60 md:flex-col md:border-r md:border-b-0">
@@ -53,9 +58,11 @@ export default function Layout() {
       </aside>
       <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto max-w-5xl">
+          <StatusBanner banner={announcements?.banner ?? null} />
           <Outlet />
         </div>
       </main>
+      <AnnouncementsModal items={announcements?.items ?? []} />
     </div>
   )
 }

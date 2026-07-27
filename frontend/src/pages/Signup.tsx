@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import StatusBanner from '../components/StatusBanner'
+import WarmupNotice from '../components/WarmupNotice'
+import { useAnnouncements } from '../hooks/useAnnouncements'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -9,6 +12,7 @@ export default function Signup() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const announcements = useAnnouncements()
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -35,6 +39,7 @@ export default function Signup() {
           <span className="text-3xl">🍽️</span>
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
+        <StatusBanner banner={announcements?.banner ?? null} />
         <form
           onSubmit={handleSubmit}
           className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
@@ -82,6 +87,7 @@ export default function Signup() {
             </Link>
           </p>
         </form>
+        <WarmupNotice />
       </div>
     </div>
   )
