@@ -105,8 +105,7 @@ gates() {
 
 === Before committing ===
 
-  cd backend  && venv/bin/python -m pytest && venv/bin/python -m ruff check app tests scripts
-  cd frontend && npx tsc --noEmit -p tsconfig.app.json && npm run lint && npm run build
+  ./scripts/check.sh          # every gate: pytest, ruff, tsc, lint, build
 
 Browser-level checks: see .claude/skills/verify.
 EOF
