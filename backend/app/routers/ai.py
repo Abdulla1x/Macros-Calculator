@@ -93,7 +93,13 @@ def _provider_http_error(exc: Exception) -> HTTPException:
 async def _read_media(
     upload: UploadFile, kind: str, max_bytes: int, a_noun: str, noun: str
 ) -> tuple[bytes, str | None]:
-    """Validate one uploaded media file and return its bytes plus mime type."""
+    """Validate one uploaded media file and return its bytes plus mime type.
+
+    The browser's content type is forwarded verbatim, parameters included.
+    MediaRecorder sends `audio/webm;codecs=opus` and Gemini accepts it — that
+    is the form running in production. Stripping the codecs parameter would
+    substitute a value never tested against the live provider.
+    """
     if upload.content_type and not upload.content_type.startswith(f"{kind}/"):
         raise HTTPException(status_code=415, detail=f"File must be {a_noun}.")
     data = await upload.read()

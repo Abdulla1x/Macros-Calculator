@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 
+// Extensions that don't match their mime subtype.
+const EXTENSION_OVERRIDES: Record<string, string> = {
+  mpeg: 'mp3',
+  'x-wav': 'wav',
+  'x-m4a': 'm4a',
+}
+
+/** A filename matching the audio we actually recorded.
+ *
+ * The mime type on the blob is what the backend forwards to Gemini, so this is
+ * only for logs and error messages — but a `.webm` name on an MP4 recording
+ * sends whoever reads those logs chasing the wrong bug. */
+export function voiceNoteFilename(mimeType: string): string {
+  const subtype = mimeType.split(';')[0].trim().toLowerCase().split('/')[1] ?? ''
+  const extension = EXTENSION_OVERRIDES[subtype] ?? subtype
+  return `voice-note.${/^[a-z0-9]+$/.test(extension) ? extension : 'webm'}`
+}
+
 /** Records a voice note with MediaRecorder and hands back the raw audio.
  *
  * Replaces the old Web Speech API dictation, which silently didn't exist in
@@ -12,7 +30,7 @@ export function useAudioRecorder() {
   const [durationMs, setDurationMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<BlobPart[]>([])
+  const chunksRef = useRef<Blob[]>([])
   const startedAtRef = useRef(0)
 
   const supported =
@@ -39,6 +57,8 @@ export function useAudioRecorder() {
       setError('Microphone access was blocked. Allow it, or type a description instead.')
       return
     }
+    // The browser default is deliberate. Chromium can only record WebM or MP4
+    // anyway, and the WebM it produces is what Gemini is known to accept.
     const recorder = new MediaRecorder(stream)
     chunksRef.current = []
     recorder.ondataavailable = (event) => {
@@ -46,7 +66,11 @@ export function useAudioRecorder() {
     }
     recorder.onstop = () => {
       setDurationMs(Date.now() - startedAtRef.current)
-      setBlob(new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' }))
+      // Some browsers leave recorder.mimeType empty; the chunks still carry the
+      // real type, and that's what the backend forwards to Gemini.
+      const type =
+        recorder.mimeType || chunksRef.current[0]?.type || 'audio/webm'
+      setBlob(new Blob(chunksRef.current, { type }))
       stopTracks()
       setRecording(false)
     }

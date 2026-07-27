@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { useAudioRecorder } from '../hooks/useAudioRecorder'
+import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
 
 interface Props {
@@ -70,7 +70,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       setError(null)
       try {
         const form = new FormData()
-        form.append('audio', recording, 'voice-note.webm')
+        form.append('audio', recording, voiceNoteFilename(recording.type))
         const { transcript } = await api.transcribeVoiceNote(form)
         if (cancelled) return
         setNote((current) =>

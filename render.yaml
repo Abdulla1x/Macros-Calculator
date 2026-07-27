@@ -39,6 +39,12 @@ services:
       # quota. Keep below the provider's daily allowance (~1500/day free tier).
       - key: AI_GLOBAL_DAILY_LIMIT
         value: "500"
+      # Site-wide outage/maintenance notice. Committed empty and read on every
+      # request, so an incident can be announced by editing it in the dashboard
+      # with no deploy; blank it again to clear the banner. Release notes are
+      # committed in app/announcements.py — this is only for live status.
+      - key: STATUS_BANNER
+        value: ""
       # Your deployed frontend origin(s), comma-separated. Set in the Render
       # dashboard — a committed placeholder would silently block the real
       # frontend if left unedited.

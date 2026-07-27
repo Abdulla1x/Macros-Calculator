@@ -12,7 +12,7 @@ from .auth.security import get_jwt_secret
 from .db import get_engine
 from .models import Base
 from .rate_limit import limiter
-from .routers import ai, analytics, data, foods, meals, settings
+from .routers import ai, analytics, announcements, data, foods, meals, settings
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -71,6 +71,7 @@ app.include_router(analytics.router)
 app.include_router(settings.router)
 app.include_router(data.router)
 app.include_router(ai.router)
+app.include_router(announcements.router)
 
 
 @app.get("/api/health")

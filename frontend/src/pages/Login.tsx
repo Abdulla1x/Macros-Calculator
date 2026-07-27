@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import StatusBanner from '../components/StatusBanner'
+import WarmupNotice from '../components/WarmupNotice'
+import { useAnnouncements } from '../hooks/useAnnouncements'
 
 export default function Login() {
   const { login } = useAuth()
@@ -10,6 +13,9 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // An outage notice matters most here: this is where someone lands when the
+  // app looks broken to them.
+  const announcements = useAnnouncements()
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -34,6 +40,7 @@ export default function Login() {
           <span className="text-3xl">🍽️</span>
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
+        <StatusBanner banner={announcements?.banner ?? null} />
         <form
           onSubmit={handleSubmit}
           className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
@@ -76,10 +83,7 @@ export default function Login() {
             </Link>
           </p>
         </form>
-        <p className="mt-4 text-center text-xs text-slate-600">
-          The free-tier server sleeps when idle — the first request can take up
-          to ~30 seconds.
-        </p>
+        <WarmupNotice />
       </div>
     </div>
   )

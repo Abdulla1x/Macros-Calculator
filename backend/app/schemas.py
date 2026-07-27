@@ -159,3 +159,20 @@ class TranscriptionResponse(BaseModel):
 
 class AnalysisLink(BaseModel):
     meal_id: int
+
+
+class Announcement(BaseModel):
+    """One release note. `id` is stable forever: the frontend stores it to
+    remember the user already dismissed this note."""
+
+    id: str
+    date: date_type
+    title: str
+    body: str
+
+
+class AnnouncementsResponse(BaseModel):
+    # `banner` is a live status/outage notice (env-driven, usually null);
+    # `items` are the committed release notes, newest first.
+    banner: str | None = None
+    items: list[Announcement]
