@@ -7,6 +7,7 @@ import StatusBanner from './StatusBanner'
 const links = [
   { to: '/', label: 'Dashboard', icon: '📊' },
   { to: '/log', label: 'Log Meal', icon: '🍽️' },
+  { to: '/weight', label: 'Weight', icon: '⚖️' },
   { to: '/analytics', label: 'Analytics', icon: '📈' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]

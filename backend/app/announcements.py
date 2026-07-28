@@ -23,6 +23,17 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-07-28-weight-tracking",
+        date="2026-07-28",
+        title="Track your weight",
+        body=(
+            "There's a new Weight page: log a weigh-in and see it charted "
+            "against a smoothed trend line, so a heavy dinner or a salty meal "
+            "doesn't read as real change. Re-logging a date replaces that day's "
+            "entry. Pick kilograms or pounds in Settings."
+        ),
+    ),
+    Announcement(
         id="2026-07-26-voice-notes",
         date="2026-07-26",
         title="Speak your meals",
