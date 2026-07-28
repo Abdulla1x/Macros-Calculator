@@ -85,6 +85,37 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <h3 className="mb-3 font-semibold">Units</h3>
+        <p className="mb-4 text-sm text-slate-400">
+          How weights are shown on the Weight page. Entries are stored the same way
+          either way, so switching converts your history rather than rewriting it.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          {(
+            [
+              { value: 'kg', label: 'Kilograms (kg)' },
+              { value: 'lb', label: 'Pounds (lb)' },
+            ] as const
+          ).map(({ value, label }) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
+            >
+              <input
+                type="radio"
+                name="weight_unit"
+                value={value}
+                checked={settings.weight_unit === value}
+                onChange={() => update({ weight_unit: value })}
+                className="h-4 w-4 accent-emerald-500"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="mb-4 font-semibold">Daily goals</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           {goalFields.filter((field) => showGoal(field.key)).map((field) => (
@@ -246,8 +277,8 @@ function AccountSection() {
 
         <div className="mt-5 border-t border-slate-800 pt-4">
           <p className="mb-2 text-sm text-slate-400">
-            Download everything stored for this account — meals, food library, goals and
-            AI analyses — as a single JSON file.
+            Download everything stored for this account — meals, food library, weight
+            entries, goals and AI analyses — as a single JSON file.
           </p>
           <button
             onClick={exportAll}
@@ -262,8 +293,8 @@ function AccountSection() {
       <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
         <h3 className="mb-1 font-semibold text-rose-300">Danger zone</h3>
         <p className="mb-4 text-sm text-slate-400">
-          Deleting your account permanently removes all meals, foods, goals and AI
-          analyses. This cannot be undone.
+          Deleting your account permanently removes all meals, foods, weight entries,
+          goals and AI analyses. This cannot be undone.
         </p>
         {!confirmingDelete ? (
           <button

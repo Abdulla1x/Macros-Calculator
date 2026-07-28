@@ -16,6 +16,7 @@ yet); their data is removed via the API where possible.
 import os
 import sys
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -96,10 +97,30 @@ def main() -> None:
         b_food_id = b_food.json()["id"]
         check(a_food_id != b_food_id, "same-named foods are distinct rows")
 
+        # Same weigh-in date for both accounts: the upsert is keyed on
+        # (user_id, date), so B's write must insert rather than update A's row.
+        weigh_day = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+        response = client.post(
+            "/api/weights",
+            json={"date": weigh_day, "weight_kg": 82.5},
+            headers=headers_a,
+        )
+        check(response.status_code == 200, "A logs a weigh-in")
+        a_weight_id = response.json()["id"]
+        response = client.post(
+            "/api/weights",
+            json={"date": weigh_day, "weight_kg": 61.0},
+            headers=headers_b,
+        )
+        check(response.status_code == 200, "B logs a weigh-in on the same date")
+        b_weight_id = response.json()["id"]
+        check(a_weight_id != b_weight_id, "same-date weigh-ins are distinct rows")
+
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
-                  "fat_goal": 55, "track_carbs": True, "track_fat": False},
+                  "fat_goal": 55, "track_carbs": True, "track_fat": False,
+                  "weight_unit": "lb"},
             headers=headers_a,
         )
 
@@ -115,6 +136,15 @@ def main() -> None:
 
         b_settings = client.get("/api/settings", headers=headers_b).json()
         check(b_settings["calorie_goal"] == 2000, "A's settings change invisible to B")
+        check(b_settings["weight_unit"] == "kg", "A's unit change invisible to B")
+
+        b_weights = client.get("/api/weights", headers=headers_b).json()
+        check(
+            [w["weight_kg"] for w in b_weights] == [61.0],
+            "B sees only B's weigh-in on the shared date",
+        )
+        b_trend = client.get("/api/weights/trend", headers=headers_b).json()
+        check(b_trend["latest_trend_kg"] == 61.0, "B's trend counts only B")
 
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
@@ -128,6 +158,8 @@ def main() -> None:
         check(response.status_code == 404, "B DELETE A's meal id -> 404")
         response = client.delete(f"/api/foods/{a_food_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's food id -> 404")
+        response = client.delete(f"/api/weights/{a_weight_id}", headers=headers_b)
+        check(response.status_code == 404, "B DELETE A's weight id -> 404")
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -164,7 +196,7 @@ def main() -> None:
             from sqlalchemy.orm import Session
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from app.models import Food, Meal, Setting
+            from app.models import Food, Meal, Setting, WeightEntry
 
             engine = create_engine(os.environ["DATABASE_URL"])
             with Session(engine) as session:
@@ -178,6 +210,16 @@ def main() -> None:
                 check(
                     sorted(f.user_id for f in foods) == sorted([user_a["id"], user_b["id"]]),
                     "DB: one food row per user, correctly owned",
+                )
+                weigh_ins = session.scalars(
+                    select(WeightEntry).where(
+                        WeightEntry.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(w.user_id for w in weigh_ins)
+                    == sorted([user_a["id"], user_b["id"]]),
+                    "DB: one weigh-in row per user on the shared date",
                 )
                 for uid in (user_a["id"], user_b["id"]):
                     check(
@@ -194,6 +236,8 @@ def main() -> None:
         client.delete(f"/api/meals/{b_meal_id}", headers=headers_b)
         client.delete(f"/api/foods/{a_food_id}", headers=headers_a)
         client.delete(f"/api/foods/{b_food_id}", headers=headers_b)
+        client.delete(f"/api/weights/{a_weight_id}", headers=headers_a)
+        client.delete(f"/api/weights/{b_weight_id}", headers=headers_b)
         # B's imported duplicate meal
         for meal in client.get("/api/meals", headers=headers_b).json():
             client.delete(f"/api/meals/{meal['id']}", headers=headers_b)

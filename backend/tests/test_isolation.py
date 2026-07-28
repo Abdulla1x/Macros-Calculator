@@ -1,9 +1,15 @@
 """Cross-tenant isolation: two users must never see or modify each other's data."""
+from datetime import date, timedelta
+
 from tests.test_meal_ai import configure
 
 MEAL_A = {"date": "2026-07-01", "name": "Alpha Meal", "calories": 500, "protein": 40}
 MEAL_B = {"date": "2026-07-01", "name": "Beta Meal", "calories": 300, "protein": 20}
 FOOD_A = {"name": "Shared Name Food", "serving_size": 100, "calories": 165, "protein": 31}
+# Weigh-in dates are relative: the API rejects future dates.
+WEIGH_DAY = (date.today() - timedelta(days=1)).isoformat()
+WEIGHT_A = {"date": WEIGH_DAY, "weight_kg": 82.0}
+WEIGHT_B = {"date": WEIGH_DAY, "weight_kg": 61.0}
 
 
 def test_meal_lists_are_scoped(client, client_b):
@@ -60,6 +66,57 @@ def test_same_food_name_allowed_per_user_and_upsert_stays_scoped(client, client_
     assert a_food["calories"] == 165
     assert client_b.get("/api/foods").json()[0]["calories"] == 999
     assert a_food["id"] != b_food.json()["id"]
+
+
+def test_weight_lists_are_scoped(client, client_b):
+    a_weight = client.post("/api/weights", json=WEIGHT_A).json()
+    client_b.post("/api/weights", json=WEIGHT_B)
+
+    a_weights = client.get("/api/weights").json()
+    b_weights = client_b.get("/api/weights").json()
+    assert [w["weight_kg"] for w in a_weights] == [82.0]
+    assert [w["weight_kg"] for w in b_weights] == [61.0]
+    assert all(w["id"] != a_weight["id"] for w in b_weights)
+
+    # The date-filtered listing is scoped too.
+    b_ranged = client_b.get(
+        "/api/weights", params={"start": WEIGH_DAY, "end": WEIGH_DAY}
+    ).json()
+    assert [w["weight_kg"] for w in b_ranged] == [61.0]
+
+
+def test_cannot_delete_another_users_weight(client, client_b):
+    a_weight = client.post("/api/weights", json=WEIGHT_A).json()
+
+    assert client_b.delete(f"/api/weights/{a_weight['id']}").status_code == 404
+    # A's weigh-in is untouched.
+    assert [w["id"] for w in client.get("/api/weights").json()] == [a_weight["id"]]
+
+
+def test_weight_upsert_does_not_overwrite_another_users_day(client, client_b):
+    """Same date, two accounts: B's upsert must insert, not update A's row."""
+    a_weight = client.post("/api/weights", json=WEIGHT_A).json()
+    b_weight = client_b.post("/api/weights", json=WEIGHT_B).json()
+
+    assert a_weight["id"] != b_weight["id"]
+    assert client.get("/api/weights").json()[0]["weight_kg"] == 82.0
+    assert client_b.get("/api/weights").json()[0]["weight_kg"] == 61.0
+
+
+def test_weight_trend_only_counts_own_entries(client, client_b):
+    client.post("/api/weights", json=WEIGHT_A)
+    client_b.post("/api/weights", json=WEIGHT_B)
+
+    assert client.get("/api/weights/trend").json()["latest_trend_kg"] == 82.0
+    assert client_b.get("/api/weights/trend").json()["latest_trend_kg"] == 61.0
+
+
+def test_full_export_only_contains_own_weights(client, client_b):
+    client.post("/api/weights", json=WEIGHT_A)
+    client_b.post("/api/weights", json=WEIGHT_B)
+
+    b_export = client_b.get("/api/data/export/all").json()
+    assert [w["weight_kg"] for w in b_export["weights"]] == [61.0]
 
 
 def test_settings_are_independent(client, client_b):

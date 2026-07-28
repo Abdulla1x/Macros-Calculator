@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import LogMeal from './pages/LogMeal'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
+import Weight from './pages/Weight'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="/log" element={<LogMeal />} />
+          <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
         </Route>

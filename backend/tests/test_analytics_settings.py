@@ -63,11 +63,13 @@ def test_settings_defaults_and_update(client):
     assert defaults == {
         "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
         "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "weight_unit": "kg",
     }
 
     updated = {
         "calorie_goal": 2400, "protein_goal": 180, "carbs_goal": 300,
         "fat_goal": 80, "track_carbs": True, "track_fat": False,
+        "weight_unit": "lb",
     }
     assert client.put("/api/settings", json=updated).json() == updated
     assert client.get("/api/settings").json() == updated
@@ -82,3 +84,24 @@ def test_settings_reject_non_positive_goals(client):
         for bad in (-100, 0):
             response = client.put("/api/settings", json={**valid, field: bad})
             assert response.status_code == 422, f"{field}={bad} was accepted"
+
+
+def test_weight_unit_defaults_so_older_clients_still_save(client):
+    """A PUT written before weight_unit existed must not start 422-ing."""
+    legacy_body = {
+        "calorie_goal": 2100, "protein_goal": 170, "carbs_goal": 260,
+        "fat_goal": 75, "track_carbs": False, "track_fat": True,
+    }
+    response = client.put("/api/settings", json=legacy_body)
+    assert response.status_code == 200
+    assert response.json()["weight_unit"] == "kg"
+
+
+def test_weight_unit_rejects_unknown_units(client):
+    valid = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    for bad in ("stone", "KG", ""):
+        response = client.put("/api/settings", json={**valid, "weight_unit": bad})
+        assert response.status_code == 422, f"{bad!r} was accepted"

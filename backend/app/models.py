@@ -76,6 +76,25 @@ class Food(Base):
 Index("uq_foods_user_lower_name", Food.user_id, func.lower(Food.name), unique=True)
 
 
+class WeightEntry(Base):
+    __tablename__ = "weights"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    date: Mapped[date_type] = mapped_column(Date)
+    # Always kilograms. Pounds are a display preference (settings.weight_unit),
+    # converted in the frontend, so stored history stays comparable if the
+    # preference changes.
+    weight_kg: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    # One weigh-in per day: POST /api/weights upserts on this pair, so the
+    # constraint is what makes re-logging a date a correction, not a duplicate.
+    __table_args__ = (
+        Index("uq_weights_user_date", "user_id", "date", unique=True),
+    )
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
@@ -88,6 +107,16 @@ class Setting(Base):
     fat_goal: Mapped[float] = mapped_column(Float, default=70)
     track_carbs: Mapped[bool] = mapped_column(default=False)
     track_fat: Mapped[bool] = mapped_column(default=False)
+    # Display unit only — weights are stored in kg regardless.
+    weight_unit: Mapped[str] = mapped_column(
+        String(2), default="kg", server_default="kg"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "weight_unit IN ('kg', 'lb')", name="ck_settings_weight_unit"
+        ),
+    )
 
 
 class AIAnalysis(Base):

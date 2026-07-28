@@ -13,6 +13,9 @@ import type {
   TokenResponse,
   Transcription,
   User,
+  WeightEntry,
+  WeightEntryCreate,
+  WeightTrend,
 } from '../types'
 import { clearToken, getToken } from '../auth/token'
 
@@ -104,6 +107,25 @@ export const api = {
     request<OFFProduct[]>(`/api/foods/lookup?q=${encodeURIComponent(q)}`),
   saveFood: (food: FoodCreate) =>
     request<Food>('/api/foods', { method: 'POST', body: JSON.stringify(food) }),
+
+  getWeights: (start?: string, end?: string) => {
+    const params = new URLSearchParams()
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    const query = params.toString()
+    return request<WeightEntry[]>(`/api/weights${query ? `?${query}` : ''}`)
+  },
+  // An upsert on (user, date): re-saving a date replaces that day's entry and
+  // still answers 200, so there is no "created vs updated" branch to handle.
+  saveWeight: (entry: WeightEntryCreate) =>
+    request<WeightEntry>('/api/weights', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    }),
+  deleteWeight: (id: number) =>
+    request<void>(`/api/weights/${id}`, { method: 'DELETE' }),
+  getWeightTrend: (days = 90) =>
+    request<WeightTrend>(`/api/weights/trend?days=${days}`),
 
   getSettings: () => request<Settings>('/api/settings'),
   updateSettings: (settings: Settings) =>

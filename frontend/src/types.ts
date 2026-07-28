@@ -20,6 +20,31 @@ export interface Settings {
   fat_goal: number
   track_carbs: boolean
   track_fat: boolean
+  /** Display preference only — weights are always sent and stored in kg. */
+  weight_unit: 'kg' | 'lb'
+}
+
+export interface WeightEntry {
+  id: number
+  date: string
+  weight_kg: number
+}
+
+export type WeightEntryCreate = Omit<WeightEntry, 'id'>
+
+export interface WeightTrendPoint {
+  date: string
+  weight_kg: number
+  /** The smoothed value the server computed; never recomputed client-side. */
+  trend_kg: number
+}
+
+export interface WeightTrend {
+  points: WeightTrendPoint[]
+  latest_trend_kg: number | null
+  /** Null when there are too few weigh-ins to fit a rate. */
+  weekly_rate_kg: number | null
+  point_count: number
 }
 
 export interface Meal {
