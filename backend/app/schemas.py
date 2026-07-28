@@ -1,7 +1,8 @@
 from datetime import date as date_type
+from datetime import timedelta
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class SignupRequest(BaseModel):
@@ -79,6 +80,55 @@ class OFFProduct(BaseModel):
     source: Literal["openfoodfacts"] = "openfoodfacts"
 
 
+# A weigh-in cannot be in the future, but "today" on the server is UTC and the
+# user may be up to a day ahead of it. One day of slack keeps someone in
+# UTC+13 from being told their morning weigh-in is in the future, while still
+# catching a mistyped year or month.
+FUTURE_DATE_GRACE_DAYS = 1
+
+# Above the heaviest weight ever recorded for a human, so a misplaced decimal
+# point is rejected and every real value is accepted.
+MAX_WEIGHT_KG = 635
+
+
+class WeightEntryCreate(BaseModel):
+    date: date_type
+    weight_kg: float = Field(gt=0, le=MAX_WEIGHT_KG)
+
+    @field_validator("date")
+    @classmethod
+    def not_in_future(cls, value: date_type) -> date_type:
+        limit = date_type.today() + timedelta(days=FUTURE_DATE_GRACE_DAYS)
+        if value > limit:
+            raise ValueError("weigh-in date cannot be in the future")
+        return value
+
+
+class WeightEntry(WeightEntryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+
+class WeightTrendPoint(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type
+    weight_kg: float
+    trend_kg: float
+
+
+class WeightTrend(BaseModel):
+    """Smoothed weight history. `weekly_rate_kg` is null when there are too few
+    weigh-ins to fit one; `point_count` is how many the numbers are built from,
+    so the UI can show it rather than imply more certainty than there is."""
+
+    points: list[WeightTrendPoint]
+    latest_trend_kg: float | None = None
+    weekly_rate_kg: float | None = None
+    point_count: int
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,6 +138,9 @@ class Settings(BaseModel):
     fat_goal: float = Field(gt=0)
     track_carbs: bool
     track_fat: bool
+    # Defaulted, unlike the goals: clients written before this field existed
+    # still PUT a valid body.
+    weight_unit: Literal["kg", "lb"] = "kg"
 
 
 class DayTotals(BaseModel):

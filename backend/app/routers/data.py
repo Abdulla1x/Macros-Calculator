@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import AIAnalysis, Food, Meal, Setting, User
+from ..models import AIAnalysis, Food, Meal, Setting, User, WeightEntry
 from ..schemas import ImportResult
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -53,6 +53,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
     foods = db.scalars(
         select(Food).where(Food.user_id == user.id).order_by(Food.id)
     ).all()
+    weights = db.scalars(
+        select(WeightEntry)
+        .where(WeightEntry.user_id == user.id)
+        .order_by(WeightEntry.date)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
@@ -70,6 +75,7 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "fat_goal": setting.fat_goal,
             "track_carbs": setting.track_carbs,
             "track_fat": setting.track_fat,
+            "weight_unit": setting.weight_unit,
         },
         "meals": [
             {"date": m.date.isoformat(), "name": m.name, "calories": m.calories,
@@ -80,6 +86,10 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             {"name": f.name, "serving_size": f.serving_size, "calories": f.calories,
              "protein": f.protein, "carbs": f.carbs, "fat": f.fat, "source": f.source}
             for f in foods
+        ],
+        "weights": [
+            {"date": w.date.isoformat(), "weight_kg": w.weight_kg}
+            for w in weights
         ],
         "ai_analyses": [
             {"created_at": a.created_at.isoformat(), "user_text": a.user_text,

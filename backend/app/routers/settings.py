@@ -37,5 +37,6 @@ def update_settings(
     row.fat_goal = settings.fat_goal
     row.track_carbs = settings.track_carbs
     row.track_fat = settings.track_fat
+    row.weight_unit = settings.weight_unit
     db.commit()
     return row

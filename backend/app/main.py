@@ -12,7 +12,16 @@ from .auth.security import get_jwt_secret
 from .db import get_engine
 from .models import Base
 from .rate_limit import limiter
-from .routers import ai, analytics, announcements, data, foods, meals, settings
+from .routers import (
+    ai,
+    analytics,
+    announcements,
+    data,
+    foods,
+    meals,
+    settings,
+    weights,
+)
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -67,6 +76,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(meals.router)
 app.include_router(foods.router)
+app.include_router(weights.router)
 app.include_router(analytics.router)
 app.include_router(settings.router)
 app.include_router(data.router)
