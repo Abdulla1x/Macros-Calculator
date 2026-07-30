@@ -92,9 +92,15 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             for w in weights
         ],
         "ai_analyses": [
-            {"created_at": a.created_at.isoformat(), "user_text": a.user_text,
-             "analysis": json.loads(a.analysis_json), "meal_id": a.meal_id}
-            for a in analyses
+            # Transcription rows carry no analysis JSON (models.py documents
+            # this), and json.loads("") raises — which used to 500 the whole
+            # export for anyone who had ever recorded a voice note. Probe rows
+            # are dropped entirely: they are operational noise, not user data.
+            {"created_at": a.created_at.isoformat(), "kind": a.kind,
+             "user_text": a.user_text,
+             "analysis": json.loads(a.analysis_json) if a.analysis_json else None,
+             "meal_id": a.meal_id}
+            for a in analyses if a.kind != "probe"
         ],
     }
 

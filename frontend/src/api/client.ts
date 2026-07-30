@@ -1,4 +1,5 @@
 import type {
+  AIStatus,
   AnalyticsSummary,
   Announcements,
   Food,
@@ -30,7 +31,24 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+// fetch has no default timeout, so a request the server accepts and never
+// answers leaves the spinner up forever — which reads as "the app is broken"
+// rather than "try again". Generous, because a cold free-tier instance takes
+// ~30s to wake.
+const DEFAULT_TIMEOUT_MS = 60_000
+// The AI endpoints get their own budgets, which must EXCEED the backend's worst
+// case, or the client aborts requests that were about to succeed. The server
+// retries a busy provider for up to its deadline (60s analyze, 25s transcribe)
+// and the final attempt can still run its full per-request timeout on top
+// (30s / 12s), so the real ceilings are ~90s and ~37s — plus the upload.
+const ANALYZE_TIMEOUT_MS = 150_000
+const TRANSCRIBE_TIMEOUT_MS = 60_000
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   const headers: Record<string, string> = {
     ...(options.body instanceof FormData
       ? {}
@@ -40,7 +58,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (err) {
+    // A dead network and our own deadline both land here and mean the same
+    // thing to the user. status 0 marks "no HTTP response happened" so callers
+    // can still tell it apart from a real 5xx.
+    const timedOut = err instanceof DOMException && err.name === 'TimeoutError'
+    throw new ApiError(
+      timedOut
+        ? 'That took too long — the server may be waking up. Try again.'
+        : 'Could not reach the server. Check your connection and try again.',
+      0,
+    )
+  }
 
   if (!response.ok) {
     // An expired/invalid session on any data endpoint sends the user back to
@@ -143,9 +179,21 @@ export const api = {
   },
 
   analyzeMeal: (form: FormData) =>
-    request<MealAnalysisResponse>('/api/ai/analyze', { method: 'POST', body: form }),
+    request<MealAnalysisResponse>(
+      '/api/ai/analyze',
+      { method: 'POST', body: form },
+      ANALYZE_TIMEOUT_MS,
+    ),
   transcribeVoiceNote: (form: FormData) =>
-    request<Transcription>('/api/ai/transcribe', { method: 'POST', body: form }),
+    request<Transcription>(
+      '/api/ai/transcribe',
+      { method: 'POST', body: form },
+      TRANSCRIBE_TIMEOUT_MS,
+    ),
+  // Operator diagnostic, not wired into any UI: answers "is the AI down, and
+  // why" without a log dig. `probe` spends one provider call.
+  getAIStatus: (probe = false) =>
+    request<AIStatus>(`/api/ai/status${probe ? '?probe=true' : ''}`),
   linkAnalysis: (analysisId: number, mealId: number) =>
     request<void>(`/api/ai/analyses/${analysisId}`, {
       method: 'PATCH',

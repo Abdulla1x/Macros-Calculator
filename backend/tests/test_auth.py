@@ -122,6 +122,7 @@ PROTECTED_ENDPOINTS = [
     ("POST", "/api/auth/change-password"),
     ("DELETE", "/api/auth/account"),
     ("POST", "/api/ai/analyze"),
+    ("GET", "/api/ai/status"),
     ("PATCH", "/api/ai/analyses/1"),
     ("GET", "/api/auth/me"),
 ]

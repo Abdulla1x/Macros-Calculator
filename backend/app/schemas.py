@@ -214,6 +214,47 @@ class AnalysisLink(BaseModel):
     meal_id: int
 
 
+class AIProbe(BaseModel):
+    """What one minimal live call to the AI provider actually did."""
+
+    # "rejected" rather than "bad_key" on purpose: an invalid key, a retired
+    # model id and the EEA region block are all HTTP 400, and the expensive
+    # lesson of the July outage was that the status code cannot tell them
+    # apart — only the message body can. That is what `message` is for.
+    status: Literal[
+        "ok",
+        "rate_limited",
+        "rejected",
+        "upstream_5xx",
+        "unreachable",
+        "internal_error",
+        "not_configured",
+        "quota_exhausted",
+    ]
+    message: str | None = None
+    latency_ms: int | None = None
+    cached: bool = False
+    age_seconds: int | None = None
+
+
+class AIStatus(BaseModel):
+    """Enough to answer "is the AI down, and why" in one request.
+
+    /api/health returns 200 in under a second and reports nothing about the
+    provider — it did so throughout both outages. This is the endpoint that
+    would have ended each of them in one call.
+    """
+
+    configured: bool
+    model: str
+    fallback_model: str | None = None
+    # The pinned SDK's own version. google-genai's transitive dependencies are
+    # not pinned, so a rebuild can resolve a pydantic or httpx the SDK no longer
+    # works against; seeing the version here beats reading Render build logs.
+    sdk_version: str
+    probe: AIProbe | None = None
+
+
 class Announcement(BaseModel):
     """One release note. `id` is stable forever: the frontend stores it to
     remember the user already dismissed this note."""
