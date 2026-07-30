@@ -7,6 +7,30 @@ export interface HealthStatus {
   status: string
 }
 
+export interface AIProbe {
+  status:
+    | 'ok'
+    | 'rate_limited'
+    | 'rejected'
+    | 'upstream_5xx'
+    | 'unreachable'
+    | 'internal_error'
+    | 'not_configured'
+    | 'quota_exhausted'
+  message: string | null
+  latency_ms: number | null
+  cached: boolean
+  age_seconds: number | null
+}
+
+export interface AIStatus {
+  configured: boolean
+  model: string
+  fallback_model: string | null
+  sdk_version: string
+  probe: AIProbe | null
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: 'bearer'

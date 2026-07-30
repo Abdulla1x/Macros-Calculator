@@ -14,3 +14,18 @@ pyjwt==2.13.0
 pwdlib[argon2]==0.3.0
 slowapi==0.1.10
 email-validator==2.3.0
+
+# google-genai's own dependencies, pinned to what the SDK was verified against.
+# It declares them as ranges (pydantic<3, httpx<1, websockets<17 ...), so
+# without this a rebuild months later resolves versions the pinned SDK has
+# never run against. That failure mode is invisible: the SDK raises a TypeError
+# from inside site-packages on every call, which the app can only report as a
+# generic provider failure. Bump these together with google-genai.
+anyio==4.14.1
+distro==1.9.0
+google-auth==2.55.1
+pydantic==2.13.4
+requests==2.34.2
+tenacity==9.1.4
+typing-extensions==4.16.0
+websockets==16.0

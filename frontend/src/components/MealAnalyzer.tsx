@@ -22,6 +22,10 @@ const confidenceDots: Record<Confidence, string> = {
 
 const round = (value: number) => Math.round(value)
 
+// Long enough that a healthy analysis never shows the notice, short enough that
+// a stuck-looking spinner gets explained before the user gives up on it.
+const RETRY_NOTICE_AFTER_MS = 5_000
+
 export default function MealAnalyzer({ settings, onApply }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -30,11 +34,24 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [analysis, setAnalysis] = useState<MealAnalysisResponse | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
   const audio = useAudioRecorder()
   const { blob: recording, durationMs, clear: clearRecording } = audio
+
+  // A normal analysis answers in a few seconds. Past that the server is almost
+  // certainly retrying a busy provider, which can legitimately take up to a
+  // minute — so say so, or a long wait reads as the app having hung.
+  useEffect(() => {
+    if (!analyzing) {
+      setRetrying(false)
+      return
+    }
+    const timer = setTimeout(() => setRetrying(true), RETRY_NOTICE_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [analyzing])
 
   useEffect(() => {
     if (!file) {
@@ -236,6 +253,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       <p className="mt-2 text-xs text-slate-500">
         Your photo, voice note, and description are sent to Google Gemini for analysis.
       </p>
+
+      {retrying && (
+        <p className="mt-3 text-sm text-amber-300">
+          The AI service is busy — still trying. This can take up to a minute.
+        </p>
+      )}
 
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 

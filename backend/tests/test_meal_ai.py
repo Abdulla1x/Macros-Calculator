@@ -3,6 +3,7 @@ import io
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
 # Importing the provider's errors is fine *here*: these tests exist to prove
 # meal_ai.py translates them, so nothing else has to know they exist.
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import AIAnalysis
+from app.routers import ai as ai_router
 from app.schemas import AnalyzedItem, MacroRange, MealAnalysis
 from app.services import meal_ai
 from app.services.meal_ai import _build_contents
@@ -354,10 +356,238 @@ def test_server_errors_map_to_unavailable(monkeypatch):
         asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
 
 
-def test_unexpected_errors_map_to_unavailable(monkeypatch):
+def test_unexpected_errors_map_to_internal_error(monkeypatch):
+    """The residual bucket: not the provider refusing us, not the network.
+
+    Kept distinct from MealAIUnavailable because "the SDK raised" and "Google is
+    down" need different people, and reporting both as an outage is what made
+    the last incident a guess.
+    """
     _install_failing_provider(monkeypatch, RuntimeError("socket exploded"))
+    with pytest.raises(meal_ai.MealAIInternalError):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        httpx.ConnectError("dns is having a day"),
+        # Our own HttpOptions deadline expiring arrives as a TimeoutException,
+        # which is a TransportError — so "we gave up" classifies as unreachable
+        # rather than as Google being down.
+        httpx.ReadTimeout("too slow"),
+    ],
+)
+def test_transport_failures_map_to_unreachable(monkeypatch, exc):
+    _install_failing_provider(monkeypatch, exc)
+    with pytest.raises(meal_ai.MealAIUnreachable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+
+# --- retry, fallback model, and the request deadline ------------------------
+
+
+@pytest.fixture(autouse=True)
+def virtual_clock(monkeypatch):
+    """Sleeping advances a fake clock instead of real time.
+
+    The retry loop is bounded by wall-clock deadline, not an attempt count, so a
+    stubbed sleep that left the clock frozen would spin until the backoff
+    overflowed. Advancing a virtual clock keeps the suite instant while
+    exercising the real deadline arithmetic.
+    """
+    now = {"t": 0.0}
+    slept: list[float] = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+        now["t"] += seconds
+
+    monkeypatch.setattr(meal_ai.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(meal_ai, "_now", lambda: now["t"])
+    return slept
+
+
+def _install_scripted_provider(monkeypatch, outcomes):
+    """A provider that yields `outcomes` in order: exceptions raise, values return.
+
+    Faked at the same seam as every other provider test — the SDK boundary —
+    so the retry logic is exercised without a network call.
+    """
+    calls = {"n": 0, "models": [], "configs": []}
+
+    async def generate_content(**kwargs):
+        calls["models"].append(kwargs.get("model"))
+        calls["configs"].append(kwargs.get("config"))
+        outcome = outcomes[min(calls["n"], len(outcomes) - 1)]
+        calls["n"] += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(
+        meal_ai.genai,
+        "Client",
+        lambda api_key=None: SimpleNamespace(
+            aio=SimpleNamespace(
+                models=SimpleNamespace(generate_content=generate_content)
+            )
+        ),
+    )
+    return calls
+
+
+def _server_error():
+    return genai_errors.ServerError(503, {"error": {"message": "overloaded"}})
+
+
+def test_a_server_error_is_retried_and_then_succeeds(monkeypatch):
+    """The failure that took the app down: Gemini 503, cleared on the retry."""
+    calls = _install_scripted_provider(
+        monkeypatch, [_server_error(), SimpleNamespace(parsed=SAMPLE, text=None)]
+    )
+    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    assert result is SAMPLE
+    assert calls["n"] == 2
+
+
+def test_the_second_attempt_uses_the_other_serving_pool(monkeypatch):
+    """Overload is per pool, so alternate rather than exhausting the primary.
+
+    Reaching the fallback on attempt two is the whole point: spending half the
+    budget on a pool that is already refusing us is what the manual workaround
+    (switching MEAL_AI_MODEL by hand) was compensating for.
+    """
+    monkeypatch.setenv("MEAL_AI_MODEL", "gemini-3.5-flash")
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "gemini-2.5-flash")
+    calls = _install_scripted_provider(
+        monkeypatch, [_server_error(), SimpleNamespace(parsed=SAMPLE, text=None)]
+    )
+    assert asyncio.run(meal_ai.analyze_meal(None, None, "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-3.5-flash", "gemini-2.5-flash"]
+
+
+def test_a_sustained_outage_keeps_trying_for_the_whole_budget(
+    monkeypatch, virtual_clock
+):
+    """The failure this redesign exists for: many tries spread over a minute.
+
+    A fixed attempt count gave up ~1.5s in, with 98% of the budget unused —
+    indistinguishable from no retry at all when a user is pressing the button
+    for a minute and eventually getting through.
+    """
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
         asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+    # Exact count depends on jitter; the guarantee is "many, across the budget".
+    assert calls["n"] >= 8
+    # And it stops at the budget rather than retrying forever.
+    assert sum(virtual_clock) <= meal_ai.ANALYZE_DEADLINE_S
+
+
+def test_an_empty_fallback_model_keeps_everything_on_one_pool(monkeypatch):
+    monkeypatch.setenv("MEAL_AI_MODEL", "gemini-3.5-flash")
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "")
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    assert set(calls["models"]) == {"gemini-3.5-flash"}
+
+
+def test_the_fallback_is_deduped_against_the_primary(monkeypatch):
+    """Same id in both slots must not silently double the worst-case latency."""
+    monkeypatch.setenv("MEAL_AI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "gemini-2.5-flash")
+    assert meal_ai._models() == ["gemini-2.5-flash"]
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        # Already sending too much: two more requests inside the same 60s window
+        # make the thing we're being limited for worse.
+        genai_errors.ClientError(429, {"error": {"message": "slow down"}}),
+        # A rejected key or retired model id fails identically every time.
+        genai_errors.ClientError(400, {"error": {"message": "bad key"}}),
+        # A drifted dependency raises the same TypeError every time.
+        RuntimeError("boom"),
+    ],
+)
+def test_failures_a_retry_cannot_fix_are_not_retried(monkeypatch, exc):
+    calls = _install_scripted_provider(monkeypatch, [exc])
+    with pytest.raises(meal_ai.MealAIError):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    assert calls["n"] == 1
+
+
+def test_an_unusable_response_is_not_retried(monkeypatch):
+    """It arrived and burned tokens; asking again bills twice for the same garbage."""
+    calls = _install_scripted_provider(
+        monkeypatch, [SimpleNamespace(parsed=None, text=None)]
+    )
+    with pytest.raises(meal_ai.MealAIBadResponse):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    assert calls["n"] == 1
+
+
+def test_backoff_grows_but_is_capped_and_jittered(monkeypatch, virtual_clock):
+    """Growth stops at a ceiling: an unbounded double would sleep through the
+    back half of the budget, when a flapping provider needs frequent sampling."""
+    _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+    for i, delay in enumerate(virtual_clock):
+        ceiling = min(meal_ai.RETRY_BASE_DELAY * 2**i, meal_ai.RETRY_MAX_DELAY)
+        # Jitter only ever shortens, so the ceiling is a hard upper bound.
+        assert ceiling / 2 <= delay <= ceiling
+    assert max(virtual_clock) <= meal_ai.RETRY_MAX_DELAY
+    # Jitter must actually vary, or concurrent users retry in lockstep.
+    assert len(set(virtual_clock)) > 1
+
+
+def test_the_deadline_is_overridable_from_the_dashboard(monkeypatch):
+    """The knob you want mid-outage is "keep trying longer", without a build."""
+    monkeypatch.setenv("MEAL_AI_DEADLINE_S", "0.1")
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    assert calls["n"] == 1
+
+
+def test_transcription_gets_a_shorter_budget_than_analysis(monkeypatch):
+    """A voice note is the first step of a flow; nobody waits a minute to type."""
+    analyze = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+
+    transcribe = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm"))
+
+    assert transcribe["n"] < analyze["n"]
+
+
+@pytest.mark.parametrize(
+    "call,expected_ms",
+    [
+        (lambda: meal_ai.analyze_meal(None, None, "chicken"), meal_ai.ANALYZE_TIMEOUT_MS),
+        (lambda: meal_ai.transcribe_audio(b"audio", "audio/webm"), meal_ai.TRANSCRIBE_TIMEOUT_MS),
+    ],
+)
+def test_every_provider_call_carries_a_request_deadline(monkeypatch, call, expected_ms):
+    """Guards the unit: HttpOptions.timeout is MILLISECONDS, not seconds.
+
+    Without a timeout the SDK inherits httpx's default of none at all, so a
+    connection Google accepts and never answers pins a worker until the platform
+    kills it.
+    """
+    calls = _install_scripted_provider(
+        monkeypatch, [SimpleNamespace(parsed=SAMPLE, text="a transcript")]
+    )
+    asyncio.run(call())
+    assert calls["configs"][0].http_options.timeout == expected_ms
 
 
 # --- the router turns those into distinguishable statuses, refunding quota ---
@@ -554,3 +784,146 @@ def test_global_cap_does_not_fire_below_the_limit(client, monkeypatch):
     monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "500")
     configure(monkeypatch)
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+
+# --- GET /api/ai/status: answers "is the AI down, and why" in one request ---
+# /api/health returned 200 in under a second throughout both real outages.
+
+
+@pytest.fixture(autouse=True)
+def _clear_probe_cache():
+    """Module-level cache outlives a test, so reset it like conftest does limiter."""
+    ai_router._probe_cache = None
+    yield
+    ai_router._probe_cache = None
+
+
+def configure_probe(monkeypatch, outcome=None):
+    """Point meal_ai.probe at a scripted result; `outcome` raises if an Exception."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    async def fake_probe():
+        if isinstance(outcome, Exception):
+            raise outcome
+        return "gemini-3.5-flash"
+
+    monkeypatch.setattr(meal_ai, "probe", fake_probe)
+
+
+def test_status_reports_the_model_chain_and_sdk_version(client, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("MEAL_AI_MODEL", "gemini-x")
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "gemini-y")
+
+    body = client.get("/api/ai/status").json()
+    assert body["configured"] is True
+    assert body["model"] == "gemini-x"
+    assert body["fallback_model"] == "gemini-y"
+    assert body["sdk_version"]
+
+
+def test_status_without_probe_never_touches_the_provider(client, monkeypatch):
+    """The free form has to stay free, or nobody can afford to poll it."""
+
+    async def explode():
+        raise AssertionError("the un-probed form must not call the provider")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(meal_ai, "probe", explode)
+
+    body = client.get("/api/ai/status").json()
+    assert body["probe"] is None
+    with Session(get_engine()) as db:
+        assert db.query(AIAnalysis).count() == 0
+
+
+def test_status_probe_reports_ok(client, monkeypatch):
+    configure_probe(monkeypatch)
+    probe = client.get("/api/ai/status?probe=true").json()["probe"]
+    assert probe["status"] == "ok"
+    assert isinstance(probe["latency_ms"], int)
+
+
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        # The outage this endpoint was built during.
+        (meal_ai.MealAIUnavailable("503 overloaded"), "upstream_5xx"),
+        (meal_ai.MealAIUnreachable("ConnectError: dns"), "unreachable"),
+        (meal_ai.MealAIInternalError("TypeError: drift"), "internal_error"),
+        (meal_ai.MealAIRateLimited("429"), "rate_limited"),
+        (meal_ai.MealAIBadRequest("bad key"), "rejected"),
+    ],
+)
+def test_status_probe_classifies_each_failure(client, monkeypatch, exc, expected):
+    configure_probe(monkeypatch, exc)
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["status"] == expected
+
+
+def test_status_probe_hides_provider_text_by_default(client, monkeypatch):
+    """Signup is open, so "authenticated" is a weak gate on Google's own words."""
+    configure_probe(monkeypatch, meal_ai.MealAIBadRequest("API key not valid"))
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["message"] is None
+
+
+def test_status_probe_reveals_provider_text_when_enabled(client, monkeypatch):
+    configure_probe(monkeypatch, meal_ai.MealAIBadRequest("API key not valid"))
+    monkeypatch.setenv("MEAL_AI_STATUS_DETAIL", "1")
+    message = client.get("/api/ai/status?probe=true").json()["probe"]["message"]
+    assert "API key not valid" in message
+
+
+def test_status_probe_is_cached_so_it_cannot_drain_the_quota(client, monkeypatch):
+    calls = {"n": 0}
+
+    async def counting_probe():
+        calls["n"] += 1
+        return "gemini-3.5-flash"
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(meal_ai, "probe", counting_probe)
+
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["cached"] is False
+    second = client.get("/api/ai/status?probe=true").json()["probe"]
+    assert second["cached"] is True
+    assert isinstance(second["age_seconds"], int)
+    assert calls["n"] == 1
+
+
+def test_status_probe_counts_against_the_global_cap(client, monkeypatch):
+    """A probe really does spend the shared quota; exempting it would be a lie."""
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "1")
+    configure_probe(monkeypatch)
+    configure(monkeypatch)
+
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["status"] == "ok"
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 503
+
+
+def test_status_probe_does_not_spend_the_analysis_allowance(client, monkeypatch):
+    """Its own kind, so diagnosing an outage doesn't cost the user their meals."""
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+    configure_probe(monkeypatch)
+    configure(monkeypatch)
+
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["status"] == "ok"
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+
+def test_status_probe_reports_its_own_cap_instead_of_failing(client, monkeypatch):
+    """A diagnostic that 429s is useless during the incident it was built for."""
+    monkeypatch.setenv("AI_PROBE_DAILY_LIMIT", "1")
+    configure_probe(monkeypatch)
+
+    assert client.get("/api/ai/status?probe=true").json()["probe"]["status"] == "ok"
+    ai_router._probe_cache = None  # force a second real reservation attempt
+    response = client.get("/api/ai/status?probe=true")
+    assert response.status_code == 200
+    assert response.json()["probe"]["status"] == "quota_exhausted"
+
+
+def test_status_probe_when_the_key_is_missing(client, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    body = client.get("/api/ai/status?probe=true").json()
+    assert body["configured"] is False
+    assert body["probe"]["status"] == "not_configured"

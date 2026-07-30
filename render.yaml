@@ -27,6 +27,28 @@ services:
       # deploy when Google retires one.
       - key: MEAL_AI_MODEL
         value: gemini-3.5-flash
+      # Tried when the model above returns 5xx on every attempt. Overload is per
+      # serving pool, so an older generation is usually still answering — an
+      # estimate from a slightly weaker model beats "enter macros manually".
+      # Set empty to disable the fallback.
+      - key: MEAL_AI_FALLBACK_MODEL
+        value: gemini-2.5-flash
+      # How long one analysis may keep retrying a busy provider before giving
+      # up, in seconds. Raise it from the dashboard during a provider overload;
+      # no deploy needed — but the frontend's own request timeout must stay
+      # above it (see ANALYZE_TIMEOUT_MS in frontend/src/api/client.ts).
+      - key: MEAL_AI_DEADLINE_S
+        value: "60"
+      # Per-user daily cap on GET /api/ai/status?probe=true, which spends one
+      # real provider call. Results are cached for 60s process-wide, so this
+      # only bounds a determined caller.
+      - key: AI_PROBE_DAILY_LIMIT
+        value: "10"
+      # When non-empty, /api/ai/status?probe=true includes the provider's own
+      # error text (truncated). Off by default because signup is open; turn it
+      # on in the dashboard while diagnosing, then off again.
+      - key: MEAL_AI_STATUS_DETAIL
+        value: ""
       # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
       - key: AI_DAILY_LIMIT
         value: "20"

@@ -1,6 +1,7 @@
 """AI meal analysis: photo and/or text in, structured macro estimate out."""
 import logging
 import os
+import time as time_module
 from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -12,6 +13,8 @@ from ..auth.deps import get_current_user
 from ..db import get_db
 from ..models import AIAnalysis, Meal, User
 from ..schemas import (
+    AIProbe,
+    AIStatus,
     AnalysisLink,
     MealAnalysis,
     MealAnalysisResponse,
@@ -38,6 +41,38 @@ DEFAULT_GLOBAL_DAILY_LIMIT = 500
 
 KIND_ANALYSIS = "analysis"
 KIND_TRANSCRIPTION = "transcription"
+KIND_PROBE = "probe"
+
+DEFAULT_PROBE_DAILY_LIMIT = 10
+STATUS_DETAIL_ENV = "MEAL_AI_STATUS_DETAIL"
+
+# One shared probe result for the whole process. Render runs a single free
+# instance, so a module-level cache is a real cache — and it is what stops a
+# diagnostic endpoint becoming an unmetered path to the provider: however many
+# people ask, however often, Google is asked at most once a minute.
+PROBE_TTL_SECONDS = 60
+_probe_cache: tuple[float, AIProbe] | None = None
+
+# Neutral exception -> probe classification. Same shape and same reason as
+# _PROVIDER_ERRORS: the router names outcomes, meal_ai.py owns which provider
+# failure becomes which exception.
+_PROBE_STATUS: list[tuple[type, str]] = [
+    (meal_ai.MealAIRateLimited, "rate_limited"),
+    (meal_ai.MealAIUnavailable, "upstream_5xx"),
+    (meal_ai.MealAIUnreachable, "unreachable"),
+    (meal_ai.MealAIInternalError, "internal_error"),
+    (meal_ai.MealAIBadRequest, "rejected"),
+    (meal_ai.MealAIBadResponse, "rejected"),
+]
+
+# "Google returned 5xx", "we could not reach Google" and "our SDK raised" get
+# identical wording on purpose: they reduce to the same instruction for a user,
+# and splitting them would leak an operational distinction nobody outside the
+# server can act on. The distinction lives in the logs and in GET /api/ai/status.
+_UNAVAILABLE_DETAIL = (
+    "The AI service is temporarily unavailable. Try again shortly, "
+    "or enter macros manually."
+)
 
 # Provider failures the user can act on get their own status and wording. The
 # provider's actual message stays in the logs (services/meal_ai.py logs it)
@@ -48,11 +83,14 @@ _PROVIDER_ERRORS: list[tuple[type, int, str]] = [
         429,
         "The AI service is busy right now. Try again in a minute, or enter macros manually.",
     ),
-    (
-        meal_ai.MealAIUnavailable,
-        503,
-        "The AI service is temporarily unavailable. Try again shortly, or enter macros manually.",
-    ),
+    (meal_ai.MealAIUnavailable, 503, _UNAVAILABLE_DETAIL),
+    (meal_ai.MealAIUnreachable, 503, _UNAVAILABLE_DETAIL),
+    # The residual bucket keeps the user-facing 503 rather than the operator's
+    # 502: these are the failures we did not anticipate, and the safe default
+    # for an unknown one is not telling someone their app is permanently broken
+    # when it might not be. The operator gets the truth from the log line and
+    # /api/ai/status, neither of which the user reads.
+    (meal_ai.MealAIInternalError, 503, _UNAVAILABLE_DETAIL),
     (
         meal_ai.MealAIBadResponse,
         502,
@@ -78,6 +116,24 @@ def _transcribe_daily_limit() -> int:
 
 def _global_daily_limit() -> int:
     return int(os.environ.get("AI_GLOBAL_DAILY_LIMIT", DEFAULT_GLOBAL_DAILY_LIMIT))
+
+
+def _probe_daily_limit() -> int:
+    return int(os.environ.get("AI_PROBE_DAILY_LIMIT", DEFAULT_PROBE_DAILY_LIMIT))
+
+
+def _probe_message(exc: Exception) -> str | None:
+    """The provider's own words, truncated — the one place they leave the process.
+
+    Off unless MEAL_AI_STATUS_DETAIL is set, so the default deployment leaks
+    nothing: signup is open, which makes "authenticated" a weak gate on its own.
+    Flipping it in the dashboard during an incident is the same no-deploy escape
+    hatch MEAL_AI_MODEL and STATUS_BANNER already use, and it goes back off
+    afterwards.
+    """
+    if not os.environ.get(STATUS_DETAIL_ENV, "").strip():
+        return None
+    return str(exc)[:300]
 
 
 def _provider_http_error(exc: Exception) -> HTTPException:
@@ -187,6 +243,75 @@ def _reserve_call(
     db.add(record)
     db.commit()
     return record
+
+
+@router.get("/status", response_model=AIStatus)
+async def ai_status(
+    probe: bool = False,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Is the AI down, and why — in one request.
+
+    Authenticated because the probe spends a real provider call. `probe` is
+    opt-in so the free form (configured, models, SDK version) can be polled or
+    scripted without touching Google at all — and because those three facts
+    already separate "the key was removed from the dashboard" from everything
+    else.
+    """
+    global _probe_cache
+    base = {"configured": meal_ai.is_configured(), **meal_ai.provider_info()}
+
+    if not probe:
+        return AIStatus(**base)
+    if not base["configured"]:
+        return AIStatus(**base, probe=AIProbe(status="not_configured"))
+
+    if _probe_cache is not None:
+        age = time_module.monotonic() - _probe_cache[0]
+        if age < PROBE_TTL_SECONDS:
+            cached = _probe_cache[1].model_copy(
+                update={"cached": True, "age_seconds": int(age)}
+            )
+            return AIStatus(**base, probe=cached)
+
+    try:
+        # Reserved like any other provider call: a probe really does spend the
+        # shared quota, so hiding it from AI_GLOBAL_DAILY_LIMIT would make that
+        # ceiling a lie. Its own `kind` keeps it out of the analysis and
+        # voice-note allowances, which _calls_today counts per kind.
+        _reserve_call(
+            db,
+            user,
+            kind=KIND_PROBE,
+            per_user_limit=_probe_daily_limit(),
+            noun="AI status probe",
+        )
+    except HTTPException as exc:
+        # A diagnostic that 429s is a diagnostic you cannot use during the
+        # incident it was built for, so the cap is reported as an outcome rather
+        # than raised. exc.detail is our own wording, never the provider's.
+        return AIStatus(
+            **base, probe=AIProbe(status="quota_exhausted", message=str(exc.detail))
+        )
+
+    started = time_module.monotonic()
+    try:
+        await meal_ai.probe()
+        outcome = AIProbe(status="ok")
+    except Exception as exc:
+        status = next(
+            (s for kind, s in _PROBE_STATUS if isinstance(exc, kind)), "internal_error"
+        )
+        outcome = AIProbe(status=status, message=_probe_message(exc))
+    outcome.latency_ms = int((time_module.monotonic() - started) * 1000)
+
+    # The row is deliberately NOT refunded on failure, unlike /analyze. There a
+    # refund protects a user whose meal the provider dropped; here it would make
+    # probing free exactly when the provider is failing — which is when this
+    # endpoint gets hammered.
+    _probe_cache = (time_module.monotonic(), outcome)
+    return AIStatus(**base, probe=outcome)
 
 
 @router.post("/analyze", response_model=MealAnalysisResponse)
