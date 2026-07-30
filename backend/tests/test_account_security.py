@@ -1,4 +1,5 @@
 """Password change, account deletion, token hardening, and full data export."""
+import io
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -6,6 +7,7 @@ import pytest
 
 from app.auth.security import get_jwt_secret
 from app.rate_limit import limiter
+from app.services import meal_ai
 from tests.conftest import TEST_PASSWORD
 
 NEW_PASSWORD = "new-password-456"
@@ -158,6 +160,30 @@ def test_export_all_includes_every_owned_table(client):
     assert [m["name"] for m in body["meals"]] == ["Omelette"]
     assert [f["name"] for f in body["foods"]] == ["Oats"]
     assert body["ai_analyses"] == []
+
+
+def test_export_all_survives_a_voice_note(client, monkeypatch):
+    """Transcription rows have no analysis JSON, and json.loads("") raises.
+
+    This 500'd the whole export for anyone who had ever recorded a voice note —
+    invisible because the other export test only ever had zero AI rows.
+    """
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    async def fake_transcribe(audio_bytes, audio_mime):
+        return "a hundred grams of chicken"
+
+    monkeypatch.setattr(meal_ai, "transcribe_audio", fake_transcribe)
+    assert client.post(
+        "/api/ai/transcribe",
+        files={"audio": ("note.webm", io.BytesIO(b"fake-audio"), "audio/webm")},
+    ).status_code == 200
+
+    response = client.get("/api/data/export/all")
+    assert response.status_code == 200
+    rows = response.json()["ai_analyses"]
+    assert [r["user_text"] for r in rows] == ["a hundred grams of chicken"]
+    assert rows[0]["analysis"] is None
 
 
 # --- Rate limiting behind the proxy ----------------------------------------
