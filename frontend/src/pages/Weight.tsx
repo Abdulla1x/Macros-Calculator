@@ -12,6 +12,7 @@ import {
 import { api } from '../api/client'
 import { localIsoDate } from '../lib/dates'
 import { displayToKg, formatRate, formatWeight, unitLabel } from '../lib/units'
+import { useSettings } from '../settings/SettingsContext'
 import type { Settings, WeightEntry, WeightTrend } from '../types'
 
 // Emphasis form: the trend line is the subject, the raw weigh-ins are context.
@@ -29,7 +30,7 @@ const fieldClass =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
 
 export default function Weight() {
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const { settings } = useSettings()
   const [entries, setEntries] = useState<WeightEntry[]>([])
   const [trend, setTrend] = useState<WeightTrend | null>(null)
   const [date, setDate] = useState(localIsoDate)
@@ -52,7 +53,6 @@ export default function Weight() {
   }, [])
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => null)
     load()
   }, [load])
 

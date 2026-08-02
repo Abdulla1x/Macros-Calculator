@@ -4,7 +4,8 @@ import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import { localIsoDate } from '../lib/dates'
-import type { FoodCreate, Meal, MealAnalysisResponse, Settings } from '../types'
+import { useSettings } from '../settings/SettingsContext'
+import type { FoodCreate, Meal, MealAnalysisResponse } from '../types'
 
 interface Row {
   key: number
@@ -97,17 +98,13 @@ export default function LogMeal() {
   // day being viewed rather than today.
   const logDate = (location.state as { logDate?: string } | null)?.logDate ?? null
 
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const { settings } = useSettings()
   const [rows, setRows] = useState<Row[]>([emptyRow()])
   const [mealName, setMealName] = useState('')
   const [mealDate, setMealDate] = useState(localIsoDate())
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
-
-  useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => null)
-  }, [])
 
   // Covers both mount and in-place navigation (edit → "Log a meal" and back).
   useEffect(() => {

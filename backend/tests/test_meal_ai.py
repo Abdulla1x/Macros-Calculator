@@ -40,7 +40,7 @@ SAMPLE = MealAnalysis(
 
 
 # **kwargs absorbs audio_bytes/audio_mime, which the router passes by keyword.
-async def fake_analyze(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+async def fake_analyze(images, text, prior_analysis=None, **kwargs):
     return SAMPLE
 
 
@@ -97,11 +97,8 @@ def test_analyze_success_returns_analysis_and_persists(client, monkeypatch):
 def test_analyze_passes_image_and_prior_to_service(client, monkeypatch):
     captured = {}
 
-    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
-        captured.update(
-            image_bytes=image_bytes, image_mime=image_mime,
-            text=text, prior=prior_analysis, **kwargs,
-        )
+    async def capture(images, text, prior_analysis=None, **kwargs):
+        captured.update(images=images, text=text, prior=prior_analysis, **kwargs)
         return SAMPLE
 
     configure(monkeypatch, capture)
@@ -111,8 +108,10 @@ def test_analyze_passes_image_and_prior_to_service(client, monkeypatch):
         files={"image": ("meal.jpg", io.BytesIO(b"fake-jpeg-bytes"), "image/jpeg")},
     )
     assert response.status_code == 200
-    assert captured["image_bytes"] == b"fake-jpeg-bytes"
-    assert captured["image_mime"] == "image/jpeg"
+    # One `image` part still arrives as a one-item list: the field name did not
+    # change when this grew to accept several, so a client written against the
+    # single-image API keeps working.
+    assert captured["images"] == [(b"fake-jpeg-bytes", "image/jpeg")]
     assert captured["text"] == "I only ate half"
     assert captured["prior"].meal_name == "Chicken & Rice"
 
@@ -130,7 +129,7 @@ def test_analyze_accepts_audio_only(client, monkeypatch):
 def test_analyze_passes_audio_to_service(client, monkeypatch):
     captured = {}
 
-    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+    async def capture(images, text, prior_analysis=None, **kwargs):
         captured.update(kwargs)
         return SAMPLE
 
@@ -198,8 +197,70 @@ def test_analyze_rejects_oversized_image(client, monkeypatch):
     assert response.status_code == 413
 
 
+def image_parts(count, size=16, mime="image/jpeg"):
+    """`count` repeated `image` parts, as httpx wants them for a repeated field.
+
+    A dict can only carry one value per key, so multi-image requests have to be
+    built as a list of (field_name, file) pairs.
+    """
+    return [
+        ("image", (f"meal{index}.jpg", io.BytesIO(b"x" * size), mime))
+        for index in range(count)
+    ]
+
+
+def test_analyze_accepts_several_photos(client, monkeypatch):
+    captured = {}
+
+    async def capture(images, text, prior_analysis=None, **kwargs):
+        captured["images"] = images
+        return SAMPLE
+
+    configure(monkeypatch, capture)
+    response = client.post("/api/ai/analyze", files=image_parts(ai_router.MAX_IMAGES))
+    assert response.status_code == 200, response.json()
+    # All of them reach the provider, in the order they were sent.
+    assert len(captured["images"]) == ai_router.MAX_IMAGES
+    assert {mime for _, mime in captured["images"]} == {"image/jpeg"}
+
+
+def test_analyze_rejects_more_photos_than_the_cap(client, monkeypatch):
+    """The cap is what bounds the token bill: one call, but N images of input."""
+    configure(monkeypatch)
+    response = client.post(
+        "/api/ai/analyze", files=image_parts(ai_router.MAX_IMAGES + 1)
+    )
+    assert response.status_code == 422
+
+
+def test_analyze_rejects_photos_oversized_in_total(client, monkeypatch):
+    """Each photo can be under the per-image limit and still be too much together."""
+    configure(monkeypatch)
+    # Four 4 MB images: none hits MAX_IMAGE_BYTES (5 MB), together they pass
+    # MAX_TOTAL_IMAGE_BYTES (12 MB).
+    response = client.post(
+        "/api/ai/analyze", files=image_parts(4, size=4 * 1024 * 1024)
+    )
+    assert response.status_code == 413
+
+
+def test_analyze_ignores_an_empty_file_part(client, monkeypatch):
+    """A form field submitted with no file chosen must not count as a photo.
+
+    Otherwise the request looks like it carried an image, and a text-only
+    analysis would be refused for having neither.
+    """
+    configure(monkeypatch)
+    response = client.post(
+        "/api/ai/analyze",
+        data={"text": "chicken and rice"},
+        files=[("image", ("", io.BytesIO(b""), "application/octet-stream"))],
+    )
+    assert response.status_code == 200, response.json()
+
+
 def test_analyze_maps_provider_errors_to_502(client, monkeypatch):
-    async def boom(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+    async def boom(images, text, prior_analysis=None, **kwargs):
         raise RuntimeError("provider down")
 
     configure(monkeypatch, boom)
@@ -216,7 +277,7 @@ def test_analyze_rejects_overlong_text(client, monkeypatch):
 def test_provider_failure_refunds_the_quota_slot(client, monkeypatch):
     monkeypatch.setenv("AI_DAILY_LIMIT", "1")
 
-    async def boom(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+    async def boom(images, text, prior_analysis=None, **kwargs):
         raise RuntimeError("provider down")
 
     configure(monkeypatch, boom)
@@ -256,31 +317,31 @@ def test_link_analysis_404_for_unknown_id(client):
 
 
 def test_build_contents_text_only():
-    parts = _build_contents(None, None, "grilled chicken", None)
+    parts = _build_contents([], "grilled chicken", None)
     assert len(parts) == 1
     assert "grilled chicken" in parts[0]
 
 
 def test_build_contents_defaults_to_photo_instruction():
-    parts = _build_contents(b"img", "image/png", None, None)
+    parts = _build_contents([(b"img", "image/png")], None, None)
     assert len(parts) == 2
     assert parts[1] == "Analyze the meal in the photo."
 
 
 def test_build_contents_audio_only():
-    parts = _build_contents(None, None, None, None, b"audio", "audio/webm")
+    parts = _build_contents([], None, None, b"audio", "audio/webm")
     assert len(parts) == 2
     assert parts[1] == "Analyze the meal described in the audio."
 
 
 def test_build_contents_image_and_audio():
-    parts = _build_contents(b"img", "image/png", None, None, b"audio", "audio/webm")
+    parts = _build_contents([(b"img", "image/png")], None, None, b"audio", "audio/webm")
     assert len(parts) == 3
     assert parts[2] == "Analyze the meal in the photo, using the spoken description."
 
 
 def test_build_contents_includes_prior_for_refinement():
-    parts = _build_contents(None, None, "I only ate half", SAMPLE)
+    parts = _build_contents([], "I only ate half", SAMPLE)
     assert "Previous analysis to refine" in parts[0]
     assert "I only ate half" in parts[0]
 
@@ -299,7 +360,7 @@ def _install_fake_provider(monkeypatch, response):
 
 def test_analyze_meal_uses_sdk_parsed_object(monkeypatch):
     _install_fake_provider(monkeypatch, SimpleNamespace(parsed=SAMPLE, text=None))
-    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+    result = asyncio.run(meal_ai.analyze_meal([], "chicken and rice"))
     assert result is SAMPLE
 
 
@@ -307,7 +368,7 @@ def test_analyze_meal_falls_back_to_raw_json_text(monkeypatch):
     # Some SDK versions leave .parsed unset and only give raw JSON text.
     response = SimpleNamespace(parsed=None, text=SAMPLE.model_dump_json())
     _install_fake_provider(monkeypatch, response)
-    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+    result = asyncio.run(meal_ai.analyze_meal([], "chicken and rice"))
     assert result.meal_name == "Chicken & Rice"
     assert result.calories.estimate == 583
 
@@ -315,7 +376,7 @@ def test_analyze_meal_falls_back_to_raw_json_text(monkeypatch):
 def test_analyze_meal_raises_on_empty_provider_response(monkeypatch):
     _install_fake_provider(monkeypatch, SimpleNamespace(parsed=None, text=None))
     with pytest.raises(meal_ai.MealAIBadResponse):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken and rice"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken and rice"))
 
 
 # --- provider errors are translated to the neutral MealAIError hierarchy ----
@@ -345,7 +406,7 @@ def test_client_errors_map_to_neutral_exceptions(monkeypatch, code, expected):
         monkeypatch, genai_errors.ClientError(code, {"error": {"message": "nope"}})
     )
     with pytest.raises(expected):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
 
 def test_server_errors_map_to_unavailable(monkeypatch):
@@ -353,7 +414,7 @@ def test_server_errors_map_to_unavailable(monkeypatch):
         monkeypatch, genai_errors.ServerError(503, {"error": {"message": "down"}})
     )
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
 
 def test_unexpected_errors_map_to_internal_error(monkeypatch):
@@ -365,7 +426,7 @@ def test_unexpected_errors_map_to_internal_error(monkeypatch):
     """
     _install_failing_provider(monkeypatch, RuntimeError("socket exploded"))
     with pytest.raises(meal_ai.MealAIInternalError):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
 
 @pytest.mark.parametrize(
@@ -381,7 +442,7 @@ def test_unexpected_errors_map_to_internal_error(monkeypatch):
 def test_transport_failures_map_to_unreachable(monkeypatch, exc):
     _install_failing_provider(monkeypatch, exc)
     with pytest.raises(meal_ai.MealAIUnreachable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
 
 # --- retry, fallback model, and the request deadline ------------------------
@@ -446,7 +507,7 @@ def test_a_server_error_is_retried_and_then_succeeds(monkeypatch):
     calls = _install_scripted_provider(
         monkeypatch, [_server_error(), SimpleNamespace(parsed=SAMPLE, text=None)]
     )
-    result = asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+    result = asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert result is SAMPLE
     assert calls["n"] == 2
 
@@ -463,7 +524,7 @@ def test_the_second_attempt_uses_the_other_serving_pool(monkeypatch):
     calls = _install_scripted_provider(
         monkeypatch, [_server_error(), SimpleNamespace(parsed=SAMPLE, text=None)]
     )
-    assert asyncio.run(meal_ai.analyze_meal(None, None, "chicken")) is SAMPLE
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
     assert calls["models"] == ["gemini-3.5-flash", "gemini-2.5-flash"]
 
 
@@ -478,7 +539,7 @@ def test_a_sustained_outage_keeps_trying_for_the_whole_budget(
     """
     calls = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
     # Exact count depends on jitter; the guarantee is "many, across the budget".
     assert calls["n"] >= 8
@@ -491,7 +552,7 @@ def test_an_empty_fallback_model_keeps_everything_on_one_pool(monkeypatch):
     monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "")
     calls = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert set(calls["models"]) == {"gemini-3.5-flash"}
 
 
@@ -517,7 +578,7 @@ def test_the_fallback_is_deduped_against_the_primary(monkeypatch):
 def test_failures_a_retry_cannot_fix_are_not_retried(monkeypatch, exc):
     calls = _install_scripted_provider(monkeypatch, [exc])
     with pytest.raises(meal_ai.MealAIError):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert calls["n"] == 1
 
 
@@ -527,7 +588,7 @@ def test_an_unusable_response_is_not_retried(monkeypatch):
         monkeypatch, [SimpleNamespace(parsed=None, text=None)]
     )
     with pytest.raises(meal_ai.MealAIBadResponse):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert calls["n"] == 1
 
 
@@ -536,7 +597,7 @@ def test_backoff_grows_but_is_capped_and_jittered(monkeypatch, virtual_clock):
     back half of the budget, when a flapping provider needs frequent sampling."""
     _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
     for i, delay in enumerate(virtual_clock):
         ceiling = min(meal_ai.RETRY_BASE_DELAY * 2**i, meal_ai.RETRY_MAX_DELAY)
@@ -552,7 +613,7 @@ def test_the_deadline_is_overridable_from_the_dashboard(monkeypatch):
     monkeypatch.setenv("MEAL_AI_DEADLINE_S", "0.1")
     calls = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert calls["n"] == 1
 
 
@@ -560,7 +621,7 @@ def test_transcription_gets_a_shorter_budget_than_analysis(monkeypatch):
     """A voice note is the first step of a flow; nobody waits a minute to type."""
     analyze = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
-        asyncio.run(meal_ai.analyze_meal(None, None, "chicken"))
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
     transcribe = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
@@ -572,7 +633,7 @@ def test_transcription_gets_a_shorter_budget_than_analysis(monkeypatch):
 @pytest.mark.parametrize(
     "call,expected_ms",
     [
-        (lambda: meal_ai.analyze_meal(None, None, "chicken"), meal_ai.ANALYZE_TIMEOUT_MS),
+        (lambda: meal_ai.analyze_meal([], "chicken"), meal_ai.ANALYZE_TIMEOUT_MS),
         (lambda: meal_ai.transcribe_audio(b"audio", "audio/webm"), meal_ai.TRANSCRIBE_TIMEOUT_MS),
     ],
 )
@@ -726,7 +787,7 @@ def test_transcriptions_have_their_own_daily_allowance(client, monkeypatch):
 def test_analyze_forwards_the_browser_mime_unchanged(client, monkeypatch):
     captured = {}
 
-    async def capture(image_bytes, image_mime, text, prior_analysis=None, **kwargs):
+    async def capture(images, text, prior_analysis=None, **kwargs):
         captured.update(kwargs)
         return SAMPLE
 

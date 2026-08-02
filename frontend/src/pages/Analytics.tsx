@@ -146,6 +146,17 @@ export default function Analytics() {
             ))}
           </section>
 
+          {/* The denominator, said out loud. "Days logged: 3" next to "Avg
+              calories / day" reads as an average over those three days; it is
+              not — the server divides by every calendar day in the range
+              (routers/analytics.py), so unlogged days pull it down. Both tiles
+              are correct and together they mislead, which is the only reason
+              this line exists. */}
+          <p className="-mt-2 text-xs text-slate-500">
+            Averages divide by every day in the range, so days with nothing
+            logged count as zero.
+          </p>
+
           {visibleCharts.map((chart) => (
             <section key={chart.key} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
               <h3 className="mb-3 font-semibold" style={{ color: chart.color }}>
