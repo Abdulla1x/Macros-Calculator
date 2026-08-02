@@ -152,9 +152,19 @@ class DayTotals(BaseModel):
 
 
 class AnalyticsSummary(BaseModel):
+    """Per-day totals over a range, plus totals and averages.
+
+    `averages` divide by `logged_days` — days that actually have meals — not by
+    calendar days in the range. A day with no meals means the user did not log,
+    not that they ate nothing, so counting it as zero understates intake.
+    `logged_days` travels with the numbers so the UI can say what they are
+    built from.
+    """
+
     days: list[DayTotals]
     totals: dict[str, float]
     averages: dict[str, float]
+    logged_days: int = 0
 
 
 class ImportResult(BaseModel):

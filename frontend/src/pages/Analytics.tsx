@@ -146,15 +146,12 @@ export default function Analytics() {
             ))}
           </section>
 
-          {/* The denominator, said out loud. "Days logged: 3" next to "Avg
-              calories / day" reads as an average over those three days; it is
-              not — the server divides by every calendar day in the range
-              (routers/analytics.py), so unlogged days pull it down. Both tiles
-              are correct and together they mislead, which is the only reason
-              this line exists. */}
+          {/* States the denominator so "Days logged" and "Avg / day" read as
+              the pair they are. Widening the range over days you never logged
+              no longer moves these numbers, which is the whole point. */}
           <p className="-mt-2 text-xs text-slate-500">
-            Averages divide by every day in the range, so days with nothing
-            logged count as zero.
+            Averages are per day you logged, not per day in the range — a day
+            with nothing recorded is missing data, not a day of zero intake.
           </p>
 
           {visibleCharts.map((chart) => (

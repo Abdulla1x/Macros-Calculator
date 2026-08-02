@@ -119,6 +119,9 @@ export interface AnalyticsSummary {
   days: DayTotals[]
   totals: Record<string, number>
   averages: Record<string, number>
+  /** Days in the range that actually have meals — the denominator the
+   *  averages are built from. */
+  logged_days: number
 }
 
 export interface ImportResult {

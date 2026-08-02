@@ -52,23 +52,28 @@ def daily_summary(
         for row in rows
     ]
 
-    # Averages are per day *in the range*, so unlogged days count as zero and
-    # every macro shares one denominator. Without explicit bounds the range is
-    # the span of logged days; an end date in the future is clamped to today
-    # so it can't dilute the average.
-    if days:
-        range_start = start if start is not None else days[0].date
-        range_end = end if end is not None else days[-1].date
-        range_end = min(range_end, date_type.today())
-        range_days = max((range_end - range_start).days + 1, 1)
-    else:
-        range_days = 0
+    # Averages are per *logged* day, not per calendar day in the range.
+    #
+    # Dividing by calendar days treats a day with no meals as a day of zero
+    # intake, and that is a claim about the user, not a neutral convention:
+    # nobody eats nothing. In practice an unlogged day means "did not log",
+    # so the old denominator quietly reported people as eating hundreds of
+    # kcal less than they did — the more days they missed, the further off it
+    # got, and the number gave no hint it was happening.
+    #
+    # Every macro still shares one denominator, so a macro recorded on only
+    # some days is not inflated relative to the others. `logged_days` is
+    # returned alongside so the UI can show what the average is built from
+    # rather than implying more data than exists.
+    logged_days = len(days)
 
     totals: dict[str, float] = {}
     averages: dict[str, float] = {}
     for macro in ("calories", "protein", "carbs", "fat"):
         values = [v for day in days if (v := getattr(day, macro)) is not None]
         totals[macro] = round(sum(values), 2)
-        averages[macro] = round(sum(values) / range_days, 2) if range_days else 0.0
+        averages[macro] = round(sum(values) / logged_days, 2) if logged_days else 0.0
 
-    return AnalyticsSummary(days=days, totals=totals, averages=averages)
+    return AnalyticsSummary(
+        days=days, totals=totals, averages=averages, logged_days=logged_days
+    )

@@ -17,8 +17,10 @@ def test_daily_summary_totals_and_averages(client):
     }
     assert summary["totals"]["calories"] == 1400
     assert summary["averages"]["calories"] == 700
-    # Every macro averages over the same denominator (days in range), so a
-    # macro logged on only some days is not inflated.
+    assert summary["logged_days"] == 2
+    # Every macro averages over the same denominator (days with meals), so a
+    # macro logged on only some days is not inflated: carbs appear on one of
+    # the two days, and 80 / 2 is reported rather than 80 / 1.
     assert summary["averages"]["carbs"] == 40
 
 
@@ -48,14 +50,40 @@ def test_daily_summary_rejects_inverted_range(client):
     assert response.status_code == 422
 
 
-def test_daily_summary_averages_count_unlogged_days_in_range(client):
+def test_daily_summary_averages_ignore_unlogged_days_in_range(client):
+    """An unlogged day is missing data, not a day of zero intake.
+
+    Dividing by calendar days would report 200 kcal/day for someone who ate
+    800 on the one day they logged — understating intake by however many days
+    they forgot, with nothing on screen to say so.
+    """
     _add_meal(client, "2026-07-01", 800, 60)
 
     summary = client.get(
         "/api/analytics/daily", params={"start": "2026-07-01", "end": "2026-07-04"}
     ).json()
-    # One logged day out of four in range → the average reflects all four.
-    assert summary["averages"]["calories"] == 200
+    assert summary["averages"]["calories"] == 800
+    assert summary["logged_days"] == 1
+
+
+def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
+    """Regression: the dashboard's 7-day window starts a day before the data.
+
+    Reported from the live app — asking for 07-26..08-01 with nothing on 07-26
+    reported 2040 kcal/day where the six logged days averaged 2380.
+    """
+    for day, calories in [("2026-07-27", 2100), ("2026-07-28", 2300)]:
+        _add_meal(client, day, calories, 100)
+
+    tight = client.get(
+        "/api/analytics/daily", params={"start": "2026-07-27", "end": "2026-07-28"}
+    ).json()
+    padded = client.get(
+        "/api/analytics/daily", params={"start": "2026-07-20", "end": "2026-07-28"}
+    ).json()
+    assert tight["averages"] == padded["averages"]
+    assert padded["averages"]["calories"] == 2200
+    assert padded["logged_days"] == 2
 
 
 def test_settings_defaults_and_update(client):

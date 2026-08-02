@@ -295,7 +295,15 @@ export default function Dashboard() {
             <p className="mt-2 text-xs text-slate-400">
               Avg {Math.round(week.averages.calories)} kcal ·{' '}
               {Math.round(week.averages.protein)} g protein per day
-              <span className="text-slate-500"> (excludes today)</span>
+              {/* The denominator, in the open. Averaging over logged days is
+                  what stops a forgotten day reading as a fasting day, but it
+                  does mean the figure is built from fewer days than the card's
+                  title suggests — so say how many. */}
+              <span className="text-slate-500">
+                {' '}
+                over {week.logged_days} logged day
+                {week.logged_days === 1 ? '' : 's'}, excluding today
+              </span>
             </p>
           )}
         </div>
