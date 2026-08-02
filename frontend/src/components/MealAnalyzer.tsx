@@ -26,10 +26,15 @@ const round = (value: number) => Math.round(value)
 // a stuck-looking spinner gets explained before the user gives up on it.
 const RETRY_NOTICE_AFTER_MS = 5_000
 
+// Mirrors MAX_IMAGES in backend/app/routers/ai.py, which is the real limit —
+// this copy exists only so the UI can stop you before a round trip does. If the
+// two ever disagree the server still wins, and it answers 422.
+const MAX_IMAGES = 4
+
 export default function MealAnalyzer({ settings, onApply }: Props) {
   const [expanded, setExpanded] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [analysis, setAnalysis] = useState<MealAnalysisResponse | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -53,15 +58,14 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     return () => clearTimeout(timer)
   }, [analyzing])
 
+  // Every object URL created here must be revoked, or each re-pick leaks a
+  // blob for the lifetime of the tab. The cleanup closes over the exact array
+  // it created, so a fast second pick can't revoke the new URLs by mistake.
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
+    const urls = files.map((item) => URL.createObjectURL(item))
+    setPreviewUrls(urls)
+    return () => urls.forEach(URL.revokeObjectURL)
+  }, [files])
 
   // Transcribe the moment a recording lands, rather than sending the audio
   // along with the analysis: the text drops into the box below where it can be
@@ -114,8 +118,39 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     }
   }, [recording, durationMs, clearRecording])
 
+  // Appended, not replaced: on a phone the gallery picker is usually opened
+  // once per photo, so replacing would make the second pick silently discard
+  // the first. Trimmed to the cap here rather than refusing the whole batch.
+  const addFiles = (picked: FileList | null) => {
+    // Copied out of the FileList *now*, not inside the state updater below.
+    // The change handler resets input.value so re-picking the same file still
+    // fires an event, and that reset empties the live FileList — by the time
+    // React ran the updater there was nothing left in it, so every selection
+    // silently vanished. An array snapshot is unaffected.
+    const chosen = picked ? Array.from(picked) : []
+    if (chosen.length === 0) return
+    setError(null)
+    setFiles((current) => {
+      const room = MAX_IMAGES - current.length
+      if (room <= 0) {
+        setError(`That's the limit — ${MAX_IMAGES} photos per analysis.`)
+        return current
+      }
+      const accepted = chosen.slice(0, room)
+      if (accepted.length < chosen.length) {
+        setError(`Only the first ${accepted.length} were added — ${MAX_IMAGES} photos max.`)
+      }
+      return [...current, ...accepted]
+    })
+  }
+
+  const removeFile = (index: number) => {
+    setFiles((current) => current.filter((_, position) => position !== index))
+    setError(null)
+  }
+
   const analyze = async (refine: boolean) => {
-    if (!file && !note.trim()) {
+    if (files.length === 0 && !note.trim()) {
       setError('Describe the meal, record a voice note, or add a photo first.')
       return
     }
@@ -123,7 +158,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     setError(null)
     try {
       const form = new FormData()
-      if (file) form.append('image', file)
+      // Repeated under one field name — the backend reads `image` as a list.
+      files.forEach((item) => form.append('image', item))
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form))
@@ -186,23 +222,58 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           />
         </label>
 
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs text-slate-400">Meal photo</span>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-xs file:text-slate-200 hover:file:bg-slate-700"
-          />
-          {previewUrl && (
-            <img
-              src={previewUrl}
-              alt="Meal preview"
-              className="mt-2 max-h-40 rounded-lg border border-slate-800 object-cover"
+        <div className="block text-sm">
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-400">
+              Meal photos{' '}
+              <span className="text-slate-500">
+                ({files.length}/{MAX_IMAGES} — more angles sharpen the estimate)
+              </span>
+            </span>
+            {/* No `capture` attribute, deliberately. It is not a hint: it tells
+                the browser to acquire from a camera and skip the file picker,
+                so on Android it made the gallery unreachable. Desktop has no
+                capture flow to invoke and ignored it, which is why this looked
+                like a phone-only bug for months. `accept` alone gets the OS
+                chooser — Camera, Gallery and Files — so taking a photo still
+                works. */}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                addFiles(e.target.files)
+                // Cleared so picking the same file again still fires a change
+                // event — otherwise removing a photo and re-adding it silently
+                // does nothing.
+                e.target.value = ''
+              }}
+              disabled={files.length >= MAX_IMAGES}
+              className="block w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-xs file:text-slate-200 hover:file:bg-slate-700 disabled:opacity-50"
             />
+          </label>
+          {previewUrls.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {previewUrls.map((url, index) => (
+                <li key={url} className="relative">
+                  <img
+                    src={url}
+                    alt={`Meal photo ${index + 1}`}
+                    className="h-20 w-20 rounded-lg border border-slate-800 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeFile(index)}
+                    aria-label={`Remove photo ${index + 1}`}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-400"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </label>
+        </div>
       </div>
 
       {audio.supported && (

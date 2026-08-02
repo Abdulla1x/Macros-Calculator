@@ -28,6 +28,17 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
+# Several angles of one meal (or the packet's nutrition label alongside the
+# plate) genuinely sharpen an estimate, but each image is billed as input
+# tokens, and the quota counts *calls* — four photos is still one ai_analyses
+# row, so nothing else in this file bounds what one request can cost. This
+# constant is that bound. Raising it raises the per-analysis token bill
+# proportionally.
+MAX_IMAGES = 4
+# A separate ceiling from MAX_IMAGES * MAX_IMAGE_BYTES (20 MB): the per-image
+# limit exists to reject one absurd file, this one exists so a single request
+# can't tie up a free-tier instance's memory holding every upload at once.
+MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024
 DEFAULT_DAILY_LIMIT = 20
 # Transcription is a cheaper call than analysis and a voice note usually
 # precedes one, so it gets its own allowance rather than eating the analysis
@@ -316,7 +327,17 @@ async def ai_status(
 
 @router.post("/analyze", response_model=MealAnalysisResponse)
 async def analyze(
-    image: UploadFile | None = File(default=None),
+    # Repeated `image` parts, not `images`: the field name is unchanged from
+    # when this took exactly one, so a client that still sends a single image
+    # keeps working. FastAPI collects the repeats into the list either way.
+    #
+    # `| str` is not decoration. A file input submitted with nothing selected
+    # sends a part with an empty filename, which FastAPI parses as a plain
+    # string — and `list[UploadFile]` alone rejects the whole request at
+    # validation, before any handler code runs. The result would be a perfectly
+    # good text-only analysis refused with an opaque 422. Accept both shapes
+    # here and discard the empties below.
+    image: list[UploadFile | str] = File(default=[]),
     audio: UploadFile | None = File(default=None),
     # Length caps bound what can be relayed to the paid Gemini API.
     text: str | None = Form(default=None, max_length=2_000),
@@ -325,10 +346,24 @@ async def analyze(
     db: Session = Depends(get_db),
 ):
     text = (text or "").strip() or None
-    if image is None and audio is None and text is None:
+    # Drop the empty parts described above, so a browser quirk can't make a
+    # text-only request look like it carried a photo.
+    # Tested against `str`, not `UploadFile`: under the union annotation the
+    # value that arrives is Starlette's UploadFile, and fastapi.UploadFile is a
+    # *subclass* of it — so an isinstance check against the imported name is
+    # False for every real upload. The empty case is the string one.
+    images = [
+        item for item in image if not isinstance(item, str) and item.filename
+    ]
+    if not images and audio is None and text is None:
         raise HTTPException(
             status_code=422,
             detail="Provide a photo, a voice note, or a description.",
+        )
+    if len(images) > MAX_IMAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many photos (max {MAX_IMAGES} per analysis).",
         )
     if not meal_ai.is_configured():
         raise HTTPException(
@@ -343,11 +378,22 @@ async def analyze(
         except ValidationError:
             raise HTTPException(status_code=422, detail="Invalid prior_analysis.")
 
-    image_bytes = image_mime = None
-    if image is not None:
-        image_bytes, image_mime = await _read_media(
-            image, "image", MAX_IMAGE_BYTES, "an image", "Image"
+    loaded_images: list[tuple[bytes, str | None]] = []
+    total_image_bytes = 0
+    for upload in images:
+        data, mime = await _read_media(
+            upload, "image", MAX_IMAGE_BYTES, "an image", "Image"
         )
+        total_image_bytes += len(data)
+        if total_image_bytes > MAX_TOTAL_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "Those photos are too large together (max "
+                    f"{MAX_TOTAL_IMAGE_BYTES // (1024 * 1024)} MB in total)."
+                ),
+            )
+        loaded_images.append((data, mime))
 
     audio_bytes = audio_mime = None
     if audio is not None:
@@ -366,7 +412,7 @@ async def analyze(
 
     try:
         analysis = await meal_ai.analyze_meal(
-            image_bytes, image_mime, text, prior,
+            loaded_images, text, prior,
             audio_bytes=audio_bytes, audio_mime=audio_mime,
         )
     except meal_ai.MealAIBadResponse as exc:

@@ -23,6 +23,19 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-02-photos-and-gallery",
+        date="2026-08-02",
+        title="Pick photos from your gallery, and use more than one",
+        body=(
+            "On Android the photo button used to open the camera and give you "
+            "no way to reach your gallery — that's fixed, you now get the "
+            "normal chooser. You can also attach up to four photos to one "
+            "analysis: another angle, or the packet's nutrition label next to "
+            "the plate, and the estimate gets sharper. Extra photos are "
+            "treated as the same meal, so nothing is counted twice."
+        ),
+    ),
+    Announcement(
         id="2026-07-28-weight-tracking",
         date="2026-07-28",
         title="Track your weight",

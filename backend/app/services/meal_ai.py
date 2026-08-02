@@ -11,6 +11,7 @@ import os
 import random
 import ssl
 import time
+from collections.abc import Sequence
 from contextlib import contextmanager
 
 import httpx
@@ -127,6 +128,13 @@ Rules:
   "regular crust", "cooked with ~1 tbsp oil").
 - The user's words (typed or spoken) are ground truth and override the image
   (e.g. "I only ate half" halves portions; "the beef is 90% lean" lowers fat).
+- Several photos are DIFFERENT VIEWS OF ONE MEAL unless the user says
+  otherwise: a plate from another angle, a close-up, or the packaging and its
+  nutrition label. Count each food ONCE, no matter how many photos show it.
+  Use the extra views to identify foods and judge portions more precisely, and
+  prefer a legible nutrition label over estimating from appearance. Only treat
+  photos as separate additional foods when the user's words say so (e.g. "and
+  I also had this") — and when you do, say so in `assumptions`.
 - Estimate the amount actually EATEN, not the amount served, whenever the
   user says so.
 - With no photo, work from the description alone: assume standard preparations
@@ -336,25 +344,31 @@ async def _call_with_retry(
         await asyncio.sleep(delay)
 
 
-def _default_instruction(has_image: bool, has_audio: bool) -> str:
+def _default_instruction(image_count: int, has_audio: bool) -> str:
     """What to say when the user gave media but no words to go with it."""
-    if has_image and has_audio:
-        return "Analyze the meal in the photo, using the spoken description."
+    # Plural matters here: "the photo" in front of four images invites the model
+    # to answer about one of them, which is the quiet version of this going
+    # wrong — a plausible estimate built from a quarter of the evidence.
+    photos = "the photo" if image_count == 1 else "the photos"
+    if image_count and has_audio:
+        return f"Analyze the meal in {photos}, using the spoken description."
     if has_audio:
         return "Analyze the meal described in the audio."
-    return "Analyze the meal in the photo."
+    return f"Analyze the meal in {photos}."
 
 
 def _build_contents(
-    image_bytes: bytes | None,
-    image_mime: str | None,
+    images: Sequence[tuple[bytes, str | None]],
     text: str | None,
     prior_analysis: MealAnalysis | None,
     audio_bytes: bytes | None = None,
     audio_mime: str | None = None,
 ) -> list:
     parts: list = []
-    if image_bytes:
+    # Order is preserved: the user picked these in a sequence, and the prompt
+    # tells the model they are views of one meal, so a stable order is what
+    # makes "the first photo" mean anything in a follow-up correction.
+    for image_bytes, image_mime in images:
         parts.append(
             types.Part.from_bytes(
                 data=image_bytes, mime_type=image_mime or "image/jpeg"
@@ -376,14 +390,13 @@ def _build_contents(
     if text:
         lines.append(f"User's description/notes: {text}")
     if not lines:
-        lines.append(_default_instruction(bool(image_bytes), bool(audio_bytes)))
+        lines.append(_default_instruction(len(images), bool(audio_bytes)))
     parts.append("\n\n".join(lines))
     return parts
 
 
 async def analyze_meal(
-    image_bytes: bytes | None,
-    image_mime: str | None,
+    images: Sequence[tuple[bytes, str | None]],
     text: str | None,
     prior_analysis: MealAnalysis | None = None,
     *,
@@ -398,8 +411,7 @@ async def analyze_meal(
         return await client.aio.models.generate_content(
             model=model,
             contents=_build_contents(
-                image_bytes, image_mime, text, prior_analysis,
-                audio_bytes, audio_mime,
+                images, text, prior_analysis, audio_bytes, audio_mime,
             ),
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
