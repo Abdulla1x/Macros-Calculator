@@ -8,6 +8,7 @@ import LogMeal from './pages/LogMeal'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
 import Weight from './pages/Weight'
+import { SettingsProvider } from './settings/SettingsContext'
 
 export default function App() {
   return (
@@ -15,7 +16,16 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route element={<RequireAuth />}>
-        <Route element={<Layout />}>
+        {/* Inside RequireAuth, so the settings fetch only ever runs with a
+            token in hand; outside Layout's children, so all five pages read
+            one shared copy instead of fetching their own. */}
+        <Route
+          element={
+            <SettingsProvider>
+              <Layout />
+            </SettingsProvider>
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="/log" element={<LogMeal />} />
           <Route path="/weight" element={<Weight />} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { useSettings } from '../settings/SettingsContext'
 import type { Settings as SettingsType } from '../types'
 
 interface GoalField {
@@ -17,27 +18,35 @@ const goalFields: GoalField[] = [
 ]
 
 export default function Settings() {
-  const [settings, setSettings] = useState<SettingsType | null>(null)
+  const { settings: saved, error: loadError, updateSettings } = useSettings()
+  // A local working copy, so edits are not published to the rest of the app
+  // until Save. Editing the shared object directly would make the dashboard
+  // rings follow every keystroke in the goal fields, including half-typed
+  // numbers on the way to the real one.
+  const [draft, setDraft] = useState<SettingsType | null>(null)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => setError('Could not load settings.'))
-  }, [])
+    if (saved) setDraft(saved)
+  }, [saved])
 
-  if (!settings) {
-    return <p className="text-slate-400">{error || 'Loading…'}</p>
+  if (!draft) {
+    return <p className="text-slate-400">{loadError || 'Loading…'}</p>
   }
+  const settings = draft
 
   const update = (patch: Partial<SettingsType>) => {
-    setSettings({ ...settings, ...patch })
+    setDraft({ ...settings, ...patch })
     setStatus('idle')
   }
 
   const save = async () => {
     setStatus('saving')
     try {
-      setSettings(await api.updateSettings(settings))
+      // Through the context, so the dashboard rings and the Weight page's unit
+      // pick up the change immediately instead of on their next remount.
+      setDraft(await updateSettings(settings))
       setStatus('saved')
     } catch (err) {
       setStatus('error')
