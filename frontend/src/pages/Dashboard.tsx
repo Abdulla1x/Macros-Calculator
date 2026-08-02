@@ -4,10 +4,11 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
-import type { AnalyticsSummary, Meal, Settings } from '../types'
+import { useSettings } from '../settings/SettingsContext'
+import type { AnalyticsSummary, Meal } from '../types'
 
 export default function Dashboard() {
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const { settings } = useSettings()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
@@ -43,12 +44,25 @@ export default function Dashboard() {
       setError("Couldn't load your meals — check your connection and try again.")
     })
     // The 7-day trend stays anchored to the real today, independent of the day
-    // being viewed.
-    api.getAnalytics(addDays(today, -6), today).then(setWeek).catch(() => setWeek(null))
+    // being viewed — and it STOPS AT YESTERDAY.
+    //
+    // The analytics endpoint divides by calendar days in the range, so a range
+    // ending today counts a half-finished day as a whole one: at lunchtime the
+    // average reads hundreds of kcal below what is actually being eaten, which
+    // is exactly when someone checks it. Seven *complete* days is still a
+    // seven-day window, and it is the only one whose average means anything
+    // before bedtime.
+    //
+    // It also settles a calendar disagreement: the server clamps the range end
+    // to its own UTC today, while these dates are local. An end date always in
+    // the past makes that clamp a no-op instead of a timezone-dependent one.
+    api
+      .getAnalytics(addDays(today, -7), addDays(today, -1))
+      .then(setWeek)
+      .catch(() => setWeek(null))
   }, [viewedDate])
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => null)
     load()
   }, [load])
 
@@ -238,7 +252,11 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-2">
-          <h3 className="mb-3 font-semibold">Last 7 days</h3>
+          {/* "Previous", not "Last": the range ends yesterday. Today is already
+              on this page in full — the rings and the meal list above — so
+              leaving it out of the trend costs nothing and keeps the chart and
+              the average below it telling the same story. */}
+          <h3 className="mb-3 font-semibold">Previous 7 days</h3>
           {week && week.days.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={week.days} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
@@ -269,11 +287,15 @@ export default function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-500">No data yet this week.</p>
+            <p className="py-6 text-center text-sm text-slate-500">
+              Nothing logged in the seven days before today.
+            </p>
           )}
-          {week && (
+          {week && week.days.length > 0 && (
             <p className="mt-2 text-xs text-slate-400">
-              Avg {Math.round(week.averages.calories)} kcal · {Math.round(week.averages.protein)} g protein per day
+              Avg {Math.round(week.averages.calories)} kcal ·{' '}
+              {Math.round(week.averages.protein)} g protein per day
+              <span className="text-slate-500"> (excludes today)</span>
             </p>
           )}
         </div>
