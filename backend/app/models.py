@@ -32,9 +32,43 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Tokens issued before this moment are rejected (see auth/deps.py), so
-    # changing the password revokes any previously leaked token. Stored with
-    # second precision so a token minted in the same request stays valid.
+    # changing the password revokes any previously leaked token. Written by
+    # both /change-password and /reset-password. Stored with second precision
+    # because JWT `iat` is a whole-second claim: change-password mints a fresh
+    # token in the same request and it must not read as older than the change.
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # SHA-256 hex of the emailed token, never the token itself.
+    #
+    # Not Argon2, deliberately, and this is the opposite of the rule that
+    # applies one column up. Argon2 is slow because passwords are low-entropy
+    # and guessable offline; this token is 256 bits from secrets.token_urlsafe,
+    # so there is no offline guess to slow down and the work factor buys
+    # nothing. It would also cost something real: Argon2 salts per hash, so the
+    # row could not be found by equality at all — verification would become
+    # "load every candidate and hash it", turning an indexed read into a CPU
+    # scan that an unauthenticated caller could trigger at will.
+    token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    # Set when the token is spent. Kept rather than deleted: it is the audit
+    # trail for "was this link already used?", which is a question support
+    # actually gets, and it keeps one code path for every dead token.
+    used_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # No index on expires_at: the opportunistic purge in auth/router.py plus the
+    # global daily send cap keep this table at a few hundred rows, ever.
+    __table_args__ = (
+        Index("uq_password_resets_token_hash", "token_hash", unique=True),
+    )
 
 
 class Meal(Base):

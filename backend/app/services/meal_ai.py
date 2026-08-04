@@ -1,9 +1,10 @@
 """AI meal analysis via Google Gemini.
 
-This is the ONLY provider-aware module: routers and the frontend depend on the
-provider-neutral MealAnalysis schema and the MealAIError hierarchy below, so
-switching providers later means rewriting this file and changing env vars,
-nothing else.
+This is the only module aware of the AI provider: routers and the frontend
+depend on the provider-neutral MealAnalysis schema and the MealAIError hierarchy
+below, so switching providers later means rewriting this file and changing env
+vars, nothing else. services/email.py holds the other end of the same contract
+for the email provider.
 """
 import asyncio
 import logging

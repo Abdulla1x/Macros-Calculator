@@ -3,8 +3,10 @@ import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import Analytics from './pages/Analytics'
 import Dashboard from './pages/Dashboard'
+import ForgotPassword from './pages/ForgotPassword'
 import Login from './pages/Login'
 import LogMeal from './pages/LogMeal'
+import ResetPassword from './pages/ResetPassword'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
 import Weight from './pages/Weight'
@@ -15,6 +17,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<RequireAuth />}>
         {/* Inside RequireAuth, so the settings fetch only ever runs with a
             token in hand; outside Layout's children, so all five pages read

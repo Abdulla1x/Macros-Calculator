@@ -68,8 +68,7 @@ export default function Signup() {
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500 focus:outline-none"
             />
             <span className="mt-1 block text-xs text-slate-500">
-              At least 8 characters. There is no password reset yet — keep it
-              somewhere safe.
+              At least 8 characters.
             </span>
           </label>
           {error && <p className="text-sm text-rose-400">{error}</p>}

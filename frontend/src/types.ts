@@ -37,6 +37,10 @@ export interface TokenResponse {
   user: User
 }
 
+export interface MessageResponse {
+  detail: string
+}
+
 export interface Settings {
   calorie_goal: number
   protein_goal: number

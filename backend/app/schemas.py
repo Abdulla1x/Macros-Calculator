@@ -24,6 +24,23 @@ class DeleteAccountRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    # Bounded so an oversized "token" can't be hashed and queried. Real ones are
+    # 43 characters — secrets.token_urlsafe(32) base64url-encoded, unpadded.
+    token: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    """A bare human-readable message, for endpoints with nothing to return."""
+
+    detail: str
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

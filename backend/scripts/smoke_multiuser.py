@@ -10,8 +10,9 @@ Usage:
 If DATABASE_URL is also set, the script additionally connects to the database
 and asserts row-level ownership directly.
 
-Leaves behind the two throwaway accounts (there is no delete-account endpoint
-yet); their data is removed via the API where possible.
+Leaves behind the two throwaway accounts; their data is removed via the API
+where possible. (DELETE /api/auth/account exists and would clean them up
+properly — worth wiring in, but it needs the password kept to hand.)
 """
 import os
 import sys
@@ -245,7 +246,7 @@ def main() -> None:
             client.delete(f"/api/meals/{meal['id']}", headers=headers_a)
 
     print(f"\nAll {_checks} checks passed against {BASE_URL}")
-    print("Note: throwaway smoke-* accounts remain (no delete-account endpoint yet).")
+    print("Note: throwaway smoke-* accounts remain; delete them from Settings.")
 
 
 if __name__ == "__main__":
