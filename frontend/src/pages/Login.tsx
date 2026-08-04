@@ -16,6 +16,8 @@ export default function Login() {
   // An outage notice matters most here: this is where someone lands when the
   // app looks broken to them.
   const announcements = useAnnouncements()
+  // Set by the reset page, which sends people here rather than logging them in.
+  const notice = (location.state as { notice?: string } | null)?.notice ?? null
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -46,6 +48,7 @@ export default function Login() {
           className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
         >
           <h2 className="text-lg font-semibold">Log in</h2>
+          {notice && <p className="text-sm text-emerald-400">{notice}</p>}
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Email</span>
             <input
@@ -76,6 +79,14 @@ export default function Login() {
           >
             {submitting ? 'Logging in…' : 'Log in'}
           </button>
+          <p className="text-center text-sm text-slate-400">
+            <Link
+              to="/forgot-password"
+              className="text-emerald-400 hover:text-emerald-300"
+            >
+              Forgot your password?
+            </Link>
+          </p>
           <p className="text-center text-sm text-slate-400">
             No account?{' '}
             <Link to="/signup" className="text-emerald-400 hover:text-emerald-300">

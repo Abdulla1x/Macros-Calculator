@@ -13,8 +13,11 @@ export default function WarmupNotice() {
   if (state === 'ready') {
     return (
       <p className="mt-4 text-center text-xs text-slate-600">
-        <span className="text-emerald-500">●</span> Server is awake — logging in
-        should be quick.
+        {/* Deliberately not "logging in": four logged-out pages share this
+            component now, and only one of them is a login. A wording prop would
+            reopen exactly the drift this component exists to prevent. */}
+        <span className="text-emerald-500">●</span> Server is awake — this should
+        be quick.
       </p>
     )
   }

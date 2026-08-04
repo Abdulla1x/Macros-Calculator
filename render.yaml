@@ -61,6 +61,35 @@ services:
       # quota. Keep below the provider's daily allowance (~1500/day free tier).
       - key: AI_GLOBAL_DAILY_LIMIT
         value: "500"
+      # Brevo API key for password-reset email. Set in the dashboard; the
+      # feature 503s without it (uniformly, for known and unknown addresses).
+      - key: BREVO_API_KEY
+        sync: false
+      # The verified "From" address. sync: false because it is a personal
+      # address and this repo is public. Brevo rewrites the domain to
+      # @brevosend.com until a domain we own is authenticated — see
+      # backend/.env.example for what that means for recipients.
+      - key: EMAIL_SENDER_ADDRESS
+        sync: false
+      # Display name beside that address. Committed: it carries the app's
+      # identity while the address itself is being rewritten.
+      - key: EMAIL_SENDER_NAME
+        value: Macros Calculator
+      # Frontend origin used to build the emailed reset link. Committed on
+      # purpose — deriving it from the request's Host header instead would be
+      # host-header injection, which poisons the link in the victim's mailbox.
+      - key: APP_BASE_URL
+        value: https://macros-calculator-mu.vercel.app
+      # Reset link lifetime in minutes. Raise it from the dashboard if delivery
+      # proves slow; an unauthenticated sender is often greylisted for several
+      # minutes before the mail is even readable.
+      - key: PASSWORD_RESET_TTL_MINUTES
+        value: "60"
+      # Ceiling on reset emails per day across all users. The per-IP limit
+      # bounds one caller; this bounds the app, so the provider's free 300/day
+      # can't be drained out from under genuine requests.
+      - key: PASSWORD_RESET_GLOBAL_DAILY_LIMIT
+        value: "100"
       # Site-wide outage/maintenance notice. Committed empty and read on every
       # request, so an incident can be announced by editing it in the dashboard
       # with no deploy; blank it again to clear the banner. Release notes are

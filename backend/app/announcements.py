@@ -23,6 +23,20 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-04-password-reset",
+        date="2026-08-04",
+        title="Forgot your password? You can reset it now",
+        body=(
+            "There's a \"Forgot your password?\" link on the login page. Enter "
+            "your email and we'll send you a link to choose a new one; it "
+            "works for an hour and only once, and using it signs out every "
+            "other device. One thing worth knowing: the email says Macros "
+            "Calculator but arrives from an unfamiliar brevosend.com address, "
+            "because we don't own a sending domain yet — so check your spam "
+            "folder, and no, it isn't phishing."
+        ),
+    ),
+    Announcement(
         id="2026-08-02-photos-and-gallery",
         date="2026-08-02",
         title="Pick photos from your gallery, and use more than one",
@@ -82,8 +96,7 @@ ANNOUNCEMENTS: list[Announcement] = [
         title="Your own account",
         body=(
             "Macros Calculator is now multi-user: your meals, foods and goals "
-            "are private to your account and follow you across devices. There "
-            "is no password reset yet, so keep your password somewhere safe."
+            "are private to your account and follow you across devices."
         ),
     ),
 ]

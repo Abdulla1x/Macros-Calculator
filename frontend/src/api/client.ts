@@ -9,6 +9,7 @@ import type {
   Meal,
   MealAnalysisResponse,
   MealCreate,
+  MessageResponse,
   OFFProduct,
   Settings,
   TokenResponse,
@@ -126,6 +127,20 @@ export const api = {
     request<void>('/api/auth/account', {
       method: 'DELETE',
       body: JSON.stringify({ password }),
+    }),
+  // Both reset endpoints are public, but must stay under /api/auth/ so the 401
+  // handling above surfaces failures as form errors instead of bouncing to
+  // /login. A stale bearer token rides along automatically when one is stored;
+  // the server ignores it on these two routes.
+  forgotPassword: (email: string) =>
+    request<MessageResponse>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    request<void>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
     }),
 
   getMeals: (date?: string) =>
