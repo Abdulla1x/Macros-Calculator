@@ -204,3 +204,24 @@ def test_ai_daily_quota_is_per_user(client, client_b, monkeypatch):
 
     # B's quota is unaffected by A exhausting theirs.
     assert client_b.post("/api/ai/analyze", data={"text": "b-one"}).status_code == 200
+
+
+def test_admin_privilege_does_not_leak_to_other_users(client, client_b, monkeypatch):
+    """The admin routes are the one place in this app that reads across tenants,
+    so the tier that opens them belongs in the isolation gate too.
+
+    B stays a normal user while A is an admin, and B's data stays B's: being
+    on the allowlist grants aggregate metrics, never another account's rows.
+    """
+    monkeypatch.setenv("ADMIN_EMAILS", client.get("/api/auth/me").json()["email"])
+    b_meal = client_b.post("/api/meals", json=MEAL_B).json()
+
+    assert client.get("/api/admin/stats").status_code == 200
+    assert client_b.get("/api/admin/stats").status_code == 403
+    assert client_b.get("/api/admin/users").status_code == 403
+
+    # Admin is not a master key: the ordinary scoped routes ignore it entirely.
+    assert client.put(f"/api/meals/{b_meal['id']}", json=MEAL_A).status_code == 404
+    assert client.delete(f"/api/meals/{b_meal['id']}").status_code == 404
+    assert [m["name"] for m in client.get("/api/meals").json()] == []
+    assert client.get("/api/data/export/all").json()["meals"] == []

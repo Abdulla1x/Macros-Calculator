@@ -78,7 +78,13 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "weight_unit": setting.weight_unit,
         },
         "meals": [
-            {"date": m.date.isoformat(), "name": m.name, "calories": m.calories,
+            # `date` is when it was eaten, `created_at` when it was logged.
+            # The latter is null for rows written before migration 0006 and is
+            # exported as null rather than guessed at -- this endpoint promises
+            # everything the account owns, including the gaps.
+            {"date": m.date.isoformat(),
+             "created_at": m.created_at.isoformat() if m.created_at else None,
+             "name": m.name, "calories": m.calories,
              "protein": m.protein, "carbs": m.carbs, "fat": m.fat}
             for m in meals
         ],

@@ -1,6 +1,14 @@
 export interface User {
   id: number
   email: string
+  /**
+   * Whether the server put this account on the ADMIN_EMAILS allowlist.
+   *
+   * Decides only whether the client bothers rendering the admin page. Every
+   * /api/admin request is authorized server-side and independently — a client
+   * that forces this true gets a 403 and nothing else.
+   */
+  is_admin: boolean
 }
 
 export interface HealthStatus {
@@ -188,4 +196,49 @@ export interface Announcements {
   /** Live outage/maintenance notice from the server env; usually null. */
   banner: string | null
   items: Announcement[]
+}
+
+/**
+ * Admin metrics. Counts, dates and account identifiers only — these types
+ * carry no meal, food or weight content, and that is a boundary rather than an
+ * omission. See the module docstring of backend/app/routers/admin.py.
+ */
+export interface AdminDailyCount {
+  date: string
+  count: number
+}
+
+export interface AdminDailyActivity {
+  date: string
+  active_users: number
+  meals: number
+}
+
+export interface AdminStats {
+  total_users: number
+  total_meals: number
+  signups_7d: number
+  signups_30d: number
+  active_7d: number
+  active_30d: number
+  meals_7d: number
+  ai_calls_today: number
+  ai_global_daily_limit: number
+  ai_calls_30d_by_kind: Record<string, number>
+  /** Width of the two series below, so the client never assumes it. */
+  window_days: number
+  signups: AdminDailyCount[]
+  activity: AdminDailyActivity[]
+}
+
+export interface AdminUserRow {
+  id: number
+  email: string
+  created_at: string
+  /** Null for an account that signed up and never logged anything. */
+  last_active_at: string | null
+  meals: number
+  weights: number
+  foods: number
+  ai_calls: number
 }

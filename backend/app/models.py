@@ -76,7 +76,19 @@ class Meal(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # `date` is when the food was EATEN. It is user-chosen and freely
+    # backdated, so it says nothing about when the app was used.
     date: Mapped[date_type] = mapped_column(Date)
+    # `created_at` is when the row was WRITTEN, which is the actual usage
+    # signal: someone logging Thursday-to-Saturday backlog on Sunday used the
+    # app on Sunday, and `date` alone would report them active Thu/Fri/Sat and
+    # idle Sunday -- backwards, and on every one of those four days.
+    #
+    # Nullable because rows written before this column existed genuinely have
+    # no such record, and inventing one (backfilling from `date`) would be
+    # fabricating an observation. NULL means "unknown"; readers fall back to
+    # `date` and get eat-date precision for history, real precision after.
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, default=utcnow)
     name: Mapped[str] = mapped_column(String(200))
     calories: Mapped[float] = mapped_column(Float)
     protein: Mapped[float] = mapped_column(Float)

@@ -13,6 +13,7 @@ from .db import get_engine
 from .models import Base
 from .rate_limit import limiter
 from .routers import (
+    admin,
     ai,
     analytics,
     announcements,
@@ -82,6 +83,7 @@ app.include_router(settings.router)
 app.include_router(data.router)
 app.include_router(ai.router)
 app.include_router(announcements.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health")

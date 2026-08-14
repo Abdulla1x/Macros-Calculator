@@ -33,7 +33,7 @@ from ..schemas import (
 # Imported as a module, not by symbol: tests swap send_password_reset with
 # monkeypatch.setattr, which a from-import would have already bound past.
 from ..services import email as email_service
-from .deps import get_current_user
+from .deps import get_current_user, is_admin
 from .security import create_access_token, hash_password, verify_password
 
 logger = logging.getLogger(__name__)
@@ -201,10 +201,23 @@ async def _send_reset_email(user_id: int, to_email: str, reset_url: str) -> None
         logger.exception("Password reset email failed (user=%s)", user_id)
 
 
+def _user_out(user: User) -> UserOut:
+    """The one place a UserOut is built from a User row.
+
+    Every path that returns a user goes through here. `is_admin` is computed,
+    not stored, so it exists on no ORM row -- and because UserOut.is_admin has
+    a default, letting Pydantic read a User directly does NOT raise. It quietly
+    returns False. That is the failure this helper exists to prevent: an admin
+    would be recognised on login (where the field was passed explicitly) and
+    silently demoted on the next page refresh (where /me read the row).
+    """
+    return UserOut(id=user.id, email=user.email, is_admin=is_admin(user))
+
+
 def _token_response(user: User) -> TokenResponse:
     return TokenResponse(
         access_token=create_access_token(user.id),
-        user=UserOut(id=user.id, email=user.email),
+        user=_user_out(user),
     )
 
 
@@ -244,7 +257,10 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
-    return user
+    # _user_out, not `return user`: see the docstring there. Returning the ORM
+    # row would type-check, pass tests that only assert id and email, and be
+    # wrong for exactly one field.
+    return _user_out(user)
 
 
 @router.post("/change-password", response_model=TokenResponse)

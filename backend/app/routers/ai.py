@@ -125,7 +125,7 @@ def _transcribe_daily_limit() -> int:
     )
 
 
-def _global_daily_limit() -> int:
+def global_daily_limit() -> int:
     return int(os.environ.get("AI_GLOBAL_DAILY_LIMIT", DEFAULT_GLOBAL_DAILY_LIMIT))
 
 
@@ -178,7 +178,7 @@ async def _read_media(
     return data, upload.content_type
 
 
-def _calls_today(
+def calls_today(
     db: Session, *, user_id: int | None = None, kind: str | None = None
 ) -> int:
     """Provider calls made since UTC midnight, optionally narrowed.
@@ -223,7 +223,7 @@ def _reserve_call(
     """
     db.execute(select(User.id).where(User.id == user.id).with_for_update())
 
-    if _calls_today(db, user_id=user.id, kind=kind) >= per_user_limit:
+    if calls_today(db, user_id=user.id, kind=kind) >= per_user_limit:
         db.rollback()
         raise HTTPException(
             status_code=429,
@@ -233,8 +233,8 @@ def _reserve_call(
             ),
         )
 
-    global_limit = _global_daily_limit()
-    if _calls_today(db) >= global_limit:
+    global_limit = global_daily_limit()
+    if calls_today(db) >= global_limit:
         db.rollback()
         logger.warning(
             "Global daily AI cap reached (%s/day); rejecting %s for user %s",
@@ -290,7 +290,7 @@ async def ai_status(
         # Reserved like any other provider call: a probe really does spend the
         # shared quota, so hiding it from AI_GLOBAL_DAILY_LIMIT would make that
         # ceiling a lie. Its own `kind` keeps it out of the analysis and
-        # voice-note allowances, which _calls_today counts per kind.
+        # voice-note allowances, which calls_today counts per kind.
         _reserve_call(
             db,
             user,
