@@ -70,6 +70,16 @@ export default function Signup() {
             <span className="mt-1 block text-xs text-slate-500">
               At least 8 characters.
             </span>
+            {/* Password reset exists in the codebase but is not switched on —
+                sending email needs a provider we don't have yet. Until it is,
+                forgetting this password means losing the account for good, so
+                say that here rather than at the point someone is already locked
+                out. Amber because that is what this app already uses for a
+                warning (StatusBanner, MealAnalyzer). Delete this the day reset
+                goes live. */}
+            <span className="mt-1 block text-xs text-amber-300/90">
+              There's no password reset yet — keep it somewhere safe.
+            </span>
           </label>
           {error && <p className="text-sm text-rose-400">{error}</p>}
           <button

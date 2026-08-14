@@ -22,24 +22,27 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # as the one to mark as seen. Ids are stable strings, never renumbered: they're
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
-    # Replaces, rather than edits, 2026-08-04-password-reset: that note shipped
-    # with the code but the email provider's sender was never verified, so the
-    # endpoint 503s and the note was never true. Editing it in place would not
-    # reach anyone — seen ids accumulate in localStorage, so every device that
-    # already read "you can reset it now" would keep that as the last word. A
-    # retracted note gets a new id; the dead one just retires unused.
-    # Phrased as a dated status so it ages into accurate history once reset is
-    # live, at which point a separate "it works now" note lands above it.
+    # Third and final note on this. The two before it (2026-08-04, then
+    # 2026-08-05) each promised reset was working or imminent; neither was true,
+    # because every email provider tried has refused the account. Each
+    # correction gets a NEW id rather than an edit: seen ids accumulate in
+    # localStorage, so editing in place reaches nobody who already read the old
+    # wording — which is precisely the audience a correction is for.
+    #
+    # This one deliberately makes no promise about timing. That is what made the
+    # previous two rot. Say what is true and what the user should do about it,
+    # and nothing about when it changes.
     Announcement(
-        id="2026-08-05-password-reset-soon",
-        date="2026-08-05",
-        title="Password reset is almost ready",
+        id="2026-08-14-password-reset-unavailable",
+        date="2026-08-14",
+        title="Password reset isn't available yet",
         body=(
-            "There's a \"Forgot your password?\" link on the login page now, "
-            "but it isn't switched on yet — we're still finishing setup with "
-            "the service that sends the email, so for the moment it will tell "
-            "you reset isn't available. Keep your password somewhere safe "
-            "until then, and we'll post here the day it starts working."
+            "The \"Forgot your password?\" link on the login page isn't "
+            "switched on — we haven't been able to get email sending set up, "
+            "so for now it will tell you reset isn't available. Please keep "
+            "your password somewhere safe: if you forget it, there is "
+            "currently no way back into your account. We'll post here if that "
+            "changes."
         ),
     ),
     Announcement(
