@@ -1,4 +1,6 @@
 import type {
+  AdminStats,
+  AdminUserRow,
   AIStatus,
   AnalyticsSummary,
   Announcements,
@@ -247,4 +249,14 @@ export const api = {
     form.append('file', file)
     return request<ImportResult>('/api/data/import', { method: 'POST', body: form })
   },
+
+  // Admin-only. These 403 for anyone not on the server's allowlist, and a 403
+  // falls through the handler above as an ordinary ApiError — unlike a 401,
+  // which bounces to /login. That difference is deliberate: a non-admin hitting
+  // these is not logged out, they simply may not read them.
+  getAdminStats: () => request<AdminStats>('/api/admin/stats'),
+  getAdminUsers: (limit?: number) =>
+    request<AdminUserRow[]>(
+      `/api/admin/users${limit ? `?limit=${limit}` : ''}`,
+    ),
 }

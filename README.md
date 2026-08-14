@@ -211,6 +211,12 @@ server boots, so the schema is created/updated on deploy. In the Render dashboar
 - `AI_PROBE_DAILY_LIMIT` / `MEAL_AI_STATUS_DETAIL` — optional, govern
   [`GET /api/ai/status`](docs/runbook-ai-provider.md)
 - `CORS_ORIGINS` — your exact frontend origin (scheme included, no trailing slash)
+- `ADMIN_EMAILS` — optional, comma-separated addresses allowed to read
+  `/api/admin` (usage metrics: signups, active accounts, per-account counts and
+  AI consumption). Case- and whitespace-insensitive, re-read on every request.
+  **Unset means nobody is an admin** — there is no role column and no promotion
+  endpoint, so this variable is the only way to grant it. Admins see counts and
+  timestamps only, never meal, food or weight content
 - `BREVO_API_KEY` + `EMAIL_SENDER_ADDRESS` — enable password reset (it returns 503
   for every address until both are set). The sender must be verified in the Brevo
   dashboard first: add the address, then enter the 6-digit code it emails you

@@ -1,5 +1,5 @@
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -46,6 +46,16 @@ class UserOut(BaseModel):
 
     id: int
     email: str
+    # Display convenience only -- it decides whether the client bothers
+    # rendering the admin page. The server authorizes every /api/admin request
+    # independently via require_admin; a client that lies about this flag gets
+    # a 403 and nothing else.
+    #
+    # Defaulted, like Settings.weight_unit and AnalyticsSummary.logged_days, so
+    # a client written before this field existed still parses the response.
+    # NOTE: the default is also why every construction site must pass it
+    # explicitly -- see _user_out in auth/router.py.
+    is_admin: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -297,3 +307,67 @@ class AnnouncementsResponse(BaseModel):
     # `items` are the committed release notes, newest first.
     banner: str | None = None
     items: list[Announcement]
+
+
+# --- Admin metrics -----------------------------------------------------------
+#
+# No `from_attributes` on any of these: they are computed from aggregate
+# queries, not loaded off a row, which is the same reason AnalyticsSummary and
+# AIStatus omit it.
+#
+# Every field below is a count, a date or an account identifier. None of them
+# carry user content, and that is a boundary rather than an oversight -- see the
+# module docstring of routers/admin.py.
+
+
+class AdminDailyCount(BaseModel):
+    """One day of a single series. Days with nothing in them are still sent,
+    with count 0, so a chart draws a real gap instead of interpolating across
+    it."""
+
+    date: date_type
+    count: int
+
+
+class AdminDailyActivity(BaseModel):
+    date: date_type
+    active_users: int
+    meals: int
+
+
+class AdminStats(BaseModel):
+    """App-wide usage: how many accounts exist, and how much they are used."""
+
+    total_users: int
+    total_meals: int
+    signups_7d: int
+    signups_30d: int
+    active_7d: int
+    active_30d: int
+    meals_7d: int
+    # The one number with operational consequences: exhausting the global cap
+    # breaks meal analysis for every user at once, not just the heavy one.
+    ai_calls_today: int
+    ai_global_daily_limit: int
+    ai_calls_30d_by_kind: dict[str, int] = {}
+    # The window the series below cover, so the client never has to assume it.
+    window_days: int
+    signups: list[AdminDailyCount] = []
+    activity: list[AdminDailyActivity] = []
+
+
+class AdminUserRow(BaseModel):
+    """One account's metrics — counts and timestamps, never content.
+
+    `last_active_at` is None for an account that has signed up and done
+    nothing, which is a genuinely useful thing to be able to see.
+    """
+
+    id: int
+    email: str
+    created_at: datetime
+    last_active_at: datetime | None = None
+    meals: int = 0
+    weights: int = 0
+    foods: int = 0
+    ai_calls: int = 0

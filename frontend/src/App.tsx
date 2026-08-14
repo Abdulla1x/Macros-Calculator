@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
+import Admin from './pages/Admin'
 import Analytics from './pages/Analytics'
 import Dashboard from './pages/Dashboard'
 import ForgotPassword from './pages/ForgotPassword'
@@ -35,6 +37,13 @@ export default function App() {
           <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
+          {/* Deliberately absent from Layout's nav: only the operator uses it,
+              and the nav already degrades to emoji-only below `sm`. Reached by
+              typing the URL; guarded here for display and by require_admin on
+              the server for real. */}
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<Admin />} />
+          </Route>
         </Route>
       </Route>
     </Routes>

@@ -16,6 +16,10 @@ _user_counter = itertools.count(1)
 def _test_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("JWT_SECRET", "test-secret-0123456789abcdef0123456789abcdef")
+    # Cleared, not defaulted: ADMIN_EMAILS is read from the real environment, so
+    # a developer who has it exported would otherwise run a different suite than
+    # CI does — and the difference would be "admin routes are open".
+    monkeypatch.delenv("ADMIN_EMAILS", raising=False)
     # All TestClient requests share one fake IP, so the per-IP auth rate limit
     # would trip across tests. Tests that exercise it re-enable it explicitly.
     limiter.enabled = False

@@ -101,5 +101,11 @@ services:
       # frontend if left unedited.
       - key: CORS_ORIGINS
         sync: false
+      # Who may read /api/admin. sync: false because it is an access-control
+      # list — committing addresses here would publish them and, worse, make
+      # the repo the place people edit privileges. Unset means nobody is an
+      # admin, which is what makes leaving it out of this file safe.
+      - key: ADMIN_EMAILS
+        sync: false
       - key: PYTHON_VERSION
         value: "3.14.4"
