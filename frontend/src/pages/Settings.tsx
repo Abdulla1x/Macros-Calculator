@@ -286,8 +286,9 @@ function AccountSection() {
 
         <div className="mt-5 border-t border-slate-800 pt-4">
           <p className="mb-2 text-sm text-slate-400">
-            Download everything stored for this account — meals, food library, weight
-            entries, goals and AI analyses — as a single JSON file.
+            Download everything stored for this account — meals, food library, saved
+            meal templates, weight entries, goals and AI analyses — as a single JSON
+            file.
           </p>
           <button
             onClick={exportAll}
@@ -302,8 +303,8 @@ function AccountSection() {
       <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
         <h3 className="mb-1 font-semibold text-rose-300">Danger zone</h3>
         <p className="mb-4 text-sm text-slate-400">
-          Deleting your account permanently removes all meals, foods, weight entries,
-          goals and AI analyses. This cannot be undone.
+          Deleting your account permanently removes all meals, foods, meal templates,
+          weight entries, goals and AI analyses. This cannot be undone.
         </p>
         {!confirmingDelete ? (
           <button

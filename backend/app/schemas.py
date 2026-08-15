@@ -79,6 +79,60 @@ class Meal(MealCreate):
     id: int
 
 
+# Bounds the size of MealTemplate.items_json. Named for the same reason
+# MAX_IMAGES is: the number is a policy choice, not a fact, and the comment is
+# where the reasoning lives. Thirty ingredients is far past any real meal.
+MAX_TEMPLATE_ITEMS = 30
+
+
+class TemplateItem(BaseModel):
+    """One ingredient row inside a saved template.
+
+    The bounds here are stricter than MealCreate's on purpose. These values are
+    serialized into a Text column and read back out through
+    /api/data/export/all, and json.dumps turns float('inf') into the bare token
+    `Infinity`, which is not valid JSON -- one such row would corrupt the
+    export for the entire account. Where a value is stored decides how much
+    damage bad input can do.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    weight_grams: float = Field(gt=0, allow_inf_nan=False)
+    serving_size: float = Field(gt=0, allow_inf_nan=False)
+    calories: float = Field(ge=0, allow_inf_nan=False)
+    protein: float = Field(ge=0, allow_inf_nan=False)
+    carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+
+class MealTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    calories: float = Field(ge=0, allow_inf_nan=False)
+    protein: float = Field(ge=0, allow_inf_nan=False)
+    carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    # The count bound lives on the list so the rejection is Pydantic's 422
+    # rather than a hand-rolled check in the router.
+    items: list[TemplateItem] = Field(
+        default_factory=list, max_length=MAX_TEMPLATE_ITEMS
+    )
+
+
+class MealTemplate(MealTemplateCreate):
+    # Deliberately NOT from_attributes, unlike every other X(XCreate) pair in
+    # this file. The ORM row has no `items` attribute -- it has `items_json` --
+    # and Pydantic's response to a missing attribute on a defaulted field is to
+    # substitute the default, silently. Every template would come back with
+    # `items: []` and nothing would raise. This is the Phase 2 `is_admin` bug
+    # in a new costume, so the router builds this model explicitly instead:
+    # see _template_out in routers/meal_templates.py.
+    id: int
+    # Whether the POST created a new template or replaced an existing one with
+    # the same name. Overwriting a food is a correction; overwriting a template
+    # destroys an ingredient list, so the client says which happened.
+    created: bool = False
+
+
 class FoodCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     serving_size: float = Field(gt=0, description="grams per serving")
@@ -370,4 +424,5 @@ class AdminUserRow(BaseModel):
     meals: int = 0
     weights: int = 0
     foods: int = 0
+    meal_templates: int = 0
     ai_calls: int = 0

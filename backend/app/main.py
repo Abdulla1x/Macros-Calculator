@@ -1,8 +1,11 @@
 import logging
+import math
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -19,6 +22,7 @@ from .routers import (
     announcements,
     data,
     foods,
+    meal_templates,
     meals,
     settings,
     weights,
@@ -51,6 +55,36 @@ app = FastAPI(title="Macros Calculator API", version="3.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 
 
+def _json_safe(value):
+    """Replace values that are valid Python floats but not valid JSON."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+def validation_error_handler(request: Request, exc: RequestValidationError):
+    """FastAPI's default 422 body echoes the rejected value back under `input`.
+
+    That is fine until the rejected value is exactly what JSON cannot express.
+    `json.loads` accepts the bare token `Infinity`, so a hand-written request
+    can put inf into a field; Pydantic then rejects it correctly (see
+    TemplateItem's allow_inf_nan), and rendering the rejection crashes, because
+    Starlette's JSONResponse serializes with allow_nan=False. The caller gets a
+    500 for a request the server had already understood and refused.
+
+    Sanitizing the echo keeps the 422. The frontend is unaffected either way --
+    api/client.ts only reads `detail` when it is a string.
+    """
+    return JSONResponse(
+        status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))}
+    )
+
+
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # A `detail` body so the frontend surfaces this like any other API error.
@@ -76,6 +110,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(meals.router)
+app.include_router(meal_templates.router)
 app.include_router(foods.router)
 app.include_router(weights.router)
 app.include_router(analytics.router)

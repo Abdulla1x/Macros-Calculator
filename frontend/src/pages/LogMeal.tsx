@@ -5,7 +5,7 @@ import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
-import type { FoodCreate, Meal, MealAnalysisResponse } from '../types'
+import type { FoodCreate, Meal, MealAnalysisResponse, MealTemplate } from '../types'
 
 interface Row {
   key: number
@@ -60,20 +60,51 @@ const rowIsValid = (row: Row) => {
   )
 }
 
+// Mirrors MAX_TEMPLATE_ITEMS in backend/app/schemas.py. Duplicated here only so
+// the user gets a sentence instead of a bare 422 — the server is the authority.
+const MAX_TEMPLATE_ITEMS = 30
+
 // Ingredients aren't persisted with a meal, so editing loads the stored totals
 // as one pass-through row: weight == serving size, so factor = 1 and the
 // macros come through unchanged (same trick applyAnalysis uses).
-const rowFromMeal = (meal: Meal): Row => ({
+//
+// Takes anything carrying a name and the four macros, which is a meal or a
+// template that has no items of its own.
+const rowFromTotals = (
+  source: Pick<Meal, 'name' | 'calories' | 'protein' | 'carbs' | 'fat'>,
+): Row => ({
   ...emptyRow(),
-  name: meal.name,
+  name: source.name,
   weight: '100',
   servingSize: '100',
-  calories: String(meal.calories),
-  protein: String(meal.protein),
-  carbs: meal.carbs == null ? '' : String(meal.carbs),
-  fat: meal.fat == null ? '' : String(meal.fat),
+  calories: String(source.calories),
+  protein: String(source.protein),
+  carbs: source.carbs == null ? '' : String(source.carbs),
+  fat: source.fat == null ? '' : String(source.fat),
   saveToLibrary: false,
 })
+
+// A template keeps its ingredient rows, so applying one restores each at the
+// weight it was saved at — which is the entire reason templates store items
+// rather than just totals: the rice stays adjustable on its own.
+//
+// A template saved while editing an existing meal has no items, only totals.
+// Returning zero rows there would open the form empty and then refuse to save,
+// complaining about ingredients the user never entered.
+const rowsFromTemplate = (template: MealTemplate): Row[] =>
+  template.items.length === 0
+    ? [rowFromTotals(template)]
+    : template.items.map((item) => ({
+        ...emptyRow(),
+        name: item.name,
+        weight: String(item.weight_grams),
+        servingSize: String(item.serving_size),
+        calories: String(item.calories),
+        protein: String(item.protein),
+        carbs: item.carbs == null ? '' : String(item.carbs),
+        fat: item.fat == null ? '' : String(item.fat),
+        saveToLibrary: false,
+      }))
 
 const rowTotals = (row: Row) => {
   const factor = Number(row.weight) / Number(row.servingSize)
@@ -97,6 +128,9 @@ export default function LogMeal() {
   // Set when navigating from a dashboard day-view, so a new meal defaults to the
   // day being viewed rather than today.
   const logDate = (location.state as { logDate?: string } | null)?.logDate ?? null
+  // Set when a Quick log template was tapped on the dashboard.
+  const template =
+    (location.state as { template?: MealTemplate } | null)?.template ?? null
 
   const { settings } = useSettings()
   const [rows, setRows] = useState<Row[]>([emptyRow()])
@@ -104,16 +138,24 @@ export default function LogMeal() {
   const [mealDate, setMealDate] = useState(localIsoDate())
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savingTemplate, setSavingTemplate] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
 
   // Covers both mount and in-place navigation (edit → "Log a meal" and back).
+  //
+  // Precedence is explicit: editing an existing meal beats applying a template,
+  // and both beat a blank form. In practice only one is ever set — they come
+  // from different dashboard buttons — but a silently empty form is the failure
+  // mode if that ever stops being true, and it reads as "the tap did nothing".
   useEffect(() => {
-    setRows(editMeal ? [rowFromMeal(editMeal)] : [emptyRow()])
-    setMealName(editMeal?.name ?? '')
+    if (editMeal) setRows([rowFromTotals(editMeal)])
+    else if (template) setRows(rowsFromTemplate(template))
+    else setRows([emptyRow()])
+    setMealName(editMeal?.name ?? template?.name ?? '')
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
     setMessage(null)
-  }, [editMeal, logDate])
+  }, [editMeal, template, logDate])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -240,6 +282,69 @@ export default function LogMeal() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Fires on its own rather than riding along with the meal save, so a meal can
+  // be templated without being logged — and so it also works while editing an
+  // existing meal, where there is no create to ride on.
+  const saveAsTemplate = async () => {
+    const name = mealName.trim()
+    if (!name) {
+      setMessage({ kind: 'error', text: 'Name the meal before saving it as a template.' })
+      return
+    }
+    if (validRows.length === 0) {
+      setMessage({
+        kind: 'error',
+        text: 'Add at least one complete ingredient before saving a template.',
+      })
+      return
+    }
+    if (validRows.length > MAX_TEMPLATE_ITEMS) {
+      setMessage({
+        kind: 'error',
+        text: `A template can hold at most ${MAX_TEMPLATE_ITEMS} ingredients.`,
+      })
+      return
+    }
+    setSavingTemplate(true)
+    setMessage(null)
+    try {
+      const saved = await api.saveMealTemplate({
+        name,
+        calories: Math.round(totals.calories * 100) / 100,
+        protein: Math.round(totals.protein * 100) / 100,
+        carbs: totals.carbs === null ? null : Math.round(totals.carbs * 100) / 100,
+        fat: totals.fat === null ? null : Math.round(totals.fat * 100) / 100,
+        items: validRows.map((row) => ({
+          // A row is valid without a name, but the API requires one on every
+          // item — so an unnamed ingredient gets a placeholder rather than a
+          // 422 the user has no way to interpret.
+          name: row.name.trim() || 'Ingredient',
+          weight_grams: Number(row.weight),
+          serving_size: Number(row.servingSize),
+          calories: Number(row.calories),
+          protein: Number(row.protein),
+          carbs: num(row.carbs),
+          fat: num(row.fat),
+        })),
+      })
+      setMessage({
+        kind: 'success',
+        // Saving over a food corrects it; saving over a template throws away an
+        // ingredient list, and there is no undo — so say which one happened.
+        text: saved.created
+          ? `Saved "${name}" as a template ☆`
+          : `Replaced your existing "${name}" template ☆`,
+      })
+    } catch (error) {
+      setMessage({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Saving the template failed',
+      })
+    } finally {
+      setSavingTemplate(false)
     }
   }
 
@@ -436,13 +541,27 @@ export default function LogMeal() {
               ({validRows.length} of {rows.length} ingredient{rows.length === 1 ? '' : 's'} counted)
             </span>
           </p>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Disabled while in flight, and that is load-bearing rather than
+                cosmetic: the save is a read-then-write upsert with no lock, so
+                two taps in quick succession would both find nothing, both
+                insert, and collide on the unique index. */}
+            <button
+              onClick={saveAsTemplate}
+              disabled={savingTemplate || saving}
+              title="Save these ingredients to re-log in one tap"
+              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
+            >
+              {savingTemplate ? 'Saving…' : '☆ Save as template'}
+            </button>
+            <button
+              onClick={save}
+              disabled={saving || savingTemplate}
+              className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            >
+              {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
+            </button>
+          </div>
         </div>
 
         {message && (

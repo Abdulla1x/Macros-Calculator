@@ -16,6 +16,8 @@ YESTERDAY = TODAY - timedelta(days=1)
 # rather than asserting the absence of a field name it has to know in advance.
 SECRET_MEAL_NAME = "Zzyzx Clandestine Casserole"
 SECRET_WEIGHT_KG = 83.7
+SECRET_TEMPLATE_NAME = "Quixotic Ptarmigan Breakfast"
+SECRET_INGREDIENT_NAME = "Vermillion Sprocket Oats"
 
 
 def email_of(client) -> str:
@@ -139,12 +141,33 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
             "protein": 31,
         },
     )
+    # A template carries user content twice over: its own name, and the name of
+    # every ingredient inside it.
+    client_b.post(
+        "/api/meal-templates",
+        json={
+            "name": SECRET_TEMPLATE_NAME,
+            "calories": 620,
+            "protein": 48,
+            "items": [
+                {
+                    "name": SECRET_INGREDIENT_NAME,
+                    "weight_grams": 150,
+                    "serving_size": 100,
+                    "calories": 165,
+                    "protein": 31,
+                }
+            ],
+        },
+    )
 
     make_admin(client, monkeypatch)
     for route in ADMIN_ROUTES:
         body = client.get(route).text
         assert SECRET_MEAL_NAME not in body, route
         assert str(SECRET_WEIGHT_KG) not in body, route
+        assert SECRET_TEMPLATE_NAME not in body, route
+        assert SECRET_INGREDIENT_NAME not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------
@@ -199,6 +222,10 @@ def test_user_rows_carry_counts_and_last_active(client, client_b, monkeypatch):
     client_b.post(
         "/api/weights", json={"date": YESTERDAY.isoformat(), "weight_kg": 70.0}
     )
+    client_b.post(
+        "/api/meal-templates",
+        json={"name": "Counted Template", "calories": 100, "protein": 10},
+    )
     address_b = email_of(client_b)
     make_admin(client, monkeypatch)
 
@@ -206,6 +233,7 @@ def test_user_rows_carry_counts_and_last_active(client, client_b, monkeypatch):
     assert rows[address_b]["meals"] == 1
     assert rows[address_b]["weights"] == 1
     assert rows[address_b]["foods"] == 0
+    assert rows[address_b]["meal_templates"] == 1
     assert rows[address_b]["ai_calls"] == 0
     assert rows[address_b]["last_active_at"] is not None
 

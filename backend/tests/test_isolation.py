@@ -6,6 +6,11 @@ from tests.test_meal_ai import configure
 MEAL_A = {"date": "2026-07-01", "name": "Alpha Meal", "calories": 500, "protein": 40}
 MEAL_B = {"date": "2026-07-01", "name": "Beta Meal", "calories": 300, "protein": 20}
 FOOD_A = {"name": "Shared Name Food", "serving_size": 100, "calories": 165, "protein": 31}
+TEMPLATE_A = {
+    "name": "Shared Name Template", "calories": 620, "protein": 48,
+    "items": [{"name": "Alpha Ingredient", "weight_grams": 150,
+               "serving_size": 100, "calories": 165, "protein": 31}],
+}
 # Weigh-in dates are relative: the API rejects future dates.
 WEIGH_DAY = (date.today() - timedelta(days=1)).isoformat()
 WEIGHT_A = {"date": WEIGH_DAY, "weight_kg": 82.0}
@@ -42,6 +47,31 @@ def test_cannot_update_another_users_meal(client, client_b):
     assert hijack.status_code == 404
     # A's meal is untouched.
     assert client.get("/api/meals").json()[0]["name"] == "Alpha Meal"
+
+
+def test_meal_templates_are_scoped(client, client_b):
+    a_template = client.post("/api/meal-templates", json=TEMPLATE_A).json()
+
+    assert client_b.get("/api/meal-templates").json() == []
+    assert client_b.delete(f"/api/meal-templates/{a_template['id']}").status_code == 404
+    # A's template is untouched, ingredients included.
+    a_listed = client.get("/api/meal-templates").json()
+    assert [t["id"] for t in a_listed] == [a_template["id"]]
+    assert a_listed[0]["items"][0]["name"] == "Alpha Ingredient"
+
+
+def test_same_template_name_allowed_per_user(client, client_b):
+    client.post("/api/meal-templates", json=TEMPLATE_A)
+    # The unique index is per user, so B's save is an insert, not an upsert of
+    # A's row -- the same property the foods index has.
+    b_template = client_b.post(
+        "/api/meal-templates",
+        json={**TEMPLATE_A, "name": "shared name template", "calories": 999},
+    )
+    assert b_template.status_code == 201
+
+    assert client.get("/api/meal-templates").json()[0]["calories"] == 620
+    assert client_b.get("/api/meal-templates").json()[0]["calories"] == 999
 
 
 def test_food_library_is_scoped(client, client_b):

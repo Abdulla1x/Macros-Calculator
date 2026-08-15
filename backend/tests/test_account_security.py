@@ -153,12 +153,20 @@ def test_export_all_includes_every_owned_table(client):
     client.post("/api/foods", json={
         "name": "Oats", "serving_size": 40, "calories": 150, "protein": 5,
     })
+    client.post("/api/meal-templates", json={
+        "name": "Porridge", "calories": 300, "protein": 12,
+        "items": [{"name": "Oats", "weight_grams": 80, "serving_size": 40,
+                   "calories": 150, "protein": 5}],
+    })
 
     body = client.get("/api/data/export/all").json()
     assert body["user"]["email"] == _me(client)["email"]
     assert body["settings"]["calorie_goal"] == 2000
     assert [m["name"] for m in body["meals"]] == ["Omelette"]
     assert [f["name"] for f in body["foods"]] == ["Oats"]
+    assert [t["name"] for t in body["meal_templates"]] == ["Porridge"]
+    # Portability means the ingredients too, not just the totals.
+    assert body["meal_templates"][0]["items"][0]["name"] == "Oats"
     assert body["ai_analyses"] == []
 
 

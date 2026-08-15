@@ -6,10 +6,10 @@ Every other router here is scoped to the authenticated user. This one
 deliberately is not, which is exactly why it is the only router behind
 `require_admin`. What it may expose is **counts, dates and account
 identifiers**: email, signup date, last-active, and how many meals, weigh-ins,
-foods and AI calls each account has.
+foods, saved meal templates and AI calls each account has.
 
-Admins do **not** see meal names, weight values, food entries or voice-note
-transcripts. That is what keeps README.md's "every API endpoint is scoped to the
+Admins do **not** see meal names, weight values, food entries, meal-template
+names or voice-note transcripts. That is what keeps README.md's "every API endpoint is scoped to the
 authenticated user" and the Settings privacy copy true without a rewrite.
 `tests/test_admin.py` asserts the absence positively, so a later "just one
 useful field" commit fails a test rather than quietly failing the promise.
@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import require_admin
 from ..db import get_db
-from ..models import AIAnalysis, Food, Meal, User, WeightEntry
+from ..models import AIAnalysis, Food, Meal, MealTemplate, User, WeightEntry
 from ..schemas import AdminDailyActivity, AdminDailyCount, AdminStats, AdminUserRow
 from .ai import calls_today, global_daily_limit
 
@@ -48,6 +48,14 @@ ACTIVE_WINDOW_DAYS = 7
 
 # Tables that record a real creation timestamp, so activity can be read off
 # them directly. Meals are handled separately: see _meal_activity_at.
+#
+# MealTemplate is counted per user below but deliberately NOT listed here, even
+# though it has a non-null created_at. Saving a template is an upsert, and an
+# upsert rewrites the row without moving created_at -- so "re-saved my Breakfast
+# template today" would register as activity on the day it was first created.
+# That is the same backwards reading _meal_activity_at exists to prevent. No
+# signal is lost: the button lives in the log-meal footer, so creating a
+# template is always accompanied by a meal write in the same session.
 _TIMESTAMPED = (WeightEntry, Food, AIAnalysis)
 
 
@@ -140,6 +148,7 @@ def list_users(
     meals = _count_by_user(db, Meal, ids)
     weights = _count_by_user(db, WeightEntry, ids)
     foods = _count_by_user(db, Food, ids)
+    templates = _count_by_user(db, MealTemplate, ids)
     ai_calls = _count_by_user(db, AIAnalysis, ids)
     last_active = _last_active_by_user(db, ids)
 
@@ -152,6 +161,7 @@ def list_users(
             meals=meals.get(u.id, 0),
             weights=weights.get(u.id, 0),
             foods=foods.get(u.id, 0),
+            meal_templates=templates.get(u.id, 0),
             ai_calls=ai_calls.get(u.id, 0),
         )
         for u in users

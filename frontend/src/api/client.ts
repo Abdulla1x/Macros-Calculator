@@ -11,6 +11,8 @@ import type {
   Meal,
   MealAnalysisResponse,
   MealCreate,
+  MealTemplate,
+  MealTemplateCreate,
   MessageResponse,
   OFFProduct,
   Settings,
@@ -153,6 +155,18 @@ export const api = {
     request<Meal>(`/api/meals/${id}`, { method: 'PUT', body: JSON.stringify(meal) }),
   deleteMeal: (id: number) =>
     request<void>(`/api/meals/${id}`, { method: 'DELETE' }),
+
+  getMealTemplates: () => request<MealTemplate[]>('/api/meal-templates'),
+  // An upsert on (user, lower(name)). Unlike saveFood, replacing a template
+  // discards an ingredient list, so the response says which happened via
+  // `created` and the caller words its message accordingly.
+  saveMealTemplate: (template: MealTemplateCreate) =>
+    request<MealTemplate>('/api/meal-templates', {
+      method: 'POST',
+      body: JSON.stringify(template),
+    }),
+  deleteMealTemplate: (id: number) =>
+    request<void>(`/api/meal-templates/${id}`, { method: 'DELETE' }),
 
   searchFoods: (q: string) =>
     request<Food[]>(`/api/foods/search?q=${encodeURIComponent(q)}`),

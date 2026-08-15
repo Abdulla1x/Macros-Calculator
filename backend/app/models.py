@@ -98,6 +98,52 @@ class Meal(Base):
     __table_args__ = (Index("ix_meals_user_date", "user_id", "date"),)
 
 
+class MealTemplate(Base):
+    """A saved meal the user can re-log in one tap, ingredients included.
+
+    A `Meal` is one flat row, so the ingredient rows someone typed are
+    discarded the moment it is saved. Templates are what keep them, which is
+    the whole point: re-logging should let you bump the rice from 200 g to
+    250 g, not just scale the entire meal proportionally.
+    """
+
+    __tablename__ = "meal_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    # The totals, denormalized alongside the items below rather than derived
+    # from them. They are what actually gets logged if the user changes
+    # nothing, they are computed from the same rows in the same request, and
+    # they let the dashboard render a template without parsing JSON.
+    calories: Mapped[float] = mapped_column(Float)
+    protein: Mapped[float] = mapped_column(Float)
+    carbs: Mapped[float | None] = mapped_column(Float)
+    fat: Mapped[float | None] = mapped_column(Float)
+    # The ingredient rows, as a serialized list[TemplateItem]. JSON rather than
+    # a child table because nothing ever queries by ingredient -- this is read
+    # whole or not at all, exactly like AIAnalysis.analysis_json. A
+    # meal_template_items table would buy a join nobody makes and cost a second
+    # CASCADE, a second export shape and a second isolation suite.
+    #
+    # Nullable: a template saved from the edit-an-existing-meal path has only a
+    # single pass-through row, so "no items, just totals" is a valid template
+    # and readers must handle it.
+    items_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# Case-insensitive template names, unique per user -- the same expression-index
+# trick as foods below, and what makes "save as template" an upsert instead of
+# a way to accumulate five templates all called "Breakfast".
+Index(
+    "uq_meal_templates_user_lower_name",
+    MealTemplate.user_id,
+    func.lower(MealTemplate.name),
+    unique=True,
+)
+
+
 class Food(Base):
     __tablename__ = "foods"
 
