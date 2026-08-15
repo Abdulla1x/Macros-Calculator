@@ -22,6 +22,22 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # as the one to mark as seen. Ids are stable strings, never renumbered: they're
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
+    Announcement(
+        id="2026-08-15-meal-templates",
+        date="2026-08-15",
+        title="Save a meal, then log it again in one tap",
+        body=(
+            "Meals you eat often no longer need retyping. Build a meal as "
+            "usual, then hit \"Save as template\" — it appears under Quick log "
+            "on your dashboard, and tapping it opens the form with every "
+            "ingredient already filled in at the weight you saved. Adjust "
+            "anything before saving: change one ingredient's weight and only "
+            "that ingredient recalculates. Saving a template with a name you "
+            "already used replaces the old one, and the message tells you when "
+            "that happens. Templates are logged against whichever day you're "
+            "viewing, so you can catch up on yesterday without retyping it."
+        ),
+    ),
     # Third and final note on this. The two before it (2026-08-04, then
     # 2026-08-05) each promised reset was working or imminent; neither was true,
     # because every email provider tried has refused the account. Each

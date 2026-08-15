@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import AIAnalysis, Food, Meal, Setting, User, WeightEntry
+from ..models import AIAnalysis, Food, Meal, MealTemplate, Setting, User, WeightEntry
 from ..schemas import ImportResult
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -58,6 +58,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         .where(WeightEntry.user_id == user.id)
         .order_by(WeightEntry.date)
     ).all()
+    templates = db.scalars(
+        select(MealTemplate)
+        .where(MealTemplate.user_id == user.id)
+        .order_by(MealTemplate.id)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
@@ -96,6 +101,15 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         "weights": [
             {"date": w.date.isoformat(), "weight_kg": w.weight_kg}
             for w in weights
+        ],
+        "meal_templates": [
+            # Same empty-string guard as ai_analyses below: items_json is
+            # nullable, and json.loads("") raises.
+            {"name": t.name, "calories": t.calories, "protein": t.protein,
+             "carbs": t.carbs, "fat": t.fat,
+             "created_at": t.created_at.isoformat(),
+             "items": json.loads(t.items_json) if t.items_json else []}
+            for t in templates
         ],
         "ai_analyses": [
             # Transcription rows carry no analysis JSON (models.py documents

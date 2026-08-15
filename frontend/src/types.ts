@@ -95,6 +95,39 @@ export interface Meal {
 
 export type MealCreate = Omit<Meal, 'id'>
 
+/** One ingredient row inside a saved template. */
+export interface TemplateItem {
+  name: string
+  weight_grams: number
+  serving_size: number
+  calories: number
+  protein: number
+  carbs: number | null
+  fat: number | null
+}
+
+export interface MealTemplate {
+  id: number
+  name: string
+  calories: number
+  protein: number
+  carbs: number | null
+  fat: number | null
+  /**
+   * Empty for a template saved while editing an existing meal, which has only
+   * a single pass-through row. Applying such a template falls back to its
+   * totals — see rowsFromTemplate in LogMeal.
+   */
+  items: TemplateItem[]
+  /**
+   * False when the save replaced an existing template with the same name.
+   * Only meaningful on a POST response; listing always reports false.
+   */
+  created: boolean
+}
+
+export type MealTemplateCreate = Omit<MealTemplate, 'id' | 'created'>
+
 export interface Food {
   id: number
   name: string
@@ -240,5 +273,6 @@ export interface AdminUserRow {
   meals: number
   weights: number
   foods: number
+  meal_templates: number
   ai_calls: number
 }

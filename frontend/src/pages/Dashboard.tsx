@@ -5,13 +5,15 @@ import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
-import type { AnalyticsSummary, Meal } from '../types'
+import type { AnalyticsSummary, Meal, MealTemplate } from '../types'
 
 export default function Dashboard() {
   const { settings } = useSettings()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
+  const [templates, setTemplates] = useState<MealTemplate[]>([])
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewedDate, setViewedDate] = useState(localIsoDate)
   const todayRef = useRef(localIsoDate())
@@ -60,6 +62,10 @@ export default function Dashboard() {
       .getAnalytics(addDays(today, -7), addDays(today, -1))
       .then(setWeek)
       .catch(() => setWeek(null))
+    // Quick log is a shortcut, not content: if it fails to load the panel is
+    // simply absent, the same way a failed trend leaves the chart out. Raising
+    // an error banner for it would be louder than the feature is important.
+    api.getMealTemplates().then(setTemplates).catch(() => setTemplates([]))
   }, [viewedDate])
 
   useEffect(() => {
@@ -74,6 +80,18 @@ export default function Dashboard() {
       return
     } finally {
       setConfirmDelete(null)
+    }
+    load()
+  }
+
+  const removeTemplate = async (id: number) => {
+    try {
+      await api.deleteMealTemplate(id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed — try again.')
+      return
+    } finally {
+      setConfirmDeleteTemplate(null)
     }
     load()
   }
@@ -178,6 +196,61 @@ export default function Dashboard() {
               color="#fb7185"
             />
           )}
+        </section>
+      )}
+
+      {/* Hidden entirely until there is something to log. The entry point is
+          the "Save as template" button on Log Meal; a permanent empty-state
+          card would spend prime screen space explaining a feature once.
+
+          Sits above the two-card grid rather than inside it so it stays near
+          the top on mobile, where re-logging yesterday's breakfast belongs. */}
+      {templates.length > 0 && (
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <h3 className="mb-3 font-semibold">Quick log</h3>
+          <ul className="flex flex-wrap gap-2">
+            {templates.map((template) => (
+              <li key={template.id} className="flex items-stretch">
+                {/* Carries the viewed date, not today's: a template tapped
+                    while looking at yesterday must land on yesterday. */}
+                <Link
+                  to="/log"
+                  state={{ template, logDate: viewedDate }}
+                  className="rounded-l-lg border border-r-0 border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-emerald-500 hover:text-emerald-300"
+                >
+                  {template.name}
+                  <span className="ml-2 text-xs text-slate-500">
+                    {Math.round(template.calories)} kcal ·{' '}
+                    {Math.round(template.protein)} g
+                  </span>
+                </Link>
+                {confirmDeleteTemplate === template.id ? (
+                  <>
+                    <button
+                      onClick={() => removeTemplate(template.id)}
+                      className="border border-r-0 border-rose-500/50 bg-rose-500/10 px-2 text-xs text-rose-300 hover:bg-rose-500/20"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteTemplate(null)}
+                      className="rounded-r-lg border border-slate-700 px-2 text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteTemplate(template.id)}
+                    aria-label={`Delete the ${template.name} template`}
+                    className="rounded-r-lg border border-slate-700 px-2 text-xs text-slate-500 hover:text-rose-400"
+                  >
+                    ✕
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

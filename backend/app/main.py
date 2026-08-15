@@ -22,6 +22,7 @@ from .routers import (
     announcements,
     data,
     foods,
+    meal_templates,
     meals,
     settings,
     weights,
@@ -71,8 +72,8 @@ def validation_error_handler(request: Request, exc: RequestValidationError):
 
     That is fine until the rejected value is exactly what JSON cannot express.
     `json.loads` accepts the bare token `Infinity`, so a hand-written request
-    can put inf into a field; a schema that bounds it (allow_inf_nan=False)
-    then rejects it correctly, and rendering the rejection crashes, because
+    can put inf into a field; Pydantic then rejects it correctly (see
+    TemplateItem's allow_inf_nan), and rendering the rejection crashes, because
     Starlette's JSONResponse serializes with allow_nan=False. The caller gets a
     500 for a request the server had already understood and refused.
 
@@ -109,6 +110,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(meals.router)
+app.include_router(meal_templates.router)
 app.include_router(foods.router)
 app.include_router(weights.router)
 app.include_router(analytics.router)

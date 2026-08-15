@@ -55,6 +55,7 @@ def main() -> None:
         for method, path in [
             ("GET", "/api/meals"),
             ("GET", "/api/foods"),
+            ("GET", "/api/meal-templates"),
             ("GET", "/api/settings"),
             ("GET", "/api/analytics/daily"),
             ("GET", "/api/data/export"),
@@ -98,6 +99,26 @@ def main() -> None:
         b_food_id = b_food.json()["id"]
         check(a_food_id != b_food_id, "same-named foods are distinct rows")
 
+        # Same template name for both accounts: the unique index is keyed on
+        # (user_id, lower(name)), so B's save must insert rather than update A's.
+        template = {
+            "name": "Smoke Shared Template", "calories": 620, "protein": 48,
+            "items": [{"name": "Smoke Alpha Ingredient", "weight_grams": 150,
+                       "serving_size": 100, "calories": 165, "protein": 31}],
+        }
+        response = client.post("/api/meal-templates", json=template, headers=headers_a)
+        check(response.status_code == 201, "A creates a meal template")
+        a_template_id = response.json()["id"]
+        check(response.json()["created"] is True, "A's template reports created=true")
+        b_template = client.post(
+            "/api/meal-templates",
+            json={**template, "calories": 999, "items": []},
+            headers=headers_b,
+        )
+        check(b_template.status_code == 201, "B can own a template with A's name")
+        b_template_id = b_template.json()["id"]
+        check(a_template_id != b_template_id, "same-named templates are distinct rows")
+
         # Same weigh-in date for both accounts: the upsert is keyed on
         # (user_id, date), so B's write must insert rather than update A's row.
         weigh_day = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
@@ -135,6 +156,19 @@ def main() -> None:
         check([f["id"] for f in b_foods] == [b_food_id], "B sees only B's foods")
         check(b_foods[0]["calories"] == 999, "B's upsert did not touch A's food")
 
+        b_templates = client.get("/api/meal-templates", headers=headers_b).json()
+        check(
+            [t["id"] for t in b_templates] == [b_template_id],
+            "B sees only B's meal templates",
+        )
+        check(b_templates[0]["calories"] == 999, "B's save did not touch A's template")
+        a_templates = client.get("/api/meal-templates", headers=headers_a).json()
+        check(
+            a_templates[0]["items"][0]["name"] == "Smoke Alpha Ingredient",
+            "A's template kept its ingredient rows",
+        )
+        check(b_templates[0]["items"] == [], "B's template has no ingredient rows")
+
         b_settings = client.get("/api/settings", headers=headers_b).json()
         check(b_settings["calorie_goal"] == 2000, "A's settings change invisible to B")
         check(b_settings["weight_unit"] == "kg", "A's unit change invisible to B")
@@ -161,6 +195,10 @@ def main() -> None:
         check(response.status_code == 404, "B DELETE A's food id -> 404")
         response = client.delete(f"/api/weights/{a_weight_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's weight id -> 404")
+        response = client.delete(
+            f"/api/meal-templates/{a_template_id}", headers=headers_b
+        )
+        check(response.status_code == 404, "B DELETE A's template id -> 404")
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -197,7 +235,7 @@ def main() -> None:
             from sqlalchemy.orm import Session
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from app.models import Food, Meal, Setting, WeightEntry
+            from app.models import Food, Meal, MealTemplate, Setting, WeightEntry
 
             engine = create_engine(os.environ["DATABASE_URL"])
             with Session(engine) as session:
@@ -222,6 +260,16 @@ def main() -> None:
                     == sorted([user_a["id"], user_b["id"]]),
                     "DB: one weigh-in row per user on the shared date",
                 )
+                templates = session.scalars(
+                    select(MealTemplate).where(
+                        MealTemplate.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(t.user_id for t in templates)
+                    == sorted([user_a["id"], user_b["id"]]),
+                    "DB: one template row per user despite the shared name",
+                )
                 for uid in (user_a["id"], user_b["id"]):
                     check(
                         session.get(Setting, uid) is not None,
@@ -239,6 +287,8 @@ def main() -> None:
         client.delete(f"/api/foods/{b_food_id}", headers=headers_b)
         client.delete(f"/api/weights/{a_weight_id}", headers=headers_a)
         client.delete(f"/api/weights/{b_weight_id}", headers=headers_b)
+        client.delete(f"/api/meal-templates/{a_template_id}", headers=headers_a)
+        client.delete(f"/api/meal-templates/{b_template_id}", headers=headers_b)
         # B's imported duplicate meal
         for meal in client.get("/api/meals", headers=headers_b).json():
             client.delete(f"/api/meals/{meal['id']}", headers=headers_b)

@@ -269,6 +269,8 @@ on the caller's data, except these public ones: `/api/health`,
 | DELETE | `/api/auth/account` | Permanently delete the account and all its data |
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
 | DELETE | `/api/meals/{id}` | Delete a meal |
+| GET/POST | `/api/meal-templates` | List saved meals / save one (upsert by name) |
+| DELETE | `/api/meal-templates/{id}` | Delete a saved meal template |
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | POST | `/api/foods` | Save/update a cached food |

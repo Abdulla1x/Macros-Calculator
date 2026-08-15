@@ -247,6 +247,7 @@ export default function Admin() {
                         Weigh-ins
                       </th>
                       <th className="pb-2 pr-4 text-right font-medium">Foods</th>
+                      <th className="pb-2 pr-4 text-right font-medium">Templates</th>
                       <th className="pb-2 text-right font-medium">AI</th>
                     </tr>
                   </thead>
@@ -263,6 +264,7 @@ export default function Admin() {
                         <td className="py-2 pr-4 text-right">{row.meals}</td>
                         <td className="py-2 pr-4 text-right">{row.weights}</td>
                         <td className="py-2 pr-4 text-right">{row.foods}</td>
+                        <td className="py-2 pr-4 text-right">{row.meal_templates}</td>
                         <td className="py-2 text-right">{row.ai_calls}</td>
                       </tr>
                     ))}
