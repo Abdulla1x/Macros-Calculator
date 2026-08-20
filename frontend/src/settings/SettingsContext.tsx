@@ -26,11 +26,17 @@ const SettingsContext = createContext<SettingsState | null>(null)
 
 /** One settings fetch for the whole authenticated app.
  *
- * Dashboard, LogMeal, Weight and Settings each used to call `api.getSettings()`
- * on mount, so navigating between them re-fetched the same row every time —
- * four round trips against an instance that may still be waking up. Worse, a
- * goal edited on the Settings page left the Dashboard's rings showing the old
- * target until that page happened to remount.
+ * Dashboard, LogMeal, Weight, Analytics and Settings each used to call
+ * `api.getSettings()` on mount, so navigating between them re-fetched the same
+ * row every time — five round trips against an instance that may still be
+ * waking up. Worse, a goal edited on the Settings page left the Dashboard's
+ * rings showing the old target until that page happened to remount.
+ *
+ * Analytics was missed by the original migration and kept its own fetch for two
+ * further phases, which is why this list is now spelled out per page rather
+ * than summarised: a comment that says the job is done is what stops the next
+ * reader from checking. If a sixth page needs settings, it reads them here and
+ * this sentence gets longer.
  *
  * Mounted inside RequireAuth so it never fires while logged out: the endpoint
  * is authenticated, and a 401 here would bounce the user to /login. */
