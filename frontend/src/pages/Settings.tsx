@@ -699,6 +699,9 @@ function BodyTargetsCard({
     .map((field) => missingLabels[field] ?? field)
     .join(', ')
 
+  const measured = targets.tdee_source === 'measured'
+  const basis = targets.tdee_basis
+
   const rows: { label: string; value: string; caption: string }[] = [
     {
       label: 'BMI',
@@ -711,10 +714,11 @@ function BodyTargetsCard({
       caption: 'Mifflin-St Jeor, from your height, weight, age and sex.',
     },
     {
-      label: 'Daily burn (TDEE)',
+      label: measured ? 'Daily burn (measured)' : 'Daily burn (estimated)',
       value: targets.tdee === null ? '—' : `${Math.round(targets.tdee)} kcal`,
-      caption:
-        'Resting burn × a fixed multiplier for your activity level. The multiplier is a convention, and the roughest step here.',
+      caption: measured
+        ? `Measured from what you actually logged: ${basis?.logged_days} days of meals against ${basis?.weigh_ins} weigh-ins over ${basis?.span_days} days. The formula would have said ${Math.round(targets.tdee_estimated ?? 0)} kcal.`
+        : 'Resting burn × a fixed multiplier for your activity level. The multiplier is a convention, and the roughest step here.',
     },
     {
       label: 'Calorie target',
@@ -722,7 +726,9 @@ function BodyTargetsCard({
         targets.target_calories === null
           ? '—'
           : `${Math.round(targets.target_calories)} kcal`,
-      caption: 'Your daily burn, adjusted for the rate you asked for.',
+      caption: measured
+        ? 'Your measured daily burn, adjusted for the rate you asked for.'
+        : 'Your daily burn, adjusted for the rate you asked for.',
     },
     {
       label: 'Macro split',
@@ -750,15 +756,25 @@ function BodyTargetsCard({
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <h3 className="mb-1 font-semibold">What your profile works out to</h3>
       <p className="mb-4 text-sm text-slate-400">
-        Estimates, not measurements — a formula applied to what you typed above.
-        They can be a few hundred calories out for any one person, so treat them
-        as a starting point and let your own weight trend correct them.
-        {unit === 'lb' && ' Weights here are shown in kg, as the formula uses them.'}
+        {measured
+          ? 'Your daily burn is now measured from your own logs — what you ate, ' +
+            'against how your weight actually moved — rather than predicted by a ' +
+            'formula. BMI and resting burn below are still formulas.'
+          : 'Estimates, not measurements — a formula applied to what you typed above. ' +
+            'They can be a few hundred calories out for any one person, so treat them ' +
+            'as a starting point and let your own weight trend correct them.'}
+        {unit === 'lb' && ' Weights here are shown in kg, as the formulas use them.'}
       </p>
 
       {stillNeeded && (
         <p className="mb-4 rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300">
           Add {stillNeeded} to see the rest.
+        </p>
+      )}
+
+      {!measured && basis?.unavailable_reason && (
+        <p className="mb-4 rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-300">
+          {basis.unavailable_reason}
         </p>
       )}
 

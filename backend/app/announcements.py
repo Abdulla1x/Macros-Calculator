@@ -23,6 +23,29 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-20-measured-tdee",
+        date="2026-08-20",
+        title="Your calorie burn is now measured, not guessed",
+        body=(
+            "Until now the app worked out your daily burn from a formula — your "
+            "height, age and sex, times a rough multiplier for how active you "
+            "said you were. That multiplier is a convention, and it can be a "
+            "few hundred calories out for any one person. Now, once you have "
+            "logged enough, the app measures your burn from your own data "
+            "instead: what you actually ate, against how your weight actually "
+            "moved. It needs about two weeks — 10 or more weigh-ins spread "
+            "across at least 14 days, with meals logged on most of them — and "
+            "until then it keeps using the formula and tells you exactly what "
+            "it is still waiting for. When it does measure, it shows you the "
+            "sample it used and what the old formula would have said, so you "
+            "can see the two agree or disagree. Today's half-finished logging "
+            "never counts, so your goal cannot drift while you are eating "
+            "towards it. If your logs imply you burn less than your body uses "
+            "at rest, the app says so rather than quietly handing you a very "
+            "low target — that almost always means meals are going unlogged."
+        ),
+    ),
+    Announcement(
         id="2026-08-20-body-profile-targets",
         date="2026-08-20",
         title="Daily goals that follow your weight",

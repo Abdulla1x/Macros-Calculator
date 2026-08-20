@@ -176,6 +176,37 @@ MAX_GOAL_RATE_KG_PER_WEEK = 1.0
 MIN_TARGET_KCAL = {"male": 1500.0, "female": 1200.0}
 MIN_TARGET_FRACTION_OF_TDEE = 0.75
 
+# POLICY. How much logging is enough before an energy-balance TDEE is allowed to
+# drive a target. All three are refusals, chosen against real data rather than
+# picked round: on a genuinely dense fortnight (24/24 logged days, 23 weigh-ins)
+# a 7-day window produced 2700 kcal against 2498 from the formula, because trend
+# weight had moved -0.01 kg over 6 days and dividing 7700 kcal/kg by that much
+# noise amplifies it. Every window of 10 days or more landed within 2-4% of the
+# formula. 14 is where the number stopped moving.
+#
+# The span is measured between the first and last weigh-in *inclusive*, not from
+# the window's nominal width -- what matters is the period the slope was
+# actually fitted over.
+TDEE_MIN_SPAN_DAYS = 14
+TDEE_MIN_LOGGED_DAYS = 10
+TDEE_MIN_WEIGH_INS = 10
+
+# POLICY. And how much of the measured period has to be logged, as a fraction.
+# The mean intake stands in for every day in the span, including the unlogged
+# ones, so this bounds how far that extrapolation is allowed to reach. The
+# absolute floor above binds at the shortest allowed span; this one binds as
+# the span grows, which is where a 10-of-28-days average would otherwise start
+# describing mostly days nobody recorded.
+TDEE_MIN_LOGGED_FRACTION = 0.7
+
+# POLICY. The band a measured TDEE has to land in to be believable, as a
+# multiple of the same person's BMR. The lower bound is the one that matters:
+# nobody expends less than they would lying still, so a measured value beneath
+# it is proof the inputs are wrong -- almost always meals that were eaten and
+# not logged -- rather than a discovery about their metabolism. The upper bound
+# catches the mirror error (a mistyped weigh-in inventing a large loss).
+TDEE_PLAUSIBLE_BMR_RANGE = (1.1, 2.5)
+
 
 class TargetCalories(NamedTuple):
     """A calorie target, and why it is not the one the rate asked for.
@@ -266,6 +297,85 @@ def estimated_tdee(
     """
     bmr = bmr_mifflin_st_jeor(weight_kg, height_cm, age, sex)
     return round(bmr * activity_multiplier(activity_level), 1)
+
+
+def measured_tdee(
+    mean_daily_intake: float,
+    weekly_rate_kg: float,
+    kcal_per_kg: float = KCAL_PER_KG,
+) -> float:
+    """Total daily energy expenditure, measured from this person's own data.
+
+    Energy balance, and nothing more: what you ate, minus what your body banked
+    as tissue, is what you burned. Both inputs must describe the **same days** --
+    a mean intake over one period and a weight slope over another is not an
+    energy balance, it is two unrelated numbers subtracted. `RATE_WINDOW_DAYS`
+    is what keeps them aligned; see `targets.py`.
+
+    Unlike `estimated_tdee` this needs no height, age, sex or activity guess. It
+    observes the individual instead of predicting them from a population, which
+    is the whole point: the activity multiplier is the roughest step in the
+    formula chain and this replaces it outright rather than tuning it.
+
+    Note for Phase 7 (steps): the number returned here **already contains** the
+    energy spent on every step taken during the measurement window. Adding a
+    step-derived burn on top of it double-counts, and would tell the user to eat
+    several hundred kcal more than they should. Steps may feed `estimated_tdee`,
+    never this.
+    """
+    stored_kcal_per_day = (weekly_rate_kg / 7.0) * kcal_per_kg
+    return round(mean_daily_intake - stored_kcal_per_day, 1)
+
+
+class PlausibleTDEE(NamedTuple):
+    """A measured TDEE, and why it is not the number the data implied.
+
+    Same shape and same contract as `TargetCalories`: when `clamped_reason` is
+    set the UI is expected to show it, because a silently corrected number
+    leaves the user believing inputs that are actually wrong.
+    """
+
+    calories: float
+    clamped_reason: str | None
+
+
+def clamp_measured_tdee(
+    tdee: float,
+    bmr: float,
+    bounds: tuple[float, float] = TDEE_PLAUSIBLE_BMR_RANGE,
+) -> PlausibleTDEE:
+    """Hold a measured TDEE inside a believable band around the person's BMR.
+
+    This is the guard that matters most, and the reason it cannot be left to
+    `target_calories`'s existing floor is worth stating plainly: that floor is
+    computed as a fraction *of the TDEE itself*, so a TDEE dragged down by
+    unlogged meals drags its own safety floor down with it and the check passes.
+    Anchoring to BMR instead brings in a quantity that under-logging cannot
+    move, because it is derived from body measurements rather than from intake.
+    """
+    low, high = bounds
+    floor, ceiling = bmr * low, bmr * high
+
+    if tdee < floor:
+        return PlausibleTDEE(
+            calories=float(round(floor)),
+            clamped_reason=(
+                f"Your logged intake works out to {round(tdee):g} kcal a day "
+                f"burned, which is below what your body uses at rest — that is "
+                f"not possible, and it usually means some meals aren't being "
+                f"logged. Using {round(floor):g} kcal until the logs catch up."
+            ),
+        )
+    if tdee > ceiling:
+        return PlausibleTDEE(
+            calories=float(round(ceiling)),
+            clamped_reason=(
+                f"Your logs work out to {round(tdee):g} kcal a day burned, which "
+                f"is higher than this calculation can credibly explain — usually "
+                f"a mistyped weigh-in. Using {round(ceiling):g} kcal instead."
+            ),
+        )
+    return PlausibleTDEE(calories=float(round(tdee)), clamped_reason=None)
 
 
 def target_calories(

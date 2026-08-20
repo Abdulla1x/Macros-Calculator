@@ -214,9 +214,13 @@ class Setting(Base):
     # would ever notice it had gone stale.
     birth_date: Mapped[date_type | None] = mapped_column(Date, default=None)
     # Binary, because Mifflin-St Jeor takes a binary term. That is a limitation
-    # of the formula rather than a claim about people, the field is optional,
-    # and a measured TDEE replaces the formula entirely once there is data. The
-    # Settings UI says so in those words.
+    # of the formula rather than a claim about people, and the field is
+    # optional. This note used to add that a measured TDEE would replace the
+    # formula entirely once there was data; Phase 5 built that, and it turned
+    # out to be only half true. Measured TDEE does replace the *activity
+    # multiplier*, but BMR is now what bounds a measured value into a
+    # believable range -- so the sex term became more load-bearing, not less.
+    # The Settings UI says the field is optional, which remains accurate.
     sex: Mapped[str | None] = mapped_column(String(6), default=None)
     activity_level: Mapped[str | None] = mapped_column(String(12), default=None)
     # Signed: negative loses weight, positive gains, zero maintains.

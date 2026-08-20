@@ -289,6 +289,49 @@ def test_targets_never_read_another_users_weigh_ins(client, client_b):
     assert b_targets["target_calories"] is not None
 
 
+def test_a_measured_tdee_never_eats_another_users_meals(client, client_b):
+    """Targets now read a *second* user-owned table, so the gate needs widening.
+
+    Measured TDEE averages the account's logged intake. An unscoped meals query
+    would not leak a meal name anywhere visible — it would fold a stranger's
+    eating into this user's measured burn and then into the goals written on
+    their dashboard, which is a leak that shows up only as a wrong number.
+
+    B logs a dense, measurable history. A logs an identical weigh-in history
+    with no meals at all, so if the intake query were unscoped A would measure
+    B's diet.
+    """
+    profile = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
+        "activity_level": "moderate", "goal_rate_kg_per_week": 0.0,
+    }
+    client.put("/api/settings", json=profile)
+    client_b.put("/api/settings", json=profile)
+
+    for days_ago in range(1, 21):
+        day = (date.today() - timedelta(days=days_ago)).isoformat()
+        for who in (client, client_b):
+            who.post("/api/weights", json={"date": day, "weight_kg": 80.0})
+        client_b.post(
+            "/api/meals",
+            json={"date": day, "name": "Beta Meal", "calories": 3300, "protein": 100},
+        )
+
+    a_targets = client.get("/api/settings/targets").json()
+    b_targets = client_b.get("/api/settings/targets").json()
+
+    # B has the logs, so B gets measured.
+    assert b_targets["tdee_source"] == "measured"
+    assert b_targets["tdee_basis"]["logged_days"] == 20
+
+    # A has none, so A must fall back rather than inherit B's intake.
+    assert a_targets["tdee_source"] == "estimated"
+    assert a_targets["tdee_basis"]["logged_days"] == 0
+    assert a_targets["tdee"] != b_targets["tdee"]
+
+
 def test_auto_targets_are_computed_from_your_own_body(client, client_b):
     """Same query, but on the write path: a weigh-in rewrites goals, and it
     must rewrite only the goals of the account that logged it."""

@@ -79,12 +79,26 @@ export interface Settings {
   targets_auto: boolean
 }
 
+/** What a measured TDEE was built from, or what it is still short of. */
+export interface TdeeBasis {
+  logged_days: number
+  weigh_ins: number
+  span_days: number
+  mean_intake: number | null
+  trend_change_kg: number | null
+  /** Null exactly when the measurement was used. */
+  unavailable_reason: string | null
+}
+
 /** What the profile implies, and what is stopping it implying more.
  *
- * Every number here is derived, never measured, which is why `weight_kg` and
- * `weight_date` travel with it — the input has to be visible beside the
- * conclusion. `missing` names the absent profile fields, so the UI can ask for
- * the one that is blocking instead of rendering an empty card. */
+ * Most of these are derived rather than measured, which is why `weight_kg` and
+ * `weight_date` travel with them — the input has to be visible beside the
+ * conclusion. `tdee` is the exception once `tdee_source` is `measured`: it then
+ * comes from this person's own logs rather than a formula, and `tdee_basis`
+ * carries the sample it was taken from. `missing` names the absent profile
+ * fields, so the UI can ask for the one that is blocking instead of rendering
+ * an empty card. */
 export interface BodyTargets {
   missing: string[]
   bmi: number | null
@@ -97,6 +111,11 @@ export interface BodyTargets {
   weight_kg: number | null
   weight_date: string | null
   clamped_reason: string | null
+  /** Which method produced `tdee`. */
+  tdee_source: 'estimated' | 'measured'
+  /** The formula's answer, kept even when measurement won, so both can show. */
+  tdee_estimated: number | null
+  tdee_basis: TdeeBasis | null
 }
 
 export interface WeightEntry {

@@ -303,6 +303,24 @@ class Settings(BaseModel):
         return value
 
 
+class TdeeBasis(BaseModel):
+    """The sample a measured TDEE rests on, or what it is still short of.
+
+    `unavailable_reason` is None exactly when the measurement was used, and
+    carries a sentence naming what is missing otherwise. It deliberately does
+    **not** travel in `BodyTargets.missing`: falling back to the formula is not
+    a failure, the user still gets a working target, and listing it as missing
+    would make a complete profile read as incomplete forever.
+    """
+
+    logged_days: int
+    weigh_ins: int
+    span_days: int
+    mean_intake: float | None = None
+    trend_change_kg: float | None = None
+    unavailable_reason: str | None = None
+
+
 class BodyTargets(BaseModel):
     """What the profile implies, and what is stopping it implying more.
 
@@ -326,6 +344,18 @@ class BodyTargets(BaseModel):
     # Shown verbatim; a target that silently disagrees with the rate the user
     # typed leaves them believing the rate.
     clamped_reason: str | None = None
+    # Which method produced `tdee`. Every field here is mirrored on
+    # `targets.TargetsResult`, and must stay mirrored: FastAPI runs the returned
+    # dataclass through `dataclasses.asdict` before validating it here, so a
+    # field this schema declares and that dataclass omits serialises silently as
+    # the default below instead of failing. Phase 2 demoted every admin that
+    # way and Phase 3 emptied every template.
+    tdee_source: Literal["estimated", "measured"] = "estimated"
+    # The formula's answer, kept even when measurement won, so the two can be
+    # shown together. Agreement is reassuring and divergence is diagnostic --
+    # either way it is information the user is entitled to.
+    tdee_estimated: float | None = None
+    tdee_basis: TdeeBasis | None = None
 
 
 class DayTotals(BaseModel):
