@@ -33,6 +33,37 @@ def test_import_handles_invalid_rows_and_date_formats(client):
     assert {meal["date"] for meal in meals} == {"2026-07-01", "2026-07-02"}
 
 
+def test_import_skips_non_finite_macros(client):
+    """The importer is the only path that writes a Meal without MealCreate.
+
+    `float()` parses all three of these, and `inf >= 0` is True, so before the
+    isfinite check they imported as valid rows. The cost was not theoretical:
+    one stored `inf` makes GET /api/data/export/all raise
+    "Out of range float values are not JSON compliant" for the rest of that
+    account's life, with no way for the user to tell which row did it.
+
+    Reachable without any hand-written request — pandas writes `inf` when it
+    serializes an infinite value, so an export-edit-reimport round trip is
+    enough.
+    """
+    csv_content = (
+        "date,name,calories,protein\n"
+        "2026-07-01,Good Meal,400,30\n"
+        "2026-07-01,Infinity Word,Infinity,30\n"
+        "2026-07-01,Lowercase Inf,inf,30\n"
+        "2026-07-01,Overflowing Exponent,1e999,30\n"
+        "2026-07-01,Not A Number,nan,30\n"
+    )
+    result = client.post(
+        "/api/data/import", files={"file": ("data.csv", csv_content, "text/csv")}
+    ).json()
+    assert result["inserted"] == 1
+    assert result["skipped_invalid"] == 4
+
+    # And the export the bad rows would have broken still works.
+    assert client.get("/api/data/export/all").status_code == 200
+
+
 def test_import_rejects_missing_columns(client):
     response = client.post(
         "/api/data/import", files={"file": ("bad.csv", "foo,bar\n1,2\n", "text/csv")}

@@ -1,5 +1,6 @@
 from app.schemas import OFFProduct
 from app.services import off_client
+from conftest import post_raw_json
 
 
 def _chicken(**overrides):
@@ -34,6 +35,20 @@ def test_saving_same_name_updates_macros(client):
     foods = client.get("/api/foods").json()
     assert len(foods) == 1
     assert foods[0]["calories"] == 170
+
+
+def test_rejects_non_finite_macros(client):
+    """Same hole as MealCreate had: `inf >= 0` and `inf > 0` are both True.
+
+    A food is the wider blast radius of the two — FoodAutocomplete writes one on
+    every Open Food Facts pick, so a bad row would be read back into the meal
+    form as well as into the export.
+    """
+    for field in ("serving_size", "calories", "protein", "carbs", "fat"):
+        response = post_raw_json(
+            client, "/api/foods", _chicken(**{field: float("inf")})
+        )
+        assert response.status_code == 422, f"{field}=inf was accepted"
 
 
 def test_delete_food(client):

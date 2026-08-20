@@ -6,6 +6,8 @@ date would start failing on its own once enough time passed.
 """
 from datetime import date, timedelta
 
+from conftest import post_raw_json
+
 
 def days_ago(n: int) -> str:
     return (date.today() - timedelta(days=n)).isoformat()
@@ -30,6 +32,21 @@ def test_log_list_and_delete(client):
     assert client.delete(f"/api/weights/{body['id']}").status_code == 204
     assert [e["date"] for e in client.get("/api/weights").json()] == [days_ago(1)]
     assert client.delete(f"/api/weights/{body['id']}").status_code == 404
+
+
+def test_non_finite_weight_is_refused_by_the_existing_bound(client):
+    """WeightEntryCreate is the one macro-ish schema with no allow_inf_nan=False.
+
+    It does not need one: MAX_WEIGHT_KG already rejects `inf`, and `nan` fails
+    every comparison it is given. This test exists so that stays true — if the
+    upper bound were ever loosened, the hole would open silently and this is the
+    only thing that would notice.
+    """
+    for bad in (float("inf"), float("-inf"), float("nan")):
+        response = post_raw_json(
+            client, "/api/weights", {"date": days_ago(1), "weight_kg": bad}
+        )
+        assert response.status_code == 422, f"weight_kg={bad} was accepted"
 
 
 def test_relogging_a_date_replaces_rather_than_duplicates(client):

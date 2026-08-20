@@ -1,3 +1,6 @@
+from conftest import post_raw_json
+
+
 def _sample(**overrides):
     meal = {
         "date": "2026-07-01",
@@ -35,6 +38,34 @@ def test_optional_macros_can_be_omitted(client):
 def test_rejects_negative_and_blank(client):
     assert client.post("/api/meals", json=_sample(calories=-5)).status_code == 422
     assert client.post("/api/meals", json=_sample(name="")).status_code == 422
+
+
+def test_rejects_non_finite_macros(client):
+    """Positive infinity is the one `ge=0` let through: `inf >= 0` is True.
+
+    (`nan` and `-inf` were already refused by the bound itself.) Stored, one such
+    value breaks the account two ways at once — GET /api/data/export/all 500s,
+    because it returns a plain dict whose raw float meets Starlette's
+    allow_nan=False, while GET /api/meals quietly reports `null` for a field
+    types.ts declares as `number`.
+    """
+    for field in ("calories", "protein", "carbs", "fat"):
+        for bad in (float("inf"), float("-inf"), float("nan")):
+            response = post_raw_json(client, "/api/meals", _sample(**{field: bad}))
+            assert response.status_code == 422, f"{field}={bad} was accepted"
+
+
+def test_the_rejection_itself_renders(client):
+    """Regression for the 422-that-500s, now reachable outside templates.
+
+    FastAPI echoes the rejected value back under `input`, and Starlette
+    serializes the body with allow_nan=False — so rendering this particular
+    rejection used to crash. main.py's validation_error_handler is what fixes
+    it; this is the first meals-side test that depends on it.
+    """
+    response = post_raw_json(client, "/api/meals", _sample(calories=float("inf")))
+    assert response.status_code == 422
+    assert "detail" in response.json()
 
 
 def test_update_meal(client):
