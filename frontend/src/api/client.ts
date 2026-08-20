@@ -72,14 +72,23 @@ async function request<T>(
       signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
-    // A dead network and our own deadline both land here and mean the same
-    // thing to the user. status 0 marks "no HTTP response happened" so callers
-    // can still tell it apart from a real 5xx.
+    // A dead network, our own deadline, and a provider-level outage all land
+    // here. status 0 marks "no HTTP response happened" so callers can still
+    // tell it apart from a real 5xx.
+    //
+    // The third case is why this message must not blame the user's network.
+    // When the host's edge answers 502/503 the response carries no CORS
+    // headers, so the browser blocks it and `fetch` rejects before we ever see
+    // a status code — a total outage is indistinguishable here from an
+    // unplugged cable. Observed for real on 2026-08-20, when Render disabled
+    // spin-up for free services during a Google Cloud incident and every user
+    // was told to check a connection that was working perfectly.
     const timedOut = err instanceof DOMException && err.name === 'TimeoutError'
     throw new ApiError(
       timedOut
         ? 'That took too long — the server may be waking up. Try again.'
-        : 'Could not reach the server. Check your connection and try again.',
+        : 'Could not reach the server. It may be temporarily unavailable — ' +
+          'check your connection, or try again in a few minutes.',
       0,
     )
   }
