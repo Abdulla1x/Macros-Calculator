@@ -3,8 +3,18 @@ from datetime import date, timedelta
 import pytest
 
 from app.calculations import (
+    KCAL_PER_G_CARB,
+    KCAL_PER_G_FAT,
+    KCAL_PER_G_PROTEIN,
     TrendPoint,
+    activity_multiplier,
+    age_years,
+    bmi,
+    bmr_mifflin_st_jeor,
+    estimated_tdee,
+    macro_targets,
     scale_macros,
+    target_calories,
     total_macros,
     weekly_rate,
     weight_trend,
@@ -145,3 +155,132 @@ def test_total_macros_all_missing_stays_none():
     totals = total_macros(items)
     assert totals["carbs"] is None
     assert totals["fat"] is None
+
+
+# --- Body profile → energy targets -------------------------------------------
+
+
+def test_age_years_counts_the_birthday_itself_as_the_new_age():
+    born = date(1990, 5, 4)
+    assert age_years(born, on=date(2026, 5, 3)) == 35
+    assert age_years(born, on=date(2026, 5, 4)) == 36
+    assert age_years(born, on=date(2026, 5, 5)) == 36
+
+
+def test_age_years_handles_a_december_birthday_in_january():
+    assert age_years(date(1990, 12, 31), on=date(2026, 1, 1)) == 35
+
+
+def test_bmi_is_none_when_either_input_is_missing():
+    """Both inputs are optional profile fields, so "unknown" is not an error."""
+    assert bmi(None, 180) is None
+    assert bmi(80, None) is None
+    assert bmi(80, 0) is None
+
+
+def test_bmi_matches_the_definition():
+    # 80 kg / 1.80 m² = 80 / 3.24 = 24.69…
+    assert bmi(80, 180) == pytest.approx(24.7, abs=0.05)
+
+
+def test_bmr_matches_a_hand_worked_mifflin_st_jeor():
+    # 10(80) + 6.25(180) - 5(35) + 5 = 800 + 1125 - 175 + 5 = 1755
+    assert bmr_mifflin_st_jeor(80, 180, 35, "male") == pytest.approx(1755, abs=0.05)
+    # The female offset is -161 rather than +5, a 166 kcal difference.
+    assert bmr_mifflin_st_jeor(80, 180, 35, "female") == pytest.approx(1589, abs=0.05)
+
+
+def test_bmr_rejects_an_unknown_sex_rather_than_guessing():
+    with pytest.raises(ValueError):
+        bmr_mifflin_st_jeor(80, 180, 35, "unspecified")
+
+
+def test_bmr_rejects_impossible_measurements():
+    with pytest.raises(ValueError):
+        bmr_mifflin_st_jeor(0, 180, 35, "male")
+    with pytest.raises(ValueError):
+        bmr_mifflin_st_jeor(80, 0, 35, "male")
+
+
+def test_activity_multiplier_raises_rather_than_defaulting_to_sedentary():
+    """A silent fallback would make a bad stored level read as a real TDEE."""
+    with pytest.raises(ValueError):
+        activity_multiplier("athlete")
+
+
+def test_estimated_tdee_is_bmr_times_the_multiplier():
+    # 1755 * 1.55 (moderate) = 2720.25
+    assert estimated_tdee(80, 180, 35, "male", "moderate") == pytest.approx(
+        2720.25, abs=0.1
+    )
+
+
+def test_target_calories_applies_the_requested_rate_when_it_is_reasonable():
+    # -0.5 kg/week * 7700 kcal/kg / 7 days = -550 kcal/day, off a 3000 TDEE.
+    result = target_calories(3000, -0.5, "male")
+    assert result.calories == 2450
+    assert result.clamped_reason is None
+
+
+def test_target_calories_reports_both_clamps_when_both_fire():
+    """Asking for -5 kg/week trips the rate cap, and the result trips the floor.
+
+    The rate is capped at -1 kg/week, giving 3000 - 1100 = 1900; the floor is
+    max(1500 absolute, 0.75 * 3000 = 2250), so 1900 is raised again. The user
+    asked for a rate and got neither it nor the target it implies, and needs
+    telling twice over.
+    """
+    result = target_calories(3000, -5, "male")
+    assert result.calories == 2250
+    assert "Rate limited" in result.clamped_reason
+    assert "Raised to" in result.clamped_reason
+
+
+def test_target_calories_never_returns_below_the_floor():
+    """A legal rate can still land somewhere nobody should eat."""
+    result = target_calories(2000, -1, "female")
+    # 2000 - 1100 = 900, below both the 1200 absolute floor and the 1500
+    # fractional one (0.75 * 2000). The higher of the two wins.
+    assert result.calories == 1500
+    assert "Raised to" in result.clamped_reason
+
+
+def test_target_calories_leaves_a_surplus_alone():
+    result = target_calories(2500, 0.25, "male")
+    assert result.calories == pytest.approx(2775, abs=1)
+    assert result.clamped_reason is None
+
+
+def test_macro_targets_sum_back_to_the_calorie_target():
+    macros = macro_targets(2400, 80)
+    total = (
+        macros["protein"] * KCAL_PER_G_PROTEIN
+        + macros["carbs"] * KCAL_PER_G_CARB
+        + macros["fat"] * KCAL_PER_G_FAT
+    )
+    # Within the rounding to whole grams, which can move each macro by half a
+    # gram — up to about 9 kcal once fat is weighted.
+    assert total == pytest.approx(2400, abs=10)
+
+
+def test_macro_targets_scale_protein_with_body_weight_not_calories():
+    """The reason this is not a fixed percentage split.
+
+    Halving the calorie target must not halve protein: during a cut protein is
+    the macro that matters most and calories the one that matters least.
+    """
+    heavy = macro_targets(2400, 100)
+    light = macro_targets(2400, 60)
+    assert heavy["protein"] > light["protein"]
+
+    cutting = macro_targets(1600, 80)
+    maintaining = macro_targets(2400, 80)
+    assert cutting["protein"] == maintaining["protein"]
+
+
+def test_macro_targets_floor_carbs_at_zero_rather_than_going_negative():
+    # 200 kg of body weight against a 1200 kcal target: protein alone is 360 g
+    # = 1440 kcal, already over budget before fat is counted.
+    macros = macro_targets(1200, 200)
+    assert macros["carbs"] == 0
+    assert macros["protein"] > 0

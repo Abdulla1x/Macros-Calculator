@@ -232,6 +232,23 @@ class WeightTrend(BaseModel):
     point_count: int
 
 
+# Taller than the tallest human ever recorded, so a misplaced decimal point is
+# rejected and every real value is accepted -- the MAX_WEIGHT_KG argument.
+MAX_HEIGHT_CM = 272
+
+# Deliberately far wider than the 1 kg/week that `calculations.py` will clamp
+# to. The clamp *explains itself* in the response; a 422 does not. Someone who
+# types -3 should be told why they are getting -1, not handed a validation
+# error that reads like the field is broken. This bound only catches input that
+# is not a rate at all.
+MAX_INPUT_GOAL_RATE_KG_PER_WEEK = 5.0
+
+# Older than the oldest verified human. Same job as the two bounds above.
+MAX_AGE_YEARS = 122
+
+ACTIVITY_LEVELS = Literal["sedentary", "light", "moderate", "active", "very_active"]
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -248,6 +265,67 @@ class Settings(BaseModel):
     # Defaulted, unlike the goals: clients written before this field existed
     # still PUT a valid body.
     weight_unit: Literal["kg", "lb"] = "kg"
+
+    # Body profile. Every field defaults, for the reason weight_unit does, and
+    # every field name matches its column name exactly -- which is what keeps
+    # `from_attributes` honest here. A response field whose name diverges from
+    # its attribute silently returns the default instead of failing, the trap
+    # `_user_out` and `_template_out` both exist to avoid.
+    #
+    # No allow_inf_nan on the two floats: each carries an upper bound, which
+    # closes inf and nan already. See WeightEntryCreate.
+    height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
+    birth_date: date_type | None = None
+    sex: Literal["male", "female"] | None = None
+    activity_level: ACTIVITY_LEVELS | None = None
+    goal_rate_kg_per_week: float | None = Field(
+        default=None,
+        ge=-MAX_INPUT_GOAL_RATE_KG_PER_WEEK,
+        le=MAX_INPUT_GOAL_RATE_KG_PER_WEEK,
+    )
+    targets_auto: bool = False
+
+    @field_validator("birth_date")
+    @classmethod
+    def plausible_birth_date(cls, value: date_type | None) -> date_type | None:
+        """A birth date in the future, or implausibly far past, is a typo.
+
+        Modelled on WeightEntryCreate.not_in_future, and using the same UTC
+        slack: the server's today may be a day behind the user's.
+        """
+        if value is None:
+            return value
+        today = date_type.today()
+        if value > today + timedelta(days=FUTURE_DATE_GRACE_DAYS):
+            raise ValueError("birth date cannot be in the future")
+        if value < today.replace(year=today.year - MAX_AGE_YEARS):
+            raise ValueError(f"birth date implies an age over {MAX_AGE_YEARS}")
+        return value
+
+
+class BodyTargets(BaseModel):
+    """What the profile implies, and what is stopping it implying more.
+
+    Every derived number here travels with the input it came from -- the weight
+    used and the date it was logged -- because none of these are measurements
+    of the person. `missing` names the profile fields that are absent, so the
+    UI can ask for the one that is blocking rather than showing an empty card.
+    """
+
+    missing: list[str]
+    bmi: float | None = None
+    bmr: float | None = None
+    tdee: float | None = None
+    target_calories: float | None = None
+    protein_g: float | None = None
+    carbs_g: float | None = None
+    fat_g: float | None = None
+    weight_kg: float | None = None
+    weight_date: date_type | None = None
+    # Set when a safety clamp moved the target away from the requested rate.
+    # Shown verbatim; a target that silently disagrees with the rate the user
+    # typed leaves them believing the rate.
+    clamped_reason: str | None = None
 
 
 class DayTotals(BaseModel):

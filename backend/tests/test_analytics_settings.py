@@ -89,21 +89,113 @@ def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
     assert padded["logged_days"] == 2
 
 
+# An account that has never opened Settings. Spelled out once because several
+# tests below assert against the whole payload, and a field missing from the
+# response is exactly the kind of regression those assertions exist to catch.
+EMPTY_PROFILE = {
+    "height_cm": None, "birth_date": None, "sex": None,
+    "activity_level": None, "goal_rate_kg_per_week": None,
+    "targets_auto": False,
+}
+
+
 def test_settings_defaults_and_update(client):
     defaults = client.get("/api/settings").json()
     assert defaults == {
         "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
         "fat_goal": 70, "track_carbs": False, "track_fat": False,
-        "weight_unit": "kg",
+        "weight_unit": "kg", **EMPTY_PROFILE,
     }
 
     updated = {
         "calorie_goal": 2400, "protein_goal": 180, "carbs_goal": 300,
         "fat_goal": 80, "track_carbs": True, "track_fat": False,
-        "weight_unit": "lb",
+        "weight_unit": "lb", **EMPTY_PROFILE,
     }
     assert client.put("/api/settings", json=updated).json() == updated
     assert client.get("/api/settings").json() == updated
+
+
+def test_body_profile_round_trips(client):
+    profile = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "weight_unit": "kg",
+        "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
+        "activity_level": "moderate", "goal_rate_kg_per_week": -0.5,
+        "targets_auto": False,
+    }
+    assert client.put("/api/settings", json=profile).json() == profile
+    assert client.get("/api/settings").json() == profile
+
+
+def test_a_put_without_profile_fields_leaves_them_alone(client):
+    """The stale-bundle guarantee: omitting a field must not blank it.
+
+    This app is an installed PWA, so a tab opened before the deploy that added
+    the body profile goes on PUTting a body without those keys until it is
+    reloaded. Under the replace semantics the other six fields use, that would
+    silently wipe the user's height and birth date on their next save.
+    """
+    client.put("/api/settings", json={
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "height_cm": 175.0, "sex": "female",
+    })
+
+    legacy_body = {
+        "calorie_goal": 2300, "protein_goal": 160, "carbs_goal": 260,
+        "fat_goal": 75, "track_carbs": False, "track_fat": False,
+    }
+    saved = client.put("/api/settings", json=legacy_body).json()
+
+    assert saved["height_cm"] == 175.0
+    assert saved["sex"] == "female"
+    assert saved["calorie_goal"] == 2300  # the replaced fields still replace
+
+
+def test_an_explicit_null_still_clears_a_profile_field(client):
+    """"Did not send" and "sent null" are different, and only one is a no-op."""
+    base = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    client.put("/api/settings", json={**base, "height_cm": 175.0})
+    saved = client.put("/api/settings", json={**base, "height_cm": None}).json()
+    assert saved["height_cm"] is None
+
+
+def test_settings_reject_implausible_profile_values(client):
+    base = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    bad_values = [
+        ("height_cm", 0), ("height_cm", -170), ("height_cm", 5000),
+        ("sex", "other"), ("sex", "Male"),
+        ("activity_level", "athlete"), ("activity_level", ""),
+        ("goal_rate_kg_per_week", 50), ("goal_rate_kg_per_week", -50),
+        ("birth_date", "2099-01-01"), ("birth_date", "1600-01-01"),
+    ]
+    for field, bad in bad_values:
+        response = client.put("/api/settings", json={**base, field: bad})
+        assert response.status_code == 422, f"{field}={bad!r} was accepted"
+
+
+def test_a_goal_rate_the_clamp_will_reduce_is_still_accepted(client):
+    """The clamp explains itself; a 422 does not.
+
+    -3 kg/week is not a typo, it is an over-ambitious plan. It has to reach
+    `target_calories` so the response can say why the target it gets back is
+    not the one that rate implies.
+    """
+    base = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    response = client.put("/api/settings", json={**base, "goal_rate_kg_per_week": -3})
+    assert response.status_code == 200
+    assert response.json()["goal_rate_kg_per_week"] == -3
 
 
 def test_settings_reject_non_positive_goals(client):

@@ -53,6 +53,13 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### ⚙️ Configurable tracking
 - Calories + protein always on; **carbs and fat are opt-in**
 - Per-macro daily goals drive the dashboard rings, log form, and analytics
+- Optional **body profile** (height, date of birth, sex, activity level, goal
+  rate) turns into BMI, an estimated daily burn, and calorie/macro targets —
+  every figure shown next to the input it came from, because they are estimates
+  from a formula, not measurements
+- Let the app **keep those goals in step with your weight**: with auto-targets
+  on, the daily goals are recalculated on every weigh-in instead of staying
+  wherever you first set them
 
 ### 📈 Analytics
 - Any date range: totals, daily averages, per-macro trend charts, daily table
@@ -84,9 +91,10 @@ Macros-Calculator
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, CORS, lifespan
 │   │   ├── db.py                # SQLAlchemy engine + session dependency
-│   │   ├── models.py            # ORM models (users, meals, foods, settings, ai_analyses, password_resets)
+│   │   ├── models.py            # ORM models (users, meals, foods, settings, weights, ai_analyses, password_resets)
 │   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
-│   │   ├── calculations.py      # Macro scaling / totalling logic
+│   │   ├── calculations.py      # Macro scaling, weight trend, BMR/TDEE/target math
+│   │   ├── targets.py           # Body profile → daily targets (the Phase 5 swap point)
 │   │   ├── schemas.py           # Pydantic models
 │   │   ├── routers/             # meals, foods, analytics, settings, data (CSV), ai
 │   │   └── services/
@@ -279,7 +287,8 @@ on the caller's data, except these public ones: `/api/health`,
 | PATCH | `/api/ai/analyses/{id}` | Link an analysis to the meal it was saved as |
 | GET | `/api/ai/status` | Provider health; `?probe=true` makes one live call and classifies the failure |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
-| GET/PUT | `/api/settings` | Daily goals + tracked-macro toggles |
+| GET/PUT | `/api/settings` | Daily goals, tracked-macro toggles, body profile |
+| GET | `/api/settings/targets` | BMI, BMR, estimated TDEE, calorie + macro targets |
 | GET/POST | `/api/data/export` · `/api/data/import` | CSV backup / restore |
 | GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 

@@ -23,6 +23,25 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-20-body-profile-targets",
+        date="2026-08-20",
+        title="Daily goals that follow your weight",
+        body=(
+            "Settings has a new Body profile section — height, date of birth, "
+            "sex, activity level and the rate you want to gain or lose. Fill it "
+            "in and the app works out your BMI, roughly what you burn in a day, "
+            "and a calorie and macro target to match. Tick \"work out my goals "
+            "from my body profile\" and those become your daily goals, "
+            "recalculated every time you log a weigh-in, so they stop being a "
+            "number you guessed once. Every figure is shown next to what it was "
+            "calculated from, because these are estimates from a formula, not "
+            "measurements of you — expect them to be a few hundred calories out "
+            "and let your own weight trend correct them. Ask for a rate that is "
+            "too aggressive and you will be told what you got instead, and why. "
+            "The profile is optional and everything works without it."
+        ),
+    ),
+    Announcement(
         id="2026-08-15-meal-templates",
         date="2026-08-15",
         title="Save a meal, then log it again in one tap",

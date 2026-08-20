@@ -255,3 +255,57 @@ def test_admin_privilege_does_not_leak_to_other_users(client, client_b, monkeypa
     assert client.delete(f"/api/meals/{b_meal['id']}").status_code == 404
     assert [m["name"] for m in client.get("/api/meals").json()] == []
     assert client.get("/api/data/export/all").json()["meals"] == []
+
+
+def test_targets_never_read_another_users_weigh_ins(client, client_b):
+    """The calorie target is the app's first cross-table read.
+
+    `compute_targets` reaches out of the settings row into `weights` to find
+    the user's current weight, which is a new shape of query for this suite:
+    every other endpoint answers from one table it already filtered. A missing
+    user_id filter there would not leak a weight directly — it would quietly
+    compute one tenant's calorie target from another tenant's body.
+    """
+    profile = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
+        "activity_level": "moderate", "goal_rate_kg_per_week": 0.0,
+    }
+    client.put("/api/settings", json=profile)
+    client_b.put("/api/settings", json=profile)
+
+    # Only B has weighed in. A's profile is otherwise identical, so if the
+    # query were unscoped A would silently get B's target instead of none.
+    client_b.post("/api/weights", json=WEIGHT_B)
+
+    a_targets = client.get("/api/settings/targets").json()
+    assert "weight" in a_targets["missing"]
+    assert a_targets["target_calories"] is None
+    assert a_targets["weight_kg"] is None
+
+    b_targets = client_b.get("/api/settings/targets").json()
+    assert b_targets["weight_kg"] == WEIGHT_B["weight_kg"]
+    assert b_targets["target_calories"] is not None
+
+
+def test_auto_targets_are_computed_from_your_own_body(client, client_b):
+    """Same query, but on the write path: a weigh-in rewrites goals, and it
+    must rewrite only the goals of the account that logged it."""
+    profile = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+        "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
+        "activity_level": "moderate", "goal_rate_kg_per_week": 0.0,
+        "targets_auto": True,
+    }
+    client.put("/api/settings", json=profile)
+    client_b.put("/api/settings", json=profile)
+
+    client.post("/api/weights", json=WEIGHT_A)
+    client_b.post("/api/weights", json=WEIGHT_B)
+
+    a_goal = client.get("/api/settings").json()["calorie_goal"]
+    b_goal = client_b.get("/api/settings").json()["calorie_goal"]
+    # 82 kg and 61 kg cannot produce the same maintenance target.
+    assert a_goal != b_goal

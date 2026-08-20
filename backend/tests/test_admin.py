@@ -18,6 +18,11 @@ SECRET_MEAL_NAME = "Zzyzx Clandestine Casserole"
 SECRET_WEIGHT_KG = 83.7
 SECRET_TEMPLATE_NAME = "Quixotic Ptarmigan Breakfast"
 SECRET_INGREDIENT_NAME = "Vermillion Sprocket Oats"
+# The body profile is the first genuinely personal data to land in the settings
+# row -- someone's height, birth date and sex, not their choice of dinner. The
+# metrics-only boundary has to cover it from the day it exists.
+SECRET_HEIGHT_CM = 173.7
+SECRET_BIRTH_DATE = "1987-03-19"
 
 
 def email_of(client) -> str:
@@ -161,6 +166,17 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         },
     )
 
+    client_b.put(
+        "/api/settings",
+        json={
+            "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+            "fat_goal": 70, "track_carbs": False, "track_fat": False,
+            "height_cm": SECRET_HEIGHT_CM,
+            "birth_date": SECRET_BIRTH_DATE,
+            "sex": "female",
+        },
+    )
+
     make_admin(client, monkeypatch)
     for route in ADMIN_ROUTES:
         body = client.get(route).text
@@ -168,6 +184,8 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert str(SECRET_WEIGHT_KG) not in body, route
         assert SECRET_TEMPLATE_NAME not in body, route
         assert SECRET_INGREDIENT_NAME not in body, route
+        assert str(SECRET_HEIGHT_CM) not in body, route
+        assert SECRET_BIRTH_DATE not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------
