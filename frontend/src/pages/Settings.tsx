@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import AlertDialog from '../components/AlertDialog'
+import { validateSettingsField } from '../lib/limits'
 import { cmToFtIn, ftInToCm } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
 import type {
@@ -58,6 +60,8 @@ export default function Settings() {
   // numbers it shows are derived from the row that was just written, and a
   // stale card beside a fresh form is how you end up trusting the wrong one.
   const [targetsKey, setTargetsKey] = useState(0)
+  // The refusal message for a value that has just been rejected and undone.
+  const [rejected, setRejected] = useState<string | null>(null)
 
   useEffect(() => {
     if (saved) setDraft(saved)
@@ -71,6 +75,23 @@ export default function Settings() {
   const update = (patch: Partial<SettingsType>) => {
     setDraft({ ...settings, ...patch })
     setStatus('idle')
+  }
+
+  /** Refuse an out-of-range value the moment the user leaves the field.
+   *
+   * On blur rather than on change: validating every keystroke would reject
+   * "7" on the way to typing "0.7". On blur the user has finished, and the
+   * answer arrives while they are still looking at the field they typed it
+   * into — not several fields later, attached to a failed Save.
+   *
+   * The value is *undone*, not merely flagged. Leaving a number the server is
+   * certain to refuse sitting in the box looks accepted, and it would fail
+   * again on the next save for a reason the user has by then forgotten. */
+  const guard = (field: keyof SettingsType) => () => {
+    const problem = validateSettingsField(field, settings[field] as number | null)
+    if (!problem) return
+    setRejected(problem)
+    update({ [field]: saved ? saved[field] : null })
   }
 
   const save = async () => {
@@ -165,7 +186,7 @@ export default function Settings() {
           follow your weight instead of staying where you first set them.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          <HeightField settings={settings} update={update} />
+          <HeightField settings={settings} update={update} onBlur={guard('height_cm')} />
 
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Date of birth</span>
@@ -249,6 +270,7 @@ export default function Settings() {
               onChange={(event) =>
                 update({ goal_rate_kg_per_week: num(event.target.value) })
               }
+              onBlur={guard('goal_rate_kg_per_week')}
               className={fieldClass}
             />
             <span className="mt-1 block text-xs text-slate-500">
@@ -293,6 +315,7 @@ export default function Settings() {
                 value={settings[field.key]}
                 readOnly={settings.targets_auto}
                 onChange={(event) => update({ [field.key]: Number(event.target.value) })}
+                onBlur={guard(field.key)}
                 className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500 focus:outline-none ${
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
@@ -323,6 +346,14 @@ export default function Settings() {
       </div>
 
       <AccountSection />
+
+      {rejected && (
+        <AlertDialog
+          title="That value can't be used"
+          message={rejected}
+          onClose={() => setRejected(null)}
+        />
+      )}
     </div>
   )
 }
@@ -537,9 +568,11 @@ function AccountSection() {
 function HeightField({
   settings,
   update,
+  onBlur,
 }: {
   settings: SettingsType
   update: (patch: Partial<SettingsType>) => void
+  onBlur: () => void
 }) {
   if (settings.weight_unit !== 'lb') {
     return (
@@ -549,6 +582,7 @@ function HeightField({
           type="number"
           value={settings.height_cm ?? ''}
           onChange={(event) => update({ height_cm: num(event.target.value) })}
+          onBlur={onBlur}
           className={fieldClass}
         />
       </label>
@@ -580,6 +614,7 @@ function HeightField({
             onChange={(event) =>
               set(num(event.target.value), settings.height_cm ? inches : null)
             }
+            onBlur={onBlur}
             className={fieldClass}
           />
         </label>
@@ -592,6 +627,7 @@ function HeightField({
             onChange={(event) =>
               set(settings.height_cm ? feet : null, num(event.target.value))
             }
+            onBlur={onBlur}
             className={fieldClass}
           />
         </label>
