@@ -146,6 +146,62 @@ def main() -> None:
             headers=headers_a,
         )
 
+        # -- Body profile and derived targets ---------------------------------
+        # Identical profiles for both users, so the only thing that can make
+        # their targets differ is the weigh-in each of them logged. If the
+        # weight query inside compute_targets were unscoped, these would match.
+        profile = {"height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
+                   "activity_level": "moderate", "goal_rate_kg_per_week": 0.0}
+        client.put(
+            "/api/settings",
+            json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
+                  "fat_goal": 55, "track_carbs": True, "track_fat": False,
+                  "weight_unit": "lb", **profile, "targets_auto": True},
+            headers=headers_a,
+        )
+        client.put(
+            "/api/settings",
+            json={"calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+                  "fat_goal": 70, "track_carbs": False, "track_fat": False,
+                  **profile, "targets_auto": True},
+            headers=headers_b,
+        )
+
+        a_targets = client.get("/api/settings/targets", headers=headers_a).json()
+        b_targets = client.get("/api/settings/targets", headers=headers_b).json()
+        check(a_targets["missing"] == [], "A's profile is complete enough to target")
+        check(a_targets["weight_kg"] == 82.5, "A's target uses A's weigh-in")
+        check(b_targets["weight_kg"] == 61.0, "B's target uses B's weigh-in")
+        check(
+            a_targets["target_calories"] > b_targets["target_calories"],
+            "82.5 kg and 61.0 kg do not produce the same target",
+        )
+
+        a_auto = client.get("/api/settings", headers=headers_a).json()
+        check(
+            a_auto["calorie_goal"] == a_targets["target_calories"],
+            "targets_auto wrote A's calorie goal",
+        )
+        check(
+            client.get("/api/settings", headers=headers_b).json()["calorie_goal"]
+            == b_targets["target_calories"],
+            "targets_auto wrote B's calorie goal from B's own body",
+        )
+
+        # A PUT that omits the profile keys must not blank them -- the stale
+        # PWA bundle case. Asserted here as well as in pytest because this runs
+        # against the real server, where the schema default is what applies.
+        client.put(
+            "/api/settings",
+            json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
+                  "fat_goal": 55, "track_carbs": True, "track_fat": False},
+            headers=headers_a,
+        )
+        check(
+            client.get("/api/settings", headers=headers_a).json()["height_cm"] == 180.0,
+            "a PUT without profile keys leaves the profile alone",
+        )
+
         # -- Read isolation ----------------------------------------------------
         a_names = {m["name"] for m in client.get("/api/meals", headers=headers_a).json()}
         b_names = {m["name"] for m in client.get("/api/meals", headers=headers_b).json()}
@@ -170,7 +226,12 @@ def main() -> None:
         check(b_templates[0]["items"] == [], "B's template has no ingredient rows")
 
         b_settings = client.get("/api/settings", headers=headers_b).json()
-        check(b_settings["calorie_goal"] == 2000, "A's settings change invisible to B")
+        # B's calorie goal is now derived rather than the 2000 default, so the
+        # check that A cannot reach it is made against B's own derived value.
+        check(
+            b_settings["calorie_goal"] == b_targets["target_calories"],
+            "A's settings change invisible to B",
+        )
         check(b_settings["weight_unit"] == "kg", "A's unit change invisible to B")
 
         b_weights = client.get("/api/weights", headers=headers_b).json()

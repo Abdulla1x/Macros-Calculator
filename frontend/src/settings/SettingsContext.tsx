@@ -39,7 +39,12 @@ const SettingsContext = createContext<SettingsState | null>(null)
  * this sentence gets longer.
  *
  * Mounted inside RequireAuth so it never fires while logged out: the endpoint
- * is authenticated, and a 401 here would bounce the user to /login. */
+ * is authenticated, and a 401 here would bounce the user to /login.
+ *
+ * `reload` exists for writes that change settings from outside this provider.
+ * Saving a weigh-in is one: on an account with targets_auto on, the server
+ * recomputes the four daily goals as a side effect, so Weight.tsx calls reload
+ * to pick them up rather than letting the rings drift. */
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)

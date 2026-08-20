@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    false as sa_false,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -204,9 +205,39 @@ class Setting(Base):
         String(2), default="kg", server_default="kg"
     )
 
+    # Body profile. Every field is nullable and the app works with none of it
+    # set: the goals above are perfectly usable as hand-typed numbers, which is
+    # all they were before this existed.
+    height_cm: Mapped[float | None] = mapped_column(Float, default=None)
+    # The date, never a stored age. An age column is correct until the user's
+    # next birthday and wrong for the following year, and nothing in the system
+    # would ever notice it had gone stale.
+    birth_date: Mapped[date_type | None] = mapped_column(Date, default=None)
+    # Binary, because Mifflin-St Jeor takes a binary term. That is a limitation
+    # of the formula rather than a claim about people, the field is optional,
+    # and a measured TDEE replaces the formula entirely once there is data. The
+    # Settings UI says so in those words.
+    sex: Mapped[str | None] = mapped_column(String(6), default=None)
+    activity_level: Mapped[str | None] = mapped_column(String(12), default=None)
+    # Signed: negative loses weight, positive gains, zero maintains.
+    goal_rate_kg_per_week: Mapped[float | None] = mapped_column(Float, default=None)
+    # When true the four goals above are derived from the profile rather than
+    # typed, and are rewritten server-side on every settings save and every
+    # weigh-in. NOT NULL, so it needs the server_default that backfills the
+    # rows which predate it.
+    targets_auto: Mapped[bool] = mapped_column(
+        default=False, server_default=sa_false()
+    )
+
     __table_args__ = (
         CheckConstraint(
             "weight_unit IN ('kg', 'lb')", name="ck_settings_weight_unit"
+        ),
+        CheckConstraint("sex IN ('male', 'female')", name="ck_settings_sex"),
+        CheckConstraint(
+            "activity_level IN "
+            "('sedentary', 'light', 'moderate', 'active', 'very_active')",
+            name="ck_settings_activity_level",
         ),
     )
 

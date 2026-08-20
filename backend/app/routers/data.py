@@ -82,6 +82,18 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "track_carbs": setting.track_carbs,
             "track_fat": setting.track_fat,
             "weight_unit": setting.weight_unit,
+            "height_cm": setting.height_cm,
+            # ISO date, or null. Exported as the date it is, not as an age:
+            # an age would be a derived number that goes stale inside a file
+            # the user keeps.
+            "birth_date": (
+                None if setting.birth_date is None
+                else setting.birth_date.isoformat()
+            ),
+            "sex": setting.sex,
+            "activity_level": setting.activity_level,
+            "goal_rate_kg_per_week": setting.goal_rate_kg_per_week,
+            "targets_auto": setting.targets_auto,
         },
         "meals": [
             # `date` is when it was eaten, `created_at` when it was logged.

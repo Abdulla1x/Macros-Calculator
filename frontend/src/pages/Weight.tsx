@@ -30,7 +30,7 @@ const fieldClass =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
 
 export default function Weight() {
-  const { settings } = useSettings()
+  const { settings, reload: reloadSettings } = useSettings()
   const [entries, setEntries] = useState<WeightEntry[]>([])
   const [trend, setTrend] = useState<WeightTrend | null>(null)
   const [date, setDate] = useState(localIsoDate)
@@ -80,6 +80,11 @@ export default function Weight() {
       await api.saveWeight({ date, weight_kg: displayToKg(typed, unit) })
       setStatus('saved')
       load()
+      // A weigh-in is an input to the calorie target, so on an account with
+      // "work out my goals from my body profile" turned on the server has just
+      // rewritten the four goals. Without this refetch the Dashboard rings
+      // would keep drawing against the old ones until the app remounted.
+      reloadSettings()
     } catch (err) {
       setStatus('idle')
       setError(err instanceof Error ? err.message : 'Could not save that weigh-in.')

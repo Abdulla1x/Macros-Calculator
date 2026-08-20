@@ -4,6 +4,7 @@ import type {
   AIStatus,
   AnalyticsSummary,
   Announcements,
+  BodyTargets,
   Food,
   FoodCreate,
   HealthStatus,
@@ -195,6 +196,7 @@ export const api = {
     request<WeightTrend>(`/api/weights/trend?days=${days}`),
 
   getSettings: () => request<Settings>('/api/settings'),
+  getBodyTargets: () => request<BodyTargets>('/api/settings/targets'),
   updateSettings: (settings: Settings) =>
     request<Settings>('/api/settings', {
       method: 'PUT',

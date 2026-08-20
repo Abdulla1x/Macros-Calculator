@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_current_user
 from ..calculations import weekly_rate, weight_trend
 from ..db import get_db
-from ..models import User
+from ..models import Setting, User
 from ..models import WeightEntry as WeightRow
 from ..schemas import WeightEntry, WeightEntryCreate, WeightTrend, WeightTrendPoint
+from ..targets import apply_auto_targets
 
 router = APIRouter(prefix="/api/weights", tags=["weights"])
 
@@ -92,6 +93,20 @@ def save_weight(
         db.add(row)
     else:
         row.weight_kg = entry.weight_kg
+
+    # A weigh-in is an input to the calorie target, so an account with
+    # targets_auto on gets its goals recomputed here rather than only when it
+    # next opens Settings. Without this the target would lag the weight by
+    # however long it took the user to visit that page -- which is precisely
+    # the "static number you guessed once" problem the profile exists to fix.
+    #
+    # Flushed first so the new row is visible to the query inside
+    # compute_targets; both writes then land on one commit.
+    setting = db.get(Setting, user.id)
+    if setting is not None:
+        db.flush()
+        apply_auto_targets(setting, db)
+
     db.commit()
     return row
 

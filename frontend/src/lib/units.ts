@@ -35,3 +35,45 @@ export function formatRate(kgPerWeek: number, unit: WeightUnit): string {
   const value = kgToDisplay(kgPerWeek, unit)
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`
 }
+
+// --- Height ------------------------------------------------------------------
+//
+// Height follows the same rule as weight: the API stores one canonical unit
+// (centimetres) and the display unit is a preference. It follows `weight_unit`
+// rather than getting a setting of its own — someone who thinks in pounds
+// thinks in feet and inches, and a second unit selector would be two controls
+// for one decision.
+
+/** Exact, by definition of the international inch (not an approximation). */
+export const CM_PER_INCH = 2.54
+const INCHES_PER_FOOT = 12
+
+export interface FeetInches {
+  feet: number
+  inches: number
+}
+
+export function cmToFtIn(cm: number): FeetInches {
+  const totalInches = Math.round(cm / CM_PER_INCH)
+  return {
+    feet: Math.floor(totalInches / INCHES_PER_FOOT),
+    inches: totalInches % INCHES_PER_FOOT,
+  }
+}
+
+/** Feet + inches → the centimetres the API stores.
+ *
+ * Rounded to 1 decimal, which is a millimetre: finer than anyone measures
+ * their own height, and enough that a ft/in round trip doesn't drift in the
+ * last digit the way an unrounded kg conversion would. Same argument as
+ * displayToKg. */
+export function ftInToCm(feet: number, inches: number): number {
+  return Math.round((feet * INCHES_PER_FOOT + inches) * CM_PER_INCH * 10) / 10
+}
+
+/** Height for display, in whichever unit the weight preference implies. */
+export function formatHeight(cm: number, unit: WeightUnit): string {
+  if (unit !== 'lb') return `${Math.round(cm)} cm`
+  const { feet, inches } = cmToFtIn(cm)
+  return `${feet}′ ${inches}″`
+}

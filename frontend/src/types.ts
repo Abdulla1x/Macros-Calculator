@@ -49,6 +49,15 @@ export interface MessageResponse {
   detail: string
 }
 
+export type Sex = 'male' | 'female'
+
+export type ActivityLevel =
+  | 'sedentary'
+  | 'light'
+  | 'moderate'
+  | 'active'
+  | 'very_active'
+
 export interface Settings {
   calorie_goal: number
   protein_goal: number
@@ -58,6 +67,36 @@ export interface Settings {
   track_fat: boolean
   /** Display preference only — weights are always sent and stored in kg. */
   weight_unit: 'kg' | 'lb'
+  /** Body profile. All nullable: the app works with none of it set. */
+  height_cm: number | null
+  /** YYYY-MM-DD. The date, not an age — an age would go stale in place. */
+  birth_date: string | null
+  sex: Sex | null
+  activity_level: ActivityLevel | null
+  /** Signed kg/week: negative loses, positive gains, 0 maintains. */
+  goal_rate_kg_per_week: number | null
+  /** When true the four goals above are derived server-side, not typed. */
+  targets_auto: boolean
+}
+
+/** What the profile implies, and what is stopping it implying more.
+ *
+ * Every number here is derived, never measured, which is why `weight_kg` and
+ * `weight_date` travel with it — the input has to be visible beside the
+ * conclusion. `missing` names the absent profile fields, so the UI can ask for
+ * the one that is blocking instead of rendering an empty card. */
+export interface BodyTargets {
+  missing: string[]
+  bmi: number | null
+  bmr: number | null
+  tdee: number | null
+  target_calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  weight_kg: number | null
+  weight_date: string | null
+  clamped_reason: string | null
 }
 
 export interface WeightEntry {
