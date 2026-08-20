@@ -28,6 +28,37 @@ def test_save_and_search_case_insensitive(client):
     assert len(results) == 1
 
 
+def test_search_treats_percent_and_underscore_as_literal_characters(client):
+    """LIKE wildcards typed into the search box used to match anything.
+
+    "100%" is a real thing to type -- half the bread in a supermarket is named
+    that way -- and before the escape it matched every food in the library,
+    because the trailing % is the wildcard. The failure is silent: ten plausible
+    rows come back, just not the ones asked for.
+    """
+    for name in ("100% Whole Wheat", "100g Oats", "Plain Rice"):
+        client.post("/api/foods", json=_chicken(name=name))
+
+    results = client.get("/api/foods/search", params={"q": "100%"}).json()
+    assert [food["name"] for food in results] == ["100% Whole Wheat"]
+
+    # `_` is the subtler one: it matches any single character, so a one-key
+    # search used to return the whole library.
+    assert client.get("/api/foods/search", params={"q": "_"}).json() == []
+
+
+def test_search_finds_a_name_containing_a_backslash(client):
+    """The escape character itself has to survive being searched for.
+
+    _escape_like doubles backslashes before it adds any, so a name with one in
+    it stays findable rather than turning the next character into an escape.
+    """
+    client.post("/api/foods", json=_chicken(name="Back\\slash Bar"))
+
+    results = client.get("/api/foods/search", params={"q": "Back\\"}).json()
+    assert [food["name"] for food in results] == ["Back\\slash Bar"]
+
+
 def test_saving_same_name_updates_macros(client):
     client.post("/api/foods", json=_chicken())
     client.post("/api/foods", json=_chicken(name="chicken breast", calories=170))
