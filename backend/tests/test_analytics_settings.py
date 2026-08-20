@@ -1,3 +1,6 @@
+from conftest import put_raw_json
+
+
 def _add_meal(client, date, calories, protein, carbs=None, fat=None):
     client.post("/api/meals", json={
         "date": date, "name": "meal", "calories": calories,
@@ -112,6 +115,24 @@ def test_settings_reject_non_positive_goals(client):
         for bad in (-100, 0):
             response = client.put("/api/settings", json={**valid, field: bad})
             assert response.status_code == 422, f"{field}={bad} was accepted"
+
+
+def test_settings_reject_non_finite_goals(client):
+    """`gt=0` admits infinity, and a goal is a divisor.
+
+    Every progress ring on the dashboard divides today's total by one of these,
+    so an infinite goal renders as permanent 0% — and GET /api/settings would
+    hand back `null` for a field types.ts types as `number`.
+    """
+    valid = {
+        "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+        "fat_goal": 70, "track_carbs": False, "track_fat": False,
+    }
+    for field in ("calorie_goal", "protein_goal", "carbs_goal", "fat_goal"):
+        response = put_raw_json(
+            client, "/api/settings", {**valid, field: float("inf")}
+        )
+        assert response.status_code == 422, f"{field}=inf was accepted"
 
 
 def test_weight_unit_defaults_so_older_clients_still_save(client):

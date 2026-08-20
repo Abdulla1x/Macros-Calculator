@@ -19,16 +19,37 @@ def list_foods(user: User = Depends(get_current_user), db: Session = Depends(get
     ).all()
 
 
+def _escape_like(value: str) -> str:
+    """Make % and _ in a search query match themselves.
+
+    LIKE reads % as "any run of characters" and _ as "any one character", so
+    without this, searching "100%" matches every food in the library and
+    searching "_" matches all of them too. Not a security problem -- the query
+    is still a bound parameter, and every row is user_id-scoped -- but a
+    wrong-results one.
+
+    Backslash first, or the two escapes added after it get escaped in turn.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/search", response_model=list[Food])
 def search_foods(
     q: str = Query(min_length=1),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    prefix_first = case((FoodRow.name.ilike(f"{q}%"), 0), else_=1)
+    # Both patterns are escaped, not just the filter: prefix_first decides which
+    # match sorts to the top, so if the two disagreed about what the query means
+    # the ranking would promote a row the filter never selected.
+    pattern = _escape_like(q)
+    prefix_first = case((FoodRow.name.ilike(f"{pattern}%", escape="\\"), 0), else_=1)
     stmt = (
         select(FoodRow)
-        .where(FoodRow.user_id == user.id, FoodRow.name.ilike(f"%{q}%"))
+        .where(
+            FoodRow.user_id == user.id,
+            FoodRow.name.ilike(f"%{pattern}%", escape="\\"),
+        )
         .order_by(prefix_first, FoodRow.name)
         .limit(10)
     )

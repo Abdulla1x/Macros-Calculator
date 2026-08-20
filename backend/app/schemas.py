@@ -64,13 +64,27 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+# Why allow_inf_nan=False appears on every float that reaches a Float column,
+# here and on FoodCreate and Settings below:
+#
+# `ge=0` does not exclude infinity -- `inf >= 0` is True -- and json.loads
+# accepts the bare token `Infinity`, so a hand-written request could park a
+# non-finite value in the database. One such row then fails two different ways
+# at once: GET /api/data/export/all returns a plain dict, so the raw float
+# reaches Starlette's json.dumps(allow_nan=False) and 500s, while the list and
+# settings endpoints serialize through Pydantic, whose ser_json_inf_nan default
+# quietly rewrites it to `null` -- for a field the client's types.ts declares as
+# `number`. The silent half is the worse half.
+#
+# Rejecting at the boundary is what fixes both. Once nothing non-finite gets in,
+# nothing downstream has to know about it.
 class MealCreate(BaseModel):
     date: date_type
     name: str = Field(min_length=1, max_length=200)
-    calories: float = Field(ge=0)
-    protein: float = Field(ge=0)
-    carbs: float | None = Field(default=None, ge=0)
-    fat: float | None = Field(default=None, ge=0)
+    calories: float = Field(ge=0, allow_inf_nan=False)
+    protein: float = Field(ge=0, allow_inf_nan=False)
+    carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class Meal(MealCreate):
@@ -134,12 +148,15 @@ class MealTemplate(MealTemplateCreate):
 
 
 class FoodCreate(BaseModel):
+    # allow_inf_nan=False for the reason given above MealCreate.
     name: str = Field(min_length=1, max_length=200)
-    serving_size: float = Field(gt=0, description="grams per serving")
-    calories: float = Field(ge=0)
-    protein: float = Field(ge=0)
-    carbs: float | None = Field(default=None, ge=0)
-    fat: float | None = Field(default=None, ge=0)
+    serving_size: float = Field(
+        gt=0, allow_inf_nan=False, description="grams per serving"
+    )
+    calories: float = Field(ge=0, allow_inf_nan=False)
+    protein: float = Field(ge=0, allow_inf_nan=False)
+    carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     source: Literal["user", "openfoodfacts"] = "user"
 
 
@@ -173,6 +190,11 @@ MAX_WEIGHT_KG = 635
 
 
 class WeightEntryCreate(BaseModel):
+    # No allow_inf_nan=False here, deliberately: MAX_WEIGHT_KG already closes
+    # it. `inf` fails the upper bound and `nan` fails every comparison it is
+    # given, so both are rejected before the keyword would ever be consulted.
+    # Adding it anyway would imply the schemas that do carry it were unsafe for
+    # some reason other than having no upper bound.
     date: date_type
     weight_kg: float = Field(gt=0, le=MAX_WEIGHT_KG)
 
@@ -213,10 +235,14 @@ class WeightTrend(BaseModel):
 class Settings(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    calorie_goal: float = Field(gt=0)
-    protein_goal: float = Field(gt=0)
-    carbs_goal: float = Field(gt=0)
-    fat_goal: float = Field(gt=0)
+    # allow_inf_nan=False for the reason given above MealCreate. `gt=0` admits
+    # infinity exactly as `ge=0` does, and these are Float columns like any
+    # other -- a non-finite goal would divide every progress ring on the
+    # dashboard.
+    calorie_goal: float = Field(gt=0, allow_inf_nan=False)
+    protein_goal: float = Field(gt=0, allow_inf_nan=False)
+    carbs_goal: float = Field(gt=0, allow_inf_nan=False)
+    fat_goal: float = Field(gt=0, allow_inf_nan=False)
     track_carbs: bool
     track_fat: bool
     # Defaulted, unlike the goals: clients written before this field existed
@@ -257,6 +283,13 @@ class ImportResult(BaseModel):
 # NOTE: no numeric Field constraints here — this schema is sent to the LLM as a
 # structured-output schema, and Gemini rejects JSON Schema numeric bounds
 # (exclusiveMinimum etc.). Values are reviewed by the user before saving anyway.
+#
+# That includes allow_inf_nan=False, which the other schemas here carry. It is
+# not omitted because it would break Gemini -- checked, and it emits nothing
+# into the generated JSON schema at all -- but because it is not needed. Pydantic
+# serializes a non-finite float to `null`, so nothing here can write `Infinity`
+# into ai_analyses.analysis_json, and an AI estimate only becomes a stored macro
+# by being sent back through MealCreate, which does reject it. One boundary.
 class AnalyzedItem(BaseModel):
     """One detected food, with macros for the estimated portion eaten."""
     name: str

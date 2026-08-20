@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import math
 from datetime import date as date_type
 from datetime import datetime, timezone
 
@@ -136,12 +137,20 @@ def _parse_date(raw: str) -> date_type | None:
 
 
 def _parse_float(raw, required: bool) -> tuple[float | None, bool]:
-    """Returns (value, ok). Optional empty values are (None, True)."""
+    """Returns (value, ok). Optional empty values are (None, True).
+
+    The isfinite check is the one that is easy to leave out, and this importer
+    is the only path that writes a Meal without going through MealCreate -- so
+    the bound on that schema does not protect it. `float()` parses "Infinity",
+    "inf" and "1e999" alike, and `inf >= 0` is True, so without this a single
+    CSV row could store a value that 500s the account's export and reads back
+    as null everywhere else. `nan` fails the >= 0 comparison on its own.
+    """
     if raw is None or str(raw).strip() == "":
         return None, not required
     try:
         value = float(raw)
-        return (value, True) if value >= 0 else (None, False)
+        return (value, True) if math.isfinite(value) and value >= 0 else (None, False)
     except ValueError:
         return None, False
 

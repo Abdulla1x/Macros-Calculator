@@ -1,4 +1,5 @@
 import itertools
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,28 @@ from app.rate_limit import limiter
 TEST_PASSWORD = "test-password-123"
 
 _user_counter = itertools.count(1)
+
+
+def post_raw_json(client, path, body):
+    """POST a body httpx would refuse to serialize, e.g. one containing `inf`.
+
+    httpx rejects non-finite floats outright ("Out of range float values are not
+    JSON compliant"), so `json=` cannot express the request this is testing.
+    Python's json.dumps writes the bare token `Infinity` and json.loads accepts
+    it, which is exactly why the input is reachable from any hand-written client
+    and worth a test at all. Serializing here and sending the result as raw
+    content is the only way to reproduce it.
+    """
+    return client.post(
+        path, content=json.dumps(body), headers={"Content-Type": "application/json"}
+    )
+
+
+def put_raw_json(client, path, body):
+    """PUT counterpart of post_raw_json."""
+    return client.put(
+        path, content=json.dumps(body), headers={"Content-Type": "application/json"}
+    )
 
 
 @pytest.fixture(autouse=True)

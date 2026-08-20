@@ -10,7 +10,8 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import { localIsoDate } from '../lib/dates'
-import type { AnalyticsSummary, ImportResult, Settings } from '../types'
+import { useSettings } from '../settings/SettingsContext'
+import type { AnalyticsSummary, ImportResult } from '../types'
 
 const defaultStart = () => {
   const date = new Date()
@@ -33,7 +34,7 @@ const macroCharts: MacroChart[] = [
 ]
 
 export default function Analytics() {
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const { settings } = useSettings()
   const [start, setStart] = useState(defaultStart)
   const [end, setEnd] = useState(localIsoDate())
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
@@ -56,10 +57,6 @@ export default function Analytics() {
       setExporting(false)
     }
   }
-
-  useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => null)
-  }, [])
 
   useEffect(() => {
     // The stale flag stops an out-of-order response for a previous range from
