@@ -94,7 +94,22 @@ async function request<T>(
     let detail = `Request failed (${response.status})`
     try {
       const body = await response.json()
-      if (typeof body.detail === 'string') detail = body.detail
+      if (typeof body.detail === 'string') {
+        detail = body.detail
+      } else if (Array.isArray(body.detail)) {
+        // FastAPI reports validation failures as an *array* of errors, never a
+        // string, so the check above can never match a 422 — every one of them
+        // used to surface as the generic "Request failed (422)" while the
+        // server had already said exactly which field was wrong and why.
+        // Forms guard their own inputs first; this is what is left when
+        // something slips past one, and it has to name the field or the user
+        // is left hunting through the whole page for it.
+        const first = body.detail[0]
+        if (typeof first?.msg === 'string') {
+          const field = Array.isArray(first.loc) ? first.loc.at(-1) : undefined
+          detail = typeof field === 'string' ? `${field}: ${first.msg}` : first.msg
+        }
+      }
     } catch {
       /* keep generic message */
     }
