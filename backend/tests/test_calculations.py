@@ -6,13 +6,17 @@ from app.calculations import (
     KCAL_PER_G_CARB,
     KCAL_PER_G_FAT,
     KCAL_PER_G_PROTEIN,
+    KCAL_PER_KG,
+    TDEE_PLAUSIBLE_BMR_RANGE,
     TrendPoint,
     activity_multiplier,
     age_years,
     bmi,
     bmr_mifflin_st_jeor,
+    clamp_measured_tdee,
     estimated_tdee,
     macro_targets,
+    measured_tdee,
     scale_macros,
     target_calories,
     total_macros,
@@ -284,3 +288,79 @@ def test_macro_targets_floor_carbs_at_zero_rather_than_going_negative():
     macros = macro_targets(1200, 200)
     assert macros["carbs"] == 0
     assert macros["protein"] > 0
+
+
+# --- measured TDEE (energy balance) ------------------------------------------
+
+
+def test_measured_tdee_equals_intake_when_weight_is_stable():
+    """Holding weight means everything eaten was burned. The definition."""
+    assert measured_tdee(2500, 0.0) == pytest.approx(2500)
+
+
+def test_measured_tdee_subtracts_what_was_stored_as_tissue():
+    # Gaining 0.7 kg/week banks 0.7 * 7700 / 7 = 770 kcal a day, so a 3000 kcal
+    # intake means 2230 was actually burned.
+    assert measured_tdee(3000, 0.7) == pytest.approx(2230, abs=0.1)
+
+
+def test_measured_tdee_adds_back_what_was_drawn_from_tissue():
+    """Losing weight means burning more than was eaten, not less."""
+    assert measured_tdee(2000, -0.5) == pytest.approx(
+        2000 + (0.5 / 7) * KCAL_PER_KG, abs=0.1
+    )
+
+
+def test_measured_tdee_matches_a_hand_worked_real_case():
+    """The production hand-check this phase's thresholds were chosen against.
+
+    Account with 22 logged days averaging 2712.3 kcal and a trend rise of
+    0.159 kg/week: 2712.3 - (0.159/7)*7700 = 2537.4.
+    """
+    assert measured_tdee(2712.3, 0.159) == pytest.approx(2537.4, abs=1.0)
+
+
+def test_clamp_leaves_a_believable_measurement_alone():
+    result = clamp_measured_tdee(2538, bmr=1612)
+    assert result.calories == 2538
+    assert result.clamped_reason is None
+
+
+def test_clamp_catches_a_tdee_below_resting_metabolism():
+    """The under-logging failure, which is the dangerous one because it is silent.
+
+    Someone logging far less than they eat produces a measured burn beneath
+    their own BMR. That is impossible rather than surprising, so it is refused
+    and explained rather than passed downstream into a starvation target.
+    """
+    low, _ = TDEE_PLAUSIBLE_BMR_RANGE
+    result = clamp_measured_tdee(1100, bmr=1612)
+
+    assert result.calories == round(1612 * low)
+    assert result.clamped_reason is not None
+    assert "aren't being logged" in result.clamped_reason
+
+
+def test_clamp_catches_an_implausibly_high_tdee():
+    _, high = TDEE_PLAUSIBLE_BMR_RANGE
+    result = clamp_measured_tdee(9000, bmr=1612)
+
+    assert result.calories == round(1612 * high)
+    assert "mistyped weigh-in" in result.clamped_reason
+
+
+def test_the_clamp_floor_is_not_reachable_by_under_logging():
+    """Why the clamp anchors to BMR and not to the TDEE itself.
+
+    `target_calories`'s existing floor is a fraction *of the TDEE*, so a TDEE
+    dragged down by unlogged meals drags its own floor down with it and passes.
+    BMR comes from body measurements, which intake cannot move -- so the same
+    bad input that fools one check is caught by the other.
+    """
+    honest = clamp_measured_tdee(2538, bmr=1612)
+    under_logged = clamp_measured_tdee(1200, bmr=1612)
+
+    assert honest.clamped_reason is None
+    assert under_logged.clamped_reason is not None
+    # The floor did not move with the bad input.
+    assert under_logged.calories > 1200

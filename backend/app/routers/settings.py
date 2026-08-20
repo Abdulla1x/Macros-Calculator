@@ -41,7 +41,12 @@ def get_settings(user: User = Depends(get_current_user), db: Session = Depends(g
 def get_targets(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    """BMI, BMR, estimated TDEE and a calorie/macro target from the profile.
+    """BMI, BMR, TDEE and a calorie/macro target from the profile and the logs.
+
+    The TDEE is measured from energy balance where the logs can support it and
+    estimated from the Mifflin-St Jeor formula where they cannot; `tdee_source`
+    says which, and `tdee_basis` says what it was built from or what it is still
+    short of. Both are always populated, so the card never has to guess.
 
     Read-only and always 200, even when nothing can be computed: an incomplete
     profile is an ordinary state, not an error, and the `missing` list is the

@@ -54,9 +54,12 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Calories + protein always on; **carbs and fat are opt-in**
 - Per-macro daily goals drive the dashboard rings, log form, and analytics
 - Optional **body profile** (height, date of birth, sex, activity level, goal
-  rate) turns into BMI, an estimated daily burn, and calorie/macro targets —
-  every figure shown next to the input it came from, because they are estimates
-  from a formula, not measurements
+  rate) turns into BMI, a daily burn, and calorie/macro targets — every figure
+  shown next to the input it came from
+- **Your daily burn is measured, not guessed**, once you have logged enough:
+  roughly two weeks of weigh-ins and meals turns into a real energy-balance
+  figure from your own data, shown beside what the formula would have said.
+  Until then it says exactly what it is still waiting for
 - Let the app **keep those goals in step with your weight**: with auto-targets
   on, the daily goals are recalculated on every weigh-in instead of staying
   wherever you first set them
@@ -288,7 +291,7 @@ on the caller's data, except these public ones: `/api/health`,
 | GET | `/api/ai/status` | Provider health; `?probe=true` makes one live call and classifies the failure |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals, tracked-macro toggles, body profile |
-| GET | `/api/settings/targets` | BMI, BMR, estimated TDEE, calorie + macro targets |
+| GET | `/api/settings/targets` | BMI, BMR, measured-or-estimated TDEE, calorie + macro targets |
 | GET/POST | `/api/data/export` · `/api/data/import` | CSV backup / restore |
 | GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 

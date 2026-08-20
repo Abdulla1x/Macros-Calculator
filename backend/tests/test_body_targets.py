@@ -6,6 +6,8 @@ the two paths that rewrite the stored goals.
 """
 from datetime import date, timedelta
 
+import pytest
+
 BASE_SETTINGS = {
     "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
     "fat_goal": 70, "track_carbs": True, "track_fat": True,
@@ -32,6 +34,41 @@ def weigh_in(client, weight_kg, days_ago=0):
     response = client.post(
         "/api/weights", json={"date": day.isoformat(), "weight_kg": weight_kg}
     )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def log_meal(client, calories, days_ago, name="Seeded"):
+    day = date.today() - timedelta(days=days_ago)
+    response = client.post(
+        "/api/meals",
+        json={
+            "date": day.isoformat(),
+            "name": name,
+            "calories": calories,
+            "protein": 100.0,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def seed_measurable_history(
+    client, days=20, calories=2700.0, start_kg=80.0, kg_per_week=0.0
+):
+    """A window dense enough to measure: a weigh-in and a meal on every day.
+
+    Ends *yesterday*, deliberately, so a test can add today separately and
+    observe whether today leaks into the measurement.
+    """
+    for days_ago in range(1, days + 1):
+        elapsed_weeks = (days - days_ago) / 7.0
+        weigh_in(client, start_kg + kg_per_week * elapsed_weeks, days_ago=days_ago)
+        log_meal(client, calories, days_ago=days_ago)
+
+
+def targets(client):
+    response = client.get("/api/settings/targets")
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -180,3 +217,164 @@ def test_turning_auto_off_leaves_the_computed_goals_editable(client):
 
 def test_targets_requires_authentication(anon_client):
     assert anon_client.get("/api/settings/targets").status_code == 401
+
+
+# --- measured TDEE wiring -----------------------------------------------------
+
+
+def test_a_dense_history_is_measured_rather_than_estimated(client):
+    set_profile(client)
+    seed_measurable_history(client)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "measured"
+    assert body["tdee_basis"]["unavailable_reason"] is None
+    assert body["tdee_basis"]["logged_days"] == 20
+    assert body["tdee_basis"]["weigh_ins"] == 20
+
+
+def test_a_stable_weight_measures_tdee_as_the_intake_that_held_it(client):
+    """The definition, end to end: eat 2700 and hold weight, and you burn 2700."""
+    set_profile(client)
+    seed_measurable_history(client, calories=2700.0, kg_per_week=0.0)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "measured"
+    assert body["tdee"] == pytest.approx(2700, abs=5)
+
+
+def test_the_formula_estimate_is_kept_even_once_measurement_wins(client):
+    """Both numbers travel, so the card can show them side by side.
+
+    Agreement is reassuring and divergence is diagnostic; neither is visible if
+    the estimate is thrown away the moment it stops driving the target.
+    """
+    set_profile(client)
+    seed_measurable_history(client)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "measured"
+    assert body["tdee_estimated"] is not None
+    assert body["tdee_estimated"] != body["tdee"]
+
+
+def test_todays_partial_logging_cannot_move_a_measured_tdee(client):
+    """Regression: the 223 kcal error found against real data.
+
+    Today is a half-logged day -- breakfast in, dinner not yet -- so averaging
+    it in as a finished day understates intake, which understates the measured
+    burn, which tells the user to eat less. Against the live account this moved
+    a 14-day TDEE from 2589 to 2366 kcal. Same class as the Phase 0.6 dashboard
+    bug, and worse here because the number drives a target rather than a chart.
+
+    It also closes a feedback loop: if today's meals moved today's target, the
+    goal would rise as the user ate towards it.
+    """
+    set_profile(client)
+    seed_measurable_history(client)
+    before = targets(client)
+
+    # A deliberately tiny partial day, plus this morning's weigh-in.
+    log_meal(client, 300.0, days_ago=0, name="Just breakfast")
+    weigh_in(client, 80.0, days_ago=0)
+
+    after = targets(client)
+
+    assert after["tdee"] == before["tdee"]
+    assert after["tdee_basis"]["mean_intake"] == before["tdee_basis"]["mean_intake"]
+
+
+def test_too_few_weigh_ins_falls_back_without_calling_the_profile_incomplete(client):
+    """Falling back is not a failure -- the user still gets a working target.
+
+    So `missing` must stay empty: listing the shortfall there would make a
+    complete profile read as incomplete forever, and the UI would ask for a
+    field the user has already filled in.
+    """
+    set_profile(client)
+    for days_ago in range(1, 21):
+        log_meal(client, 2700.0, days_ago=days_ago)
+    weigh_in(client, 80.0, days_ago=1)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "estimated"
+    assert body["missing"] == []
+    assert body["target_calories"] is not None
+    assert body["tdee_basis"]["unavailable_reason"] is not None
+    assert "Weigh in on" in body["tdee_basis"]["unavailable_reason"]
+
+
+def test_a_refusal_still_reports_the_meals_that_were_logged(client):
+    """A count that is wrong in the payload is wrong even if no card draws it.
+
+    This account logged meals every day for three weeks and simply has not
+    weighed in. Reporting `logged_days: 0` at them because the weigh-in guard
+    fired first would be a number that contradicts what they actually did.
+    """
+    set_profile(client)
+    for days_ago in range(1, 21):
+        log_meal(client, 2700.0, days_ago=days_ago)
+    weigh_in(client, 80.0, days_ago=1)
+
+    basis = targets(client)["tdee_basis"]
+
+    assert basis["unavailable_reason"] is not None
+    assert basis["logged_days"] == 20
+
+
+def test_a_short_span_of_weigh_ins_is_refused_with_its_own_reason(client):
+    """Enough weigh-ins, too few days between them: the slope is noise.
+
+    Ten weigh-ins crammed into ten days produced 2700 kcal against a formula
+    estimate of 2498 on real data, because trend weight had moved -0.01 kg.
+    """
+    set_profile(client)
+    for days_ago in range(1, 11):
+        weigh_in(client, 80.0, days_ago=days_ago)
+        log_meal(client, 2700.0, days_ago=days_ago)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "estimated"
+    assert "at least" in body["tdee_basis"]["unavailable_reason"]
+
+
+def test_sparse_meal_logging_is_refused_even_with_daily_weigh_ins(client):
+    """The average stands in for unlogged days, so too few of them is a guess."""
+    set_profile(client)
+    for days_ago in range(1, 21):
+        weigh_in(client, 80.0, days_ago=days_ago)
+    for days_ago in range(1, 6):
+        log_meal(client, 2700.0, days_ago=days_ago)
+
+    body = targets(client)
+
+    assert body["tdee_source"] == "estimated"
+    assert "logged meals on" in body["tdee_basis"]["unavailable_reason"]
+
+
+def test_an_incomplete_profile_reports_no_basis_at_all(client):
+    """`missing` is still the answer when the profile itself is the blocker."""
+    set_profile(client, height_cm=None)
+    seed_measurable_history(client)
+
+    body = targets(client)
+
+    assert "height_cm" in body["missing"]
+    assert body["tdee_basis"] is None
+
+
+def test_a_measured_tdee_drives_the_auto_written_goals(client):
+    """The point of the phase: the stored goals come from the measurement."""
+    set_profile(client, targets_auto=True)
+    seed_measurable_history(client, calories=2700.0, kg_per_week=0.0)
+
+    body = targets(client)
+    stored = client.get("/api/settings").json()
+
+    assert body["tdee_source"] == "measured"
+    assert stored["calorie_goal"] == pytest.approx(body["target_calories"], abs=1)
