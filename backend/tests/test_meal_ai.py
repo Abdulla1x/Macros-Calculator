@@ -988,3 +988,64 @@ def test_status_probe_when_the_key_is_missing(client, monkeypatch):
     body = client.get("/api/ai/status?probe=true").json()
     assert body["configured"] is False
     assert body["probe"]["status"] == "not_configured"
+
+
+# --- Env-var limit parsing -------------------------------------------------
+# These call the readers directly rather than through a request: the bug is in
+# reading the value, and a full analyze round-trip would only add ways for the
+# test to fail for unrelated reasons.
+
+def test_env_limit_falls_back_when_the_value_is_unreadable(monkeypatch):
+    """A typo in the Render dashboard used to 500 every AI call.
+
+    The readers run inside the request handler, so int("2O") raised there rather
+    than at import — the app booted fine and then refused every analysis with a
+    500, including the admin usage page that reads the global limit.
+    """
+    for bad in ("2O", "abc", "20 30", "twenty", "1.5", "²"):
+        monkeypatch.setenv("AI_DAILY_LIMIT", bad)
+        assert ai_router._daily_limit() == ai_router.DEFAULT_DAILY_LIMIT, bad
+
+
+def test_env_limit_falls_back_when_unset_or_empty(monkeypatch):
+    """An env var set to "" is how a dashboard records "I cleared this"."""
+    monkeypatch.delenv("AI_GLOBAL_DAILY_LIMIT", raising=False)
+    assert ai_router.global_daily_limit() == ai_router.DEFAULT_GLOBAL_DAILY_LIMIT
+
+    for blank in ("", "   "):
+        monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", blank)
+        assert ai_router.global_daily_limit() == ai_router.DEFAULT_GLOBAL_DAILY_LIMIT
+
+
+def test_env_limit_honours_a_deliberate_zero(monkeypatch):
+    """Zero is a kill switch, not a mistake.
+
+    Falling back to the shipped 500 here would turn "AI off" into "AI on" —
+    the exact opposite of what the operator asked for, at their expense.
+    """
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "0")
+    assert ai_router.global_daily_limit() == 0
+
+
+def test_env_limit_clamps_a_negative_to_zero(monkeypatch):
+    """A negative was already blocking every call, since the test is `>=`.
+
+    So it must not fall back to the default: that would take a value which was
+    holding the gate shut and quietly open it.
+    """
+    monkeypatch.setenv("AI_DAILY_LIMIT", "-1")
+    assert ai_router._daily_limit() == 0
+
+
+def test_env_limit_reads_a_valid_value(monkeypatch):
+    for name, reader in (
+        ("AI_DAILY_LIMIT", ai_router._daily_limit),
+        ("AI_TRANSCRIBE_DAILY_LIMIT", ai_router._transcribe_daily_limit),
+        ("AI_GLOBAL_DAILY_LIMIT", ai_router.global_daily_limit),
+        ("AI_PROBE_DAILY_LIMIT", ai_router._probe_daily_limit),
+    ):
+        monkeypatch.setenv(name, "7")
+        assert reader() == 7, name
+        # Surrounding whitespace is a dashboard copy-paste artefact, not a typo.
+        monkeypatch.setenv(name, " 7 ")
+        assert reader() == 7, name

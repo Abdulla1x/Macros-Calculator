@@ -115,22 +115,60 @@ _PROVIDER_ERRORS: list[tuple[type, int, str]] = [
 ]
 
 
+def _env_int(name: str, default: int) -> int:
+    """An integer limit from the environment, defaulting on anything unusable.
+
+    These readers run inside request handlers, so a bare int() turned a typo in
+    the Render dashboard -- AI_DAILY_LIMIT=2O, letter O -- into a ValueError
+    mid-request and a 500 on every AI call, instead of degrading to the shipped
+    default. render.yaml is not synced to the dashboard, so the dashboard is
+    exactly where such a typo lives, and global_daily_limit() is also read by
+    the admin usage page: the one screen you would open to find out what broke.
+
+    Zero is honoured rather than replaced. AI_GLOBAL_DAILY_LIMIT=0 is a
+    legitimate kill switch, and quietly substituting 500 would be the opposite
+    of what the operator asked for. Only genuinely unreadable values fall back,
+    and they log, because a silent fallback is how a misconfiguration hides.
+
+    A negative is clamped to 0, not defaulted. The quota test is
+    `calls_today() >= limit`, so a negative already blocked every call -- and
+    falling back to the shipped default would take a value that was closing the
+    gate and quietly open it. Clamping keeps the previous behaviour and matches
+    the reading that anyone setting a negative limit wanted AI off.
+
+    try/except rather than the .isdigit() guard used in auth/router.py: the
+    superscript two passes .isdigit() but raises inside int(), so that idiom
+    accepts input it then crashes on. Asking int() what int() will do cannot
+    be wrong about it.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("%s is not an integer (%r); using %s", name, raw, default)
+        return default
+    if value < 0:
+        logger.warning("%s is negative (%s); treating as 0 (AI off)", name, value)
+        return 0
+    return value
+
+
 def _daily_limit() -> int:
-    return int(os.environ.get("AI_DAILY_LIMIT", DEFAULT_DAILY_LIMIT))
+    return _env_int("AI_DAILY_LIMIT", DEFAULT_DAILY_LIMIT)
 
 
 def _transcribe_daily_limit() -> int:
-    return int(
-        os.environ.get("AI_TRANSCRIBE_DAILY_LIMIT", DEFAULT_TRANSCRIBE_DAILY_LIMIT)
-    )
+    return _env_int("AI_TRANSCRIBE_DAILY_LIMIT", DEFAULT_TRANSCRIBE_DAILY_LIMIT)
 
 
 def global_daily_limit() -> int:
-    return int(os.environ.get("AI_GLOBAL_DAILY_LIMIT", DEFAULT_GLOBAL_DAILY_LIMIT))
+    return _env_int("AI_GLOBAL_DAILY_LIMIT", DEFAULT_GLOBAL_DAILY_LIMIT)
 
 
 def _probe_daily_limit() -> int:
-    return int(os.environ.get("AI_PROBE_DAILY_LIMIT", DEFAULT_PROBE_DAILY_LIMIT))
+    return _env_int("AI_PROBE_DAILY_LIMIT", DEFAULT_PROBE_DAILY_LIMIT)
 
 
 def _probe_message(exc: Exception) -> str | None:
