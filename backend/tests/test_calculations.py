@@ -3,11 +3,14 @@ from datetime import date, timedelta
 import pytest
 
 from app.calculations import (
+    DEFAULT_WATER_QUICK_ADDS,
     KCAL_PER_G_CARB,
     KCAL_PER_G_FAT,
     KCAL_PER_G_PROTEIN,
     KCAL_PER_KG,
     TDEE_PLAUSIBLE_BMR_RANGE,
+    WATER_DEFAULT_GOAL_ML,
+    WATER_ML_PER_KG,
     TrendPoint,
     activity_multiplier,
     age_years,
@@ -18,6 +21,7 @@ from app.calculations import (
     macro_targets,
     measured_tdee,
     scale_macros,
+    water_goal,
     target_calories,
     total_macros,
     weekly_rate,
@@ -364,3 +368,49 @@ def test_the_clamp_floor_is_not_reachable_by_under_logging():
     assert under_logged.clamped_reason is not None
     # The floor did not move with the bad input.
     assert under_logged.calories > 1200
+
+
+def test_water_goal_is_derived_from_weight_and_rounded_to_50ml():
+    goal = water_goal(70.0)
+    assert goal.source == "weight"
+    assert goal.ml == 2450  # 35 x 70
+    # The inputs travel with the answer, so the card can show its working.
+    assert goal.ml_per_kg == WATER_ML_PER_KG
+    assert goal.weight_kg == 70.0
+
+    # Rounded, because 35 x 71.3 = 2495.5 and "2,496 ml" reads as a
+    # measurement of something rather than as a rule of thumb.
+    assert water_goal(71.3).ml == 2500
+
+
+def test_water_goal_falls_back_when_there_is_no_weight():
+    goal = water_goal(None)
+    assert goal.ml == WATER_DEFAULT_GOAL_ML
+    # Says so, rather than presenting the folk figure as personal.
+    assert goal.source == "default"
+    assert goal.weight_kg is None
+
+
+def test_a_custom_water_goal_wins_over_the_derivation():
+    """A goal the user typed must not drift as their weight changes.
+
+    The override is checked before the weight is even consulted -- otherwise
+    someone who set 3 litres deliberately would find the app quietly
+    overruling them after a few weigh-ins.
+    """
+    goal = water_goal(70.0, custom_ml=3000.0)
+    assert goal.ml == 3000.0
+    assert goal.source == "custom"
+    # Nothing to explain, so no inputs are reported.
+    assert goal.ml_per_kg is None
+    assert goal.weight_kg is None
+
+    # Still wins when there is no weight at all.
+    assert water_goal(None, custom_ml=3000.0).ml == 3000.0
+
+
+def test_the_shipped_quick_adds_are_immutable():
+    """A tuple, so a caller cannot mutate the default every account starts from."""
+    assert DEFAULT_WATER_QUICK_ADDS == (250.0, 500.0, 750.0)
+    with pytest.raises(AttributeError):
+        DEFAULT_WATER_QUICK_ADDS.append(1000.0)

@@ -92,10 +92,18 @@ def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
 # An account that has never opened Settings. Spelled out once because several
 # tests below assert against the whole payload, and a field missing from the
 # response is exactly the kind of regression those assertions exist to catch.
-EMPTY_PROFILE = {
+# Every optional settings field in its unset state. Shared because several
+# tests below compare the *whole* payload, and a new column would otherwise
+# break each of them in a different place.
+#
+# Named for the behaviour rather than the feature it started as: this was the
+# body profile alone, and it now carries water too. Anything added to the
+# patched group in routers/settings.py belongs here.
+UNSET_OPTIONALS = {
     "height_cm": None, "birth_date": None, "sex": None,
     "activity_level": None, "goal_rate_kg_per_week": None,
     "targets_auto": False,
+    "water_goal_ml": None, "water_quick_adds": None,
 }
 
 
@@ -104,13 +112,13 @@ def test_settings_defaults_and_update(client):
     assert defaults == {
         "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
         "fat_goal": 70, "track_carbs": False, "track_fat": False,
-        "weight_unit": "kg", **EMPTY_PROFILE,
+        "weight_unit": "kg", **UNSET_OPTIONALS,
     }
 
     updated = {
         "calorie_goal": 2400, "protein_goal": 180, "carbs_goal": 300,
         "fat_goal": 80, "track_carbs": True, "track_fat": False,
-        "weight_unit": "lb", **EMPTY_PROFILE,
+        "weight_unit": "lb", **UNSET_OPTIONALS,
     }
     assert client.put("/api/settings", json=updated).json() == updated
     assert client.get("/api/settings").json() == updated
@@ -124,6 +132,7 @@ def test_body_profile_round_trips(client):
         "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
         "activity_level": "moderate", "goal_rate_kg_per_week": -0.5,
         "targets_auto": False,
+        "water_goal_ml": None, "water_quick_adds": None,
     }
     assert client.put("/api/settings", json=profile).json() == profile
     assert client.get("/api/settings").json() == profile
@@ -246,3 +255,86 @@ def test_weight_unit_rejects_unknown_units(client):
     for bad in ("stone", "KG", ""):
         response = client.put("/api/settings", json={**valid, "weight_unit": bad})
         assert response.status_code == 422, f"{bad!r} was accepted"
+
+
+def test_water_quick_adds_round_trip_as_a_list_not_a_string(client):
+    """The column is TEXT and the API field is a list, and this is the seam.
+
+    Without the explicit conversion in routers/settings.py, Pydantic reads the
+    raw JSON *string* off the ORM row for a list field and every GET
+    /api/settings 500s. That is the third incarnation of a trap this codebase
+    has hit -- UserOut.is_admin and MealTemplate.items were the other two --
+    and it is the reason the column is named water_quick_adds_json rather than
+    matching the field.
+    """
+    settings = client.get("/api/settings").json()
+    # Unset means "use the shipped defaults", which the client resolves.
+    assert settings["water_quick_adds"] is None
+
+    saved = client.put(
+        "/api/settings", json={**settings, "water_quick_adds": [200.0, 400.0]}
+    ).json()
+    assert saved["water_quick_adds"] == [200.0, 400.0]
+
+    # The read path is the half that actually breaks, so assert it separately
+    # rather than trusting the PUT response.
+    reread = client.get("/api/settings").json()
+    assert reread["water_quick_adds"] == [200.0, 400.0]
+    assert isinstance(reread["water_quick_adds"], list)
+
+
+def test_water_quick_adds_can_be_cleared_back_to_the_defaults(client):
+    settings = client.get("/api/settings").json()
+    client.put("/api/settings", json={**settings, "water_quick_adds": [100.0]})
+    client.put("/api/settings", json={**settings, "water_quick_adds": None})
+    assert client.get("/api/settings").json()["water_quick_adds"] is None
+
+
+def test_a_put_without_water_fields_leaves_them_alone(client):
+    """The stale-bundle guarantee, extended to water.
+
+    A phone running the bundle from before this deploy PUTs a body with no
+    water keys. Under the replace semantics the original goals use, that would
+    silently wipe a custom goal and any edited quick-add amounts.
+    """
+    settings = client.get("/api/settings").json()
+    client.put("/api/settings", json={
+        **settings, "water_goal_ml": 3000.0, "water_quick_adds": [300.0],
+    })
+
+    legacy_body = {
+        "calorie_goal": 2300, "protein_goal": 160, "carbs_goal": 260,
+        "fat_goal": 75, "track_carbs": False, "track_fat": False,
+    }
+    saved = client.put("/api/settings", json=legacy_body).json()
+
+    assert saved["water_goal_ml"] == 3000.0
+    assert saved["water_quick_adds"] == [300.0]
+    # The replaced fields did move, which is the half that should.
+    assert saved["calorie_goal"] == 2300
+
+
+def test_water_settings_bounds_are_refused(client):
+    settings = client.get("/api/settings").json()
+
+    # Above the safe-intake ceiling.
+    assert client.put(
+        "/api/settings", json={**settings, "water_goal_ml": 12000}
+    ).status_code == 422
+    assert client.put(
+        "/api/settings", json={**settings, "water_goal_ml": 0}
+    ).status_code == 422
+    # A single button larger than a large bottle.
+    assert client.put(
+        "/api/settings", json={**settings, "water_quick_adds": [2500.0]}
+    ).status_code == 422
+    # More buttons than fit on a phone.
+    assert client.put(
+        "/api/settings",
+        json={**settings, "water_quick_adds": [100.0, 200.0, 300.0, 400.0, 500.0]},
+    ).status_code == 422
+    # An empty list is not "use the defaults" -- null is. An empty list would
+    # render a card with no way to log anything.
+    assert client.put(
+        "/api/settings", json={**settings, "water_quick_adds": []}
+    ).status_code == 422

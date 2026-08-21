@@ -1,6 +1,6 @@
 from datetime import date as date_type
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -246,6 +246,79 @@ MAX_INPUT_GOAL_RATE_KG_PER_WEEK = 5.0
 # Older than the oldest verified human. Same job as the two bounds above.
 MAX_AGE_YEARS = 122
 
+# Water bounds. All three are refusals of input that is not a plausible amount
+# of water, not opinions about how much anyone should drink.
+#
+# The goal ceiling is the one with a real reason behind it rather than a
+# rounding: sustained intake much above 10 litres a day outruns the kidneys'
+# ability to excrete it, and hyponatraemia is a genuine harm. A tracker should
+# not accept a goal it would be dangerous to meet.
+MAX_WATER_GOAL_ML = 10_000.0
+# One tap should not be able to log more than a large bottle.
+MAX_WATER_QUICK_ADD_ML = 2_000.0
+# A single hand-typed entry, which may legitimately be a jug at a restaurant.
+MAX_WATER_ENTRY_ML = 5_000.0
+# How many quick-add buttons fit on a phone without wrapping into a grid.
+MAX_WATER_QUICK_ADDS = 4
+
+# Each element bounded, not just the list. `list[float]` with a bound on the
+# list alone would accept [inf, nan, -1] as three perfectly good floats.
+WaterQuickAddMl = Annotated[float, Field(gt=0, le=MAX_WATER_QUICK_ADD_ML)]
+
+
+class WaterEntryCreate(BaseModel):
+    # Bounded above, so no allow_inf_nan -- the WeightEntryCreate argument.
+    date: date_type
+    ml: float = Field(gt=0, le=MAX_WATER_ENTRY_ML)
+
+    @field_validator("date")
+    @classmethod
+    def not_in_future(cls, value: date_type) -> date_type:
+        # Same grace as a weigh-in, and for the same reason: the server's today
+        # may be a day behind the user's.
+        limit = date_type.today() + timedelta(days=FUTURE_DATE_GRACE_DAYS)
+        if value > limit:
+            raise ValueError("water log date cannot be in the future")
+        return value
+
+
+class WaterEntry(WaterEntryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    # What "undo" removes: the entries come back newest-first so the client
+    # never has to sort them to find the last one.
+    created_at: datetime | None = None
+
+
+class WaterGoalBasis(BaseModel):
+    """Where the day's goal came from, so the card can show its working.
+
+    Mirrors TdeeBasis in intent: a derived number arrives with its inputs
+    attached, and "we had nothing to derive from" is stated rather than hidden
+    behind a plausible-looking figure.
+    """
+
+    source: Literal["custom", "weight", "default"]
+    ml_per_kg: float | None = None
+    weight_kg: float | None = None
+
+
+class WaterDay(BaseModel):
+    """Everything the water card needs, in one response.
+
+    The goal travels with the total deliberately. It is derived from the user's
+    trend weight, and deriving it client-side would be a second definition of
+    the same number -- the thing this codebase keeps refusing to have.
+    """
+
+    date: date_type
+    total_ml: float
+    goal_ml: float
+    goal_basis: WaterGoalBasis
+    entries: list[WaterEntry] = []
+
+
 ACTIVITY_LEVELS = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 
@@ -284,6 +357,21 @@ class Settings(BaseModel):
         le=MAX_INPUT_GOAL_RATE_KG_PER_WEEK,
     )
     targets_auto: bool = False
+
+    # Water. Both default, for the reason weight_unit does.
+    #
+    # None is meaningful for both rather than merely absent: it means "derive
+    # my goal from my weight" and "use the shipped quick-add amounts". That
+    # makes them indistinguishable from "not sent" in `model_fields_set`
+    # terms -- which is fine, because both are patched fields and clearing one
+    # is done by sending null explicitly.
+    #
+    # No allow_inf_nan on either: every bound here is an upper bound, which
+    # closes inf and nan already. See WeightEntryCreate.
+    water_goal_ml: float | None = Field(default=None, gt=0, le=MAX_WATER_GOAL_ML)
+    water_quick_adds: list[WaterQuickAddMl] | None = Field(
+        default=None, min_length=1, max_length=MAX_WATER_QUICK_ADDS
+    )
 
     @field_validator("birth_date")
     @classmethod
@@ -567,3 +655,4 @@ class AdminUserRow(BaseModel):
     foods: int = 0
     meal_templates: int = 0
     ai_calls: int = 0
+    water_logs: int = 0

@@ -188,6 +188,39 @@ class WeightEntry(Base):
     )
 
 
+class WaterLog(Base):
+    """One drink, not one day.
+
+    Deliberately event rows rather than a single running total per date, which
+    is the opposite of how `weights` models a day. The difference is undo: a
+    mis-tap on "+500" has to be removable, and that is only well defined if the
+    row it created still exists. A per-day total would turn undo into a guess
+    about which amount to subtract.
+
+    It also means the index below is NOT unique on (user_id, date) -- several
+    rows a day is the entire point, where for `weights` a second row for a date
+    is a correction.
+    """
+
+    __tablename__ = "water_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # The day the water was drunk, user-chosen and freely backdated -- the same
+    # meaning `Meal.date` carries, and for the same reason: the dashboard card
+    # follows the day being viewed, not the day the button was pressed.
+    date: Mapped[date_type] = mapped_column(Date)
+    ml: Mapped[float] = mapped_column(Float)
+    # When the row was written. Named `created_at` to match every other table
+    # here; the roadmap sketch called it `logged_at`, and one table using a
+    # different word for the same concept is how a codebase starts needing a
+    # glossary. Doubles as the tiebreaker for "which entry was last" when two
+    # land on the same date.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (Index("ix_water_logs_user_date", "user_id", "date"),)
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
@@ -232,6 +265,28 @@ class Setting(Base):
     targets_auto: Mapped[bool] = mapped_column(
         default=False, server_default=sa_false()
     )
+
+    # Water. Both nullable, so neither needs a Python-side default nor a
+    # server_default: NULL is a meaningful state for each, not a gap to
+    # backfill.
+    #
+    # NULL means "work it out from my weight"; a number means "I set this
+    # myself". One nullable column rather than a value plus a `water_goal_auto`
+    # boolean, because NULL already carries the flag and two columns could
+    # disagree with each other.
+    water_goal_ml: Mapped[float | None] = mapped_column(Float, default=None)
+    # The quick-add amounts, as a serialized list of ml values. NULL means the
+    # shipped defaults, so an account that never opens this setting stores
+    # nothing and still gets buttons.
+    #
+    # The `_json` suffix is load-bearing, not decoration. The API field is a
+    # `list[float]` named `water_quick_adds`, and `schemas.Settings` reads
+    # attributes off this row directly. A column named `water_quick_adds`
+    # holding a *string* would therefore be fed straight into a list field --
+    # and every GET /api/settings would 500. The mismatched name forces the
+    # explicit conversion in routers/settings.py, exactly as `items_json` does
+    # for MealTemplate.items.
+    water_quick_adds_json: Mapped[str | None] = mapped_column(Text, default=None)
 
     __table_args__ = (
         CheckConstraint(

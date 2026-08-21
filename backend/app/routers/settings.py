@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -9,17 +11,47 @@ from ..targets import apply_auto_targets, compute_targets
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# The body-profile fields, which are patched rather than replaced. See the note
-# on update_settings for why these six behave differently from the six above
-# them.
-_PROFILE_FIELDS = (
+# The fields that are patched rather than replaced. See the note on
+# update_settings for why these behave differently from the seven original ones.
+#
+# Named for the behaviour, not the feature: this began as the body profile and
+# is now the body profile plus water, and every field added from here on joins
+# this group rather than the replaced one.
+#
+# `water_quick_adds` is patched too but is NOT in this tuple -- it is the one
+# field whose schema name and column name differ, so it cannot go through the
+# generic setattr below. It is handled explicitly, just after the loop.
+_PATCHED_FIELDS = (
     "height_cm",
     "birth_date",
     "sex",
     "activity_level",
     "goal_rate_kg_per_week",
     "targets_auto",
+    "water_goal_ml",
 )
+
+
+def _settings_out(row: Setting) -> Settings:
+    """Build the response explicitly, rather than letting Pydantic read the row.
+
+    `Settings` is a from_attributes model, so returning the ORM row directly
+    works for every field whose name matches its column -- which is all of them
+    but one. `water_quick_adds` is a list[float] on the API and
+    `water_quick_adds_json` is TEXT in the database, and that divergence is
+    exactly the trap this codebase has now hit three times: `UserOut.is_admin`
+    silently returned False, `MealTemplate.items` silently returned [], and
+    here it would be louder but worse -- Pydantic would be handed a JSON
+    *string* for a list field and every GET /api/settings would 500.
+
+    One construction site, the same fix `_user_out` and `_template_out` are.
+    """
+    data = Settings.model_validate(row).model_dump()
+    data["water_quick_adds"] = (
+        None if row.water_quick_adds_json is None
+        else json.loads(row.water_quick_adds_json)
+    )
+    return Settings.model_validate(data)
 
 
 def _get_or_create(db: Session, user_id: int) -> Setting:
@@ -34,7 +66,7 @@ def _get_or_create(db: Session, user_id: int) -> Setting:
 
 @router.get("", response_model=Settings)
 def get_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _get_or_create(db, user.id)
+    return _settings_out(_get_or_create(db, user.id))
 
 
 @router.get("/targets", response_model=BodyTargets)
@@ -65,8 +97,9 @@ def update_settings(
 ):
     """Save settings. Two write semantics in one handler, deliberately.
 
-    The original six fields are **replaced** on every PUT, exactly as they
-    always have been. The body-profile fields are **patched**: each is written
+    The original goal and tracking fields are **replaced** on every PUT,
+    exactly as they always have been. Everything added since -- the body
+    profile, and now the two water fields -- is **patched**: each is written
     only if the request actually contained it.
 
     The asymmetry buys one specific thing. This app is an installed PWA, so a
@@ -76,6 +109,9 @@ def update_settings(
     silently blank the user's height, birth date and sex on their next save,
     and move their targets with it. `model_fields_set` distinguishes "did not
     send" from "sent null", so clearing a field on purpose still works.
+
+    That reasoning is why the water fields joined the patched group on day one
+    rather than after a phone somewhere quietly wiped someone's goal.
 
     When `targets_auto` is on the four submitted goals are ignored and
     recomputed from the profile; the client sends them anyway because the
@@ -90,12 +126,21 @@ def update_settings(
     row.track_fat = settings.track_fat
     row.weight_unit = settings.weight_unit
 
-    for field in _PROFILE_FIELDS:
+    for field in _PATCHED_FIELDS:
         if field in settings.model_fields_set:
             setattr(row, field, getattr(settings, field))
+
+    # Out of the loop because the name and the type both change on the way in.
+    # Sending null clears it back to the shipped defaults, which is why this is
+    # keyed on model_fields_set rather than on the value being non-None.
+    if "water_quick_adds" in settings.model_fields_set:
+        row.water_quick_adds_json = (
+            None if settings.water_quick_adds is None
+            else json.dumps(settings.water_quick_adds)
+        )
 
     # After the profile is in place, never before -- targets_auto and the
     # fields it reads are both assigned in the loop above.
     apply_auto_targets(row, db)
     db.commit()
-    return row
+    return _settings_out(row)

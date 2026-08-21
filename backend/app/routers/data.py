@@ -13,7 +13,16 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
 from ..db import get_db
-from ..models import AIAnalysis, Food, Meal, MealTemplate, Setting, User, WeightEntry
+from ..models import (
+    AIAnalysis,
+    Food,
+    Meal,
+    MealTemplate,
+    Setting,
+    User,
+    WaterLog,
+    WeightEntry,
+)
 from ..schemas import ImportResult
 
 router = APIRouter(prefix="/api/data", tags=["data"])
@@ -64,6 +73,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         .where(MealTemplate.user_id == user.id)
         .order_by(MealTemplate.id)
     ).all()
+    water = db.scalars(
+        select(WaterLog)
+        .where(WaterLog.user_id == user.id)
+        .order_by(WaterLog.date, WaterLog.id)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
@@ -94,6 +108,15 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "activity_level": setting.activity_level,
             "goal_rate_kg_per_week": setting.goal_rate_kg_per_week,
             "targets_auto": setting.targets_auto,
+            # Null means "derived from my weight" rather than "unset", so it
+            # exports as null and the meaning travels in this comment.
+            "water_goal_ml": setting.water_goal_ml,
+            # Exported as the list the API speaks, not the JSON string the
+            # column stores -- an export is for the user, not for the schema.
+            "water_quick_adds": (
+                None if setting.water_quick_adds_json is None
+                else json.loads(setting.water_quick_adds_json)
+            ),
         },
         "meals": [
             # `date` is when it was eaten, `created_at` when it was logged.
@@ -114,6 +137,13 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         "weights": [
             {"date": w.date.isoformat(), "weight_kg": w.weight_kg}
             for w in weights
+        ],
+        "water_logs": [
+            # Event rows, so created_at is what orders two drinks on one day
+            # and is part of the data rather than metadata about it.
+            {"date": w.date.isoformat(), "ml": w.ml,
+             "created_at": w.created_at.isoformat() if w.created_at else None}
+            for w in water
         ],
         "meal_templates": [
             # Same empty-string guard as ai_analyses below: items_json is

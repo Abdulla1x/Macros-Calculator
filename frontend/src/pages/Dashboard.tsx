@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
+import WaterCard from '../components/WaterCard'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate } from '../types'
@@ -198,6 +199,24 @@ export default function Dashboard() {
           )}
         </section>
       )}
+
+      {/* The daily quick-logs.
+
+          One section holding a grid, not a stack of full-width cards — this is
+          where Phase 7's steps and Phase 8's supplements are meant to land, and
+          three trackers each taking a full row would push the meal list off the
+          first screen on a phone. Adding one is adding a child here.
+
+          It sits below the rings because those are the primary targets, and
+          above the meal list because a quick-log is a thing you tap, not a
+          thing you read.
+
+          `viewedDate`, not today: the header's ◀ ▶ already move the whole page
+          through time, and a tracker that ignored them would be the only part
+          of this screen showing a different day from the rest. */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <WaterCard date={viewedDate} />
+      </section>
 
       {/* Hidden entirely until there is something to log. The entry point is
           the "Save as template" button on Log Meal; a permanent empty-state

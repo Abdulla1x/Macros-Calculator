@@ -450,3 +450,77 @@ def macro_targets(
         "carbs": float(round(carbs_g)),
         "fat": float(round(fat_g)),
     }
+
+
+# CONVENTION. Millilitres of water per kilogram of body weight per day. The
+# guidance usually quoted is 30-35 ml/kg; 35 is the top of that band, chosen
+# because the failure modes are not symmetric -- a goal slightly too high is a
+# glass of water, a goal too low is a tracker that says "done" before you are.
+# Nothing about this is measured, it varies with climate, activity and diet,
+# and it is why the UI shows the arithmetic next to the answer rather than the
+# answer alone.
+WATER_ML_PER_KG = 35.0
+
+# CONVENTION. What to show when there is no weigh-in to derive from. 2 litres
+# is the folk figure, which is exactly why it is the fallback and not the
+# formula: it is a reasonable default for an unknown adult and a poor one for
+# any specific adult. `WaterGoalBasis.source` says when this is being used, so
+# the UI can ask for a weigh-in instead of quietly presenting it as personal.
+WATER_DEFAULT_GOAL_ML = 2000.0
+
+# CONVENTION. The quick-add amounts a new account starts with: a glass, a large
+# glass, and a small bottle. Settable per user, so this is only a starting
+# point. A tuple, not a list, so nothing can mutate the shipped default.
+DEFAULT_WATER_QUICK_ADDS = (250.0, 500.0, 750.0)
+
+
+class WaterGoal(NamedTuple):
+    """A daily water goal, and where the number came from.
+
+    `source` is what the UI renders the explanation from -- the standing rule
+    that no derived number reaches the screen without its inputs beside it. The
+    three cases genuinely differ: "custom" is the user's own figure and needs no
+    justification, "weight" has arithmetic worth showing, and "default" is a
+    stand-in that should invite a weigh-in rather than look personal.
+    """
+
+    ml: float
+    source: str  # "custom" | "weight" | "default"
+    ml_per_kg: float | None
+    weight_kg: float | None
+
+
+def water_goal(
+    weight_kg: float | None,
+    custom_ml: float | None = None,
+    ml_per_kg: float = WATER_ML_PER_KG,
+) -> WaterGoal:
+    """Resolve the daily water goal from the user's own figure or their weight.
+
+    A stored `custom_ml` always wins: the user overrode the derivation on
+    purpose, and a goal that silently drifted with their weight after they set
+    it by hand would be the app overruling them.
+
+    Deliberately takes the *smoothed* trend weight rather than the latest
+    reading, because that is the app's single definition of what someone
+    weighs -- and because a goal that jumped every time the scale caught a
+    litre of yesterday's water would be circular in a way that is almost funny.
+    """
+    if custom_ml is not None:
+        return WaterGoal(
+            ml=float(custom_ml), source="custom", ml_per_kg=None, weight_kg=None
+        )
+    if weight_kg is None:
+        return WaterGoal(
+            ml=WATER_DEFAULT_GOAL_ML,
+            source="default",
+            ml_per_kg=None,
+            weight_kg=None,
+        )
+    # Rounded to 50 ml. The inputs do not support finer than that, and
+    # "2,447 ml" reads as a measurement of something rather than as the rule of
+    # thumb it is.
+    ml = round(ml_per_kg * weight_kg / 50.0) * 50.0
+    return WaterGoal(
+        ml=float(ml), source="weight", ml_per_kg=ml_per_kg, weight_kg=weight_kg
+    )

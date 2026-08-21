@@ -25,6 +25,31 @@ export const MAX_HEIGHT_CM = 272
  * someone entering their goal *weight* here by mistake. */
 export const MAX_GOAL_RATE_KG_PER_WEEK = 5
 
+/** schemas.py MAX_WATER_GOAL_ML. Not a rounding: sustained intake much above
+ *  10 litres a day outruns the kidneys and hyponatraemia is a real harm, so
+ *  this is a goal the app declines to help anyone meet. */
+export const MAX_WATER_GOAL_ML = 10000
+
+/** schemas.py MAX_WATER_QUICK_ADD_ML — one tap should not exceed a large bottle. */
+export const MAX_WATER_QUICK_ADD_ML = 2000
+
+/** schemas.py MAX_WATER_ENTRY_ML — a hand-typed amount, which may legitimately
+ *  be a jug at a restaurant. */
+export const MAX_WATER_ENTRY_ML = 5000
+
+/** schemas.py MAX_WATER_QUICK_ADDS. */
+export const MAX_WATER_QUICK_ADDS = 4
+
+/** calculations.py DEFAULT_WATER_QUICK_ADDS — what an account that has never
+ *  customised them gets. The server stores NULL in that case rather than these
+ *  values, so the client is what turns "unset" into buttons. */
+export const DEFAULT_WATER_QUICK_ADDS = [250, 500, 750]
+
+/** calculations.py WATER_ML_PER_KG. Needed here for one message only: the
+ *  card has to name the rate before any weigh-in exists for the server to
+ *  report it alongside. */
+export const WATER_ML_PER_KG = 35
+
 interface FieldRule {
   label: string
   /** Null when the value is acceptable, otherwise why it is not. */
@@ -38,6 +63,16 @@ const positiveGoal = (label: string): FieldRule => ({
 })
 
 export const settingsFieldRules: Partial<Record<keyof Settings, FieldRule>> = {
+  water_goal_ml: {
+    label: 'Water goal',
+    check: (value) => {
+      if (value <= 0) return 'Water goal has to be greater than zero.'
+      if (value > MAX_WATER_GOAL_ML) {
+        return `A daily goal above ${MAX_WATER_GOAL_ML.toLocaleString()} ml is more than the body can safely clear — this app will not set one.`
+      }
+      return null
+    },
+  },
   calorie_goal: positiveGoal('Daily calories'),
   protein_goal: positiveGoal('Daily protein'),
   carbs_goal: positiveGoal('Daily carbs'),
@@ -72,4 +107,21 @@ export function validateSettingsField(
   if (value === null) return null
   const rule = settingsFieldRules[field]
   return rule ? rule.check(value) : null
+}
+
+
+/** Why a quick-add amount would be refused, or null if it would not be.
+ *
+ * Deliberately not part of `settingsFieldRules`: the quick-adds are elements of
+ * one list field, not distinct `keyof Settings` keys, so there is no key for
+ * that record to hang a rule on. Same job, different shape. */
+export function validateWaterQuickAdd(value: number | null): string | null {
+  if (value === null) return null
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'A quick-add amount has to be greater than zero.'
+  }
+  if (value > MAX_WATER_QUICK_ADD_ML) {
+    return `A single button should not add more than ${MAX_WATER_QUICK_ADD_ML.toLocaleString()} ml.`
+  }
+  return null
 }
