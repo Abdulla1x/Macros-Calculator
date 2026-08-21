@@ -148,6 +148,53 @@ export interface StepDay {
   burn_weight_kg: number | null
 }
 
+/** One supplement the user keeps on their list.
+ *
+ * `times` is the schedule as "HH:MM" strings, sorted and de-duplicated by the
+ * server. Strings rather than a time type because they are *labels on a
+ * schedule*, not instants: no date, no timezone, and the two digits either side
+ * of the colon are what the log row and the clock comparison both want.
+ *
+ * `active: false` means paused — off the daily card, history intact. It is the
+ * non-destructive way to stop taking something; deleting takes every ticked
+ * dose with it. */
+export interface Supplement {
+  id: number
+  name: string
+  dose: string | null
+  times: string[]
+  active: boolean
+  created_at: string | null
+}
+
+/** One scheduled dose on one day, and whether it has been taken.
+ *
+ * `off_schedule` marks a slot that is only here because a dose was ticked in
+ * it — the supplement has since been paused, or its time moved. It is history
+ * rather than something due, and it is what stops pausing or rescheduling from
+ * turning a day that was fully taken into a day with a miss on it. */
+export interface SupplementSlot {
+  supplement_id: number
+  name: string
+  dose: string | null
+  time: string
+  taken: boolean
+  off_schedule: boolean
+}
+
+/** One day of doses — everything the card renders, in one response.
+ *
+ * Nothing here says whether a dose is *due*. That needs the user's wall clock,
+ * which the server does not have and this app stores no timezone for, so it is
+ * the one derived value among the daily trackers that is honestly the client's
+ * to compute. See SupplementsCard. */
+export interface SupplementDay {
+  date: string
+  taken: number
+  scheduled: number
+  slots: SupplementSlot[]
+}
+
 /** What a measured TDEE was built from, or what it is still short of. */
 export interface TdeeBasis {
   logged_days: number
@@ -402,4 +449,12 @@ export interface AdminUserRow {
   foods: number
   meal_templates: number
   ai_calls: number
+  /** The daily trackers. Water counts drinks and supplement_logs counts doses,
+   *  so both climb several times a day; steps counts *days* logged, since it
+   *  upserts. Different units, which is why the table gives them a column each
+   *  rather than one summed "activity" figure that would mean nothing. */
+  water_logs: number
+  steps: number
+  supplements: number
+  supplement_logs: number
 }

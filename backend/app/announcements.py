@@ -23,6 +23,31 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-21-supplement-tracker",
+        date="2026-08-21",
+        title="Tick off your supplements",
+        body=(
+            "Add what you take in Settings -- a name, the dose if you want one, "
+            "and the times of day you mean to take it -- and a card appears on "
+            "your dashboard with a box for each dose. Tick them as you go. It "
+            "follows whichever day you are looking at, like the water and steps "
+            "cards, so you can fill in yesterday with the same arrows.\n\n"
+            "It will tell you when a dose is overdue while you have the app "
+            "open, and that is the honest limit of it: **nothing here will "
+            "notify you on your phone.** Real push notifications on Android go "
+            "through Google Play Services, and scheduled local ones need a "
+            "browser feature that was never actually built, so a reminder that "
+            "reached you while the app was closed is not something this app can "
+            "deliver. It would rather say so than quietly not fire.\n\n"
+            "Taking a break from something? Pause it -- it drops off the card "
+            "and keeps every dose you already ticked. Deleting removes the "
+            "history with it, and you will be told how much before it does. "
+            "Nothing here counts towards your calories or macros: a protein "
+            "powder big enough to matter is a meal, and logging it in both "
+            "places would count it twice."
+        ),
+    ),
+    Announcement(
         id="2026-08-21-steps-tracker",
         date="2026-08-21",
         title="Log your steps on the dashboard",

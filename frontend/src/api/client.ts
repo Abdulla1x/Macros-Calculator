@@ -22,6 +22,8 @@ import type {
   TokenResponse,
   Transcription,
   User,
+  Supplement,
+  SupplementDay,
   WaterDay,
   WaterEntry,
   WeightEntry,
@@ -254,6 +256,51 @@ export const api = {
     request<void>(`/api/steps?date=${encodeURIComponent(date)}`, {
       method: 'DELETE',
     }),
+
+  // One request feeds the whole card: every scheduled dose for the day, and
+  // which of them are ticked.
+  getSupplementDay: (date: string) =>
+    request<SupplementDay>(
+      `/api/supplements/day?date=${encodeURIComponent(date)}`,
+    ),
+  // Both check-off verbs return the whole day rather than the row, because the
+  // tick list *is* the day's state and this is a card you tap several boxes on
+  // in a row — a re-fetch after each one would double the requests against a
+  // cold free-tier instance for no new information.
+  //
+  // Idempotent, both ways: ticking a ticked box and clearing a clear one are
+  // the states the caller asked for, not errors.
+  takeDose: (supplementId: number, date: string, time: string) =>
+    request<SupplementDay>('/api/supplements/log', {
+      method: 'POST',
+      body: JSON.stringify({ supplement_id: supplementId, date, time }),
+    }),
+  untakeDose: (supplementId: number, date: string, time: string) => {
+    const params = new URLSearchParams({
+      supplement_id: String(supplementId),
+      date,
+      time,
+    })
+    return request<SupplementDay>(`/api/supplements/log?${params}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // The management list, paused ones included — the Settings editor is the
+  // only place a paused supplement can be brought back.
+  getSupplements: () => request<Supplement[]>('/api/supplements'),
+  createSupplement: (body: Omit<Supplement, 'id' | 'created_at'>) =>
+    request<Supplement>('/api/supplements', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateSupplement: (id: number, body: Omit<Supplement, 'id' | 'created_at'>) =>
+    request<Supplement>(`/api/supplements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteSupplement: (id: number) =>
+    request<void>(`/api/supplements/${id}`, { method: 'DELETE' }),
 
   getSettings: () => request<Settings>('/api/settings'),
   getBodyTargets: () => request<BodyTargets>('/api/settings/targets'),

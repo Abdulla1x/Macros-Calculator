@@ -376,6 +376,147 @@ class StepDay(BaseModel):
     burn_weight_kg: float | None = None
 
 
+# Supplement bounds. Like MAX_STEPS_PER_DAY these carry no health opinion --
+# this app has no business telling anyone what to take. They exist so the list
+# stays a list a person can tick off, and so a paste accident cannot store a
+# novel in a name column.
+MAX_SUPPLEMENTS = 30
+MAX_SUPPLEMENT_TIMES = 6
+MAX_SUPPLEMENT_NAME = 100
+MAX_SUPPLEMENT_DOSE = 60
+
+# "HH:MM", 24-hour. A plain string rather than datetime.time because it is a
+# *label on a schedule*, not an instant: it has no date and no timezone, and
+# every consumer -- the unique index, the log row, the client's clock
+# comparison -- wants the two digits either side of the colon.
+SupplementTime = Annotated[
+    str, Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+]
+
+
+class SupplementCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=MAX_SUPPLEMENT_NAME)
+    # Free text and optional: doses have no common unit (IU, mg, ml, capsules),
+    # so a number-plus-enum would be missing whatever someone actually takes.
+    # Displayed beside the name, never computed with.
+    dose: str | None = Field(default=None, max_length=MAX_SUPPLEMENT_DOSE)
+    times: list[SupplementTime] = Field(
+        min_length=1, max_length=MAX_SUPPLEMENT_TIMES
+    )
+    # Present on create so the same model can serve PUT, where pausing is the
+    # whole point. Defaults true: a supplement you are adding is one you intend
+    # to take.
+    active: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        """Trim, and refuse a name that is only whitespace.
+
+        `min_length=1` alone accepts " ", which then renders as a blank row on
+        the tick list -- a dose you cannot identify is one you cannot honestly
+        tick. It would also defeat the case-insensitive unique index, since
+        " " and "  " are different strings.
+        """
+        value = value.strip()
+        if not value:
+            raise ValueError("supplement name cannot be blank")
+        return value
+
+    @field_validator("dose")
+    @classmethod
+    def strip_dose(cls, value: str | None) -> str | None:
+        """An all-whitespace dose is no dose, and stores as NULL rather than "".
+
+        Two ways to say "unset" in one column is how a display ends up with a
+        stray separator nobody can find the source of.
+        """
+        if value is None:
+            return None
+        return value.strip() or None
+
+    @field_validator("times")
+    @classmethod
+    def sorted_and_unique(cls, value: list[str]) -> list[str]:
+        """A schedule, not an ordering the user chose.
+
+        Sorting is what lets the card render the day in order without sorting it
+        again in the client, and de-duplicating stops "08:00, 08:00" from
+        claiming two doses that are one -- the second could never be ticked
+        separately, since the log's unique index spans exactly this value.
+        """
+        return sorted(set(value))
+
+
+class Supplement(SupplementCreate):
+    """One supplement as stored.
+
+    Not a from_attributes model, deliberately, and this is the fourth time the
+    same trap has come up: the ORM column is `times_json` (TEXT) and this field
+    is `times` (list). Reading attributes off the row would hand Pydantic a JSON
+    string for a list field and 500 every response, so routers/supplements.py
+    builds this explicitly in `_supplement_out`, the sibling of `_settings_out`,
+    `_template_out` and `_user_out`.
+    """
+
+    id: int
+    created_at: datetime | None = None
+
+
+class SupplementSlot(BaseModel):
+    """One scheduled dose on one day, and whether it has been taken.
+
+    `off_schedule` is the interesting flag. A slot normally comes from the
+    supplement's current schedule, but a slot that is only here because a log
+    row exists -- the supplement has since been paused, or its time moved -- is
+    still part of that day's truth and must not silently vanish from a day that
+    was fully taken. It is rendered as history rather than as something due.
+    """
+
+    supplement_id: int
+    name: str
+    dose: str | None = None
+    time: SupplementTime
+    taken: bool
+    off_schedule: bool = False
+
+
+class SupplementDay(BaseModel):
+    """Everything the supplements card needs, in one response.
+
+    `taken` and `scheduled` are the card's value and goal. Neither is a derived
+    measurement the way a water goal is -- they are counts of the rows below --
+    but they travel with the slots for the same reason: one definition, resolved
+    once, rather than a client that re-counts and can disagree.
+
+    Nothing here says whether a dose is *due*. That needs the user's wall clock,
+    which the server does not have and this app stores no timezone for, so it is
+    the one derived value in the daily trackers that is honestly the client's to
+    compute. See components/SupplementsCard.tsx.
+    """
+
+    date: date_type
+    taken: int
+    scheduled: int
+    slots: list[SupplementSlot] = []
+
+
+class SupplementLogCreate(BaseModel):
+    supplement_id: int
+    date: date_type
+    time: SupplementTime
+
+    @field_validator("date")
+    @classmethod
+    def not_in_future(cls, value: date_type) -> date_type:
+        # Same grace as a weigh-in, a water log and a step count: the server's
+        # today may be a day behind the user's.
+        limit = date_type.today() + timedelta(days=FUTURE_DATE_GRACE_DAYS)
+        if value > limit:
+            raise ValueError("supplement log date cannot be in the future")
+        return value
+
+
 ACTIVITY_LEVELS = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 
@@ -720,3 +861,8 @@ class AdminUserRow(BaseModel):
     ai_calls: int = 0
     water_logs: int = 0
     steps: int = 0
+    # Two counts rather than one, because they answer different questions: how
+    # many things someone tracks is setup, how many doses they have ticked is
+    # use. Counts only -- never a name, see the privacy note on the router.
+    supplements: int = 0
+    supplement_logs: int = 0

@@ -20,6 +20,8 @@ from ..models import (
     MealTemplate,
     Setting,
     StepEntry,
+    Supplement,
+    SupplementLog,
     User,
     WaterLog,
     WeightEntry,
@@ -88,12 +90,26 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         .where(StepEntry.user_id == user.id)
         .order_by(StepEntry.date, StepEntry.id)
     ).all()
+    supplements = db.scalars(
+        select(Supplement)
+        .where(Supplement.user_id == user.id)
+        .order_by(Supplement.id)
+    ).all()
+    supplement_logs = db.scalars(
+        select(SupplementLog)
+        .where(SupplementLog.user_id == user.id)
+        .order_by(SupplementLog.date, SupplementLog.id)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
         .where(AIAnalysis.user_id == user.id)
         .order_by(AIAnalysis.id)
     ).all()
+
+    # Resolved once rather than per log row: supplement_logs is the only export
+    # section that names a row in another table.
+    supplement_names = {s.id: s.name for s in supplements}
 
     return {
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -164,6 +180,30 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             # row rather than part of the day, which is why it is not exported.
             {"date": s.date.isoformat(), "steps": s.steps}
             for s in steps
+        ],
+        "supplements": [
+            # `times` as the list the API speaks, not the JSON string the
+            # column stores -- an export is for the user, not for the schema.
+            # Same treatment water_quick_adds gets above.
+            #
+            # `active` is exported because a paused supplement is a real state
+            # and not an absence: the check-offs below may reference one, and a
+            # file that dropped it would make that history unexplainable.
+            {"name": sup.name, "dose": sup.dose,
+             "times": json.loads(sup.times_json), "active": sup.active,
+             "created_at": sup.created_at.isoformat()}
+            for sup in supplements
+        ],
+        "supplement_logs": [
+            # Identified by name rather than by supplement_id: the ids in this
+            # file mean nothing outside the database they came from, and a name
+            # is what the person reading it recognises. `time` is the scheduled
+            # slot the dose was taken in, created_at when the box was ticked --
+            # they differ whenever someone catches up in the evening.
+            {"supplement": supplement_names.get(log.supplement_id),
+             "date": log.date.isoformat(), "time": log.time_of_day,
+             "created_at": log.created_at.isoformat() if log.created_at else None}
+            for log in supplement_logs
         ],
         "meal_templates": [
             # Same empty-string guard as ai_analyses below: items_json is

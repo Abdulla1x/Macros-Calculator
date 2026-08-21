@@ -6,11 +6,15 @@ Every other router here is scoped to the authenticated user. This one
 deliberately is not, which is exactly why it is the only router behind
 `require_admin`. What it may expose is **counts, dates and account
 identifiers**: email, signup date, last-active, and how many meals, weigh-ins,
-foods, saved meal templates, water logs, step-count days and AI calls each
-account has.
+foods, saved meal templates, water logs, step-count days, supplements and
+doses ticked each account has.
 
 Admins do **not** see meal names, weight values, food entries, meal-template
-names, how much anyone drank or walked, or voice-note transcripts. That is what keeps README.md's "every API endpoint is scoped to the
+names, **supplement names or doses**, how much anyone drank or walked, or
+voice-note transcripts. The supplement names matter most of that list: a
+supplement list can name a prescription, which makes it the most disclosive
+data this app stores, and a count of rows says everything an operator needs
+while saying nothing about anyone's health. That is what keeps README.md's "every API endpoint is scoped to the
 authenticated user" and the Settings privacy copy true without a rewrite.
 `tests/test_admin.py` asserts the absence positively, so a later "just one
 useful field" commit fails a test rather than quietly failing the promise.
@@ -36,6 +40,8 @@ from ..models import (
     Meal,
     MealTemplate,
     StepEntry,
+    Supplement,
+    SupplementLog,
     User,
     WaterLog,
     WeightEntry,
@@ -80,7 +86,13 @@ ACTIVE_WINDOW_DAYS = 7
 # That undercounts a session spent only fixing history, for steps exactly as it
 # already does for a re-logged weigh-in. Logging the current day -- the common
 # case for both -- is a fresh row and reads correctly.
-_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog, StepEntry)
+#
+# Supplement follows MealTemplate out of this tuple for the same reason and
+# is counted below without joining it: the list is written once and then
+# edited by PUT, so a rename today would register as activity on the day it
+# was first added. Its check-offs are the signal instead, and they are the
+# WaterLog shape exactly -- a fresh row every time a box is ticked.
+_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog, StepEntry, SupplementLog)
 
 
 def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datetime:
@@ -176,6 +188,8 @@ def list_users(
     ai_calls = _count_by_user(db, AIAnalysis, ids)
     water_logs = _count_by_user(db, WaterLog, ids)
     steps = _count_by_user(db, StepEntry, ids)
+    supplements = _count_by_user(db, Supplement, ids)
+    supplement_logs = _count_by_user(db, SupplementLog, ids)
     last_active = _last_active_by_user(db, ids)
 
     return [
@@ -191,6 +205,8 @@ def list_users(
             ai_calls=ai_calls.get(u.id, 0),
             water_logs=water_logs.get(u.id, 0),
             steps=steps.get(u.id, 0),
+            supplements=supplements.get(u.id, 0),
+            supplement_logs=supplement_logs.get(u.id, 0),
         )
         for u in users
     ]

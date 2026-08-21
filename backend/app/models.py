@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     false as sa_false,
     func,
+    true as sa_true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -252,6 +253,113 @@ class StepEntry(Base):
     # date is a correction and not a second day's walking.
     __table_args__ = (
         Index("uq_steps_user_date", "user_id", "date", unique=True),
+    )
+
+
+class Supplement(Base):
+    """One thing the user takes, and when they mean to take it.
+
+    The schedule is a list of times rather than a count of doses, because the
+    reminder half of this feature needs a clock to compare against: "one of your
+    two doses is outstanding" is not actionable, "the 08:00 one is overdue" is.
+    Times only -- no weekday selection. A second schedule dimension doubles the
+    "is this due today" logic everywhere it is asked, and the once-weekly
+    supplement it would serve is rare enough to be worth revisiting on evidence
+    rather than guessing at now.
+
+    Nothing here contributes calories or macros, deliberately. A protein powder
+    that meaningfully feeds a macro total is a meal, and it is logged as one --
+    counting it in both places would double it.
+    """
+
+    __tablename__ = "supplements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    # Free text, and nullable. Supplement doses have no common unit -- IU, mg,
+    # µg, ml, capsules, scoops -- so a number plus a unit enum would either be
+    # missing whatever someone takes or be a units table nobody asked for. It
+    # is displayed beside the name and never computed with.
+    dose: Mapped[str | None] = mapped_column(String(60), default=None)
+    # The scheduled times, as a serialized list of "HH:MM" strings.
+    #
+    # The `_json` suffix is load-bearing, exactly as it is on
+    # `Setting.water_quick_adds_json`. The API field is `times: list[str]` and
+    # a column of the same name would hand Pydantic a JSON *string* for a list
+    # field, 500ing every read. Fourth appearance of that trap; the mismatched
+    # name is what forces the explicit conversion in routers/supplements.py.
+    times_json: Mapped[str] = mapped_column(Text)
+    # False means "paused": off the daily card, history intact. Supplements
+    # genuinely cycle -- a creatine break, a finished course -- and deleting to
+    # declutter would take the check-offs with it. NOT NULL, so it needs both a
+    # Python-side default for inserts and a server_default; the table is new,
+    # so the latter only ever backfills a downgrade-and-upgrade round trip.
+    active: Mapped[bool] = mapped_column(default=True, server_default=sa_true())
+    # Also load-bearing rather than metadata: a supplement added today must not
+    # make every past day read as a missed dose, so `_day` only schedules it on
+    # dates at or after this one. See routers/supplements.py.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# Case-insensitive supplement names, unique per user -- the same expression
+# index meal_templates uses. Two rows both called "Magnesium" on a tick list is
+# a thing you cannot act on: neither row says which one you already took.
+Index(
+    "uq_supplements_user_lower_name",
+    Supplement.user_id,
+    func.lower(Supplement.name),
+    unique=True,
+)
+
+
+class SupplementLog(Base):
+    """One dose, taken.
+
+    Closest to WaterLog of the three trackers -- several rows a day, each one an
+    insert -- but the unique index below is what makes it different: a tick is a
+    *state* ("the 08:00 dose is taken"), not an event, so a second tap on the
+    same box is the same fact rather than a second dose.
+
+    `time_of_day` stores the literal "08:00", not an index into the
+    supplement's times list. An index would silently relabel history the moment
+    someone moves their morning dose from 08:00 to 09:00: yesterday's tick would
+    re-point at a time it was never taken at. The string keeps the record
+    attached to the time it actually happened.
+
+    Named `time_of_day` rather than `time` because `time` is a Postgres keyword.
+    SQLAlchemy would quote it correctly; hand-written SQL in a psql session is
+    where it would bite, and the keyword buys nothing.
+    """
+
+    __tablename__ = "supplement_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Denormalized, even though the owner is reachable through supplement_id.
+    # Every isolation query in this app filters on user_id directly, and a join
+    # would make this the one table where that pattern does not hold -- which is
+    # the table where someone eventually forgets the join.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    supplement_id: Mapped[int] = mapped_column(
+        ForeignKey("supplements.id", ondelete="CASCADE")
+    )
+    # The day the dose was taken, user-chosen and freely backdated -- the same
+    # meaning WaterLog.date and StepEntry.date carry.
+    date: Mapped[date_type] = mapped_column(Date)
+    time_of_day: Mapped[str] = mapped_column(String(5))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    # One tick per dose per day: this is what makes POST idempotent rather than
+    # a way to record the same pill twice.
+    __table_args__ = (
+        Index(
+            "uq_supplement_logs_user_supp_date_time",
+            "user_id",
+            "supplement_id",
+            "date",
+            "time_of_day",
+            unique=True,
+        ),
     )
 
 
