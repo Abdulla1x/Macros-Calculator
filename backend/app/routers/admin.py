@@ -29,7 +29,15 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import require_admin
 from ..db import get_db
-from ..models import AIAnalysis, Food, Meal, MealTemplate, User, WeightEntry
+from ..models import (
+    AIAnalysis,
+    Food,
+    Meal,
+    MealTemplate,
+    User,
+    WaterLog,
+    WeightEntry,
+)
 from ..schemas import AdminDailyActivity, AdminDailyCount, AdminStats, AdminUserRow
 from .ai import calls_today, global_daily_limit
 
@@ -56,7 +64,12 @@ ACTIVE_WINDOW_DAYS = 7
 # That is the same backwards reading _meal_activity_at exists to prevent. No
 # signal is lost: the button lives in the log-meal footer, so creating a
 # template is always accompanied by a meal write in the same session.
-_TIMESTAMPED = (WeightEntry, Food, AIAnalysis)
+# WaterLog *is* listed, unlike MealTemplate: every row is an insert with a
+# fresh created_at, never an upsert, so the timestamp always means what this
+# tuple assumes it means. It is also the truest engagement signal the app has
+# -- someone tapping "+250" four times a day is using it on days they may not
+# log a single meal.
+_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog)
 
 
 def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datetime:
@@ -150,6 +163,7 @@ def list_users(
     foods = _count_by_user(db, Food, ids)
     templates = _count_by_user(db, MealTemplate, ids)
     ai_calls = _count_by_user(db, AIAnalysis, ids)
+    water_logs = _count_by_user(db, WaterLog, ids)
     last_active = _last_active_by_user(db, ids)
 
     return [
@@ -163,6 +177,7 @@ def list_users(
             foods=foods.get(u.id, 0),
             meal_templates=templates.get(u.id, 0),
             ai_calls=ai_calls.get(u.id, 0),
+            water_logs=water_logs.get(u.id, 0),
         )
         for u in users
     ]

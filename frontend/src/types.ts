@@ -77,6 +77,45 @@ export interface Settings {
   goal_rate_kg_per_week: number | null
   /** When true the four goals above are derived server-side, not typed. */
   targets_auto: boolean
+  /** Daily water goal in ml. Null means "derive it from my weight" rather
+   *  than "unset" — the server resolves it and reports which it did. */
+  water_goal_ml: number | null
+  /** Quick-add amounts in ml. Null means the server's shipped defaults, which
+   *  is why the card falls back to DEFAULT_WATER_QUICK_ADDS rather than
+   *  rendering no buttons. */
+  water_quick_adds: number[] | null
+}
+
+/** One logged drink. */
+export interface WaterEntry {
+  id: number
+  date: string
+  ml: number
+  created_at: string | null
+}
+
+/** Where the day's goal came from, so the card can show its working.
+ *
+ * Same intent as TdeeBasis: a derived number arrives with its inputs attached,
+ * and "we had nothing to derive from" is stated rather than dressed up as a
+ * personal figure. */
+export interface WaterGoalBasis {
+  source: 'custom' | 'weight' | 'default'
+  ml_per_kg: number | null
+  weight_kg: number | null
+}
+
+/** One day of water — everything the card renders, in one response.
+ *
+ * The goal is computed server-side and travels with the total on purpose:
+ * deriving it here would be a second definition of a number the app already
+ * defines once. */
+export interface WaterDay {
+  date: string
+  total_ml: number
+  goal_ml: number
+  goal_basis: WaterGoalBasis
+  entries: WaterEntry[]
 }
 
 /** What a measured TDEE was built from, or what it is still short of. */

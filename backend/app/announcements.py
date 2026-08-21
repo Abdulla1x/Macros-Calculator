@@ -23,6 +23,24 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-21-water-tracker",
+        date="2026-08-21",
+        title="Track your water from the dashboard",
+        body=(
+            "There is a water card on your dashboard now, under the calorie "
+            "and protein rings. Tap a button to add a glass; tap undo if you "
+            "tapped the wrong one. It follows whichever day you are looking "
+            "at, so you can fill in yesterday with the same arrows you "
+            "already use for meals.\n\n"
+            "Your daily goal is worked out from your weight — 35 ml for every "
+            "kilogram — and the card shows you that sum rather than just the "
+            "answer. If you have not logged a weigh-in yet it falls back to a "
+            "general 2 litres and tells you that is what it is doing. You can "
+            "also set your own goal, and change the quick-add amounts to "
+            "match the glasses and bottles you actually use, in Settings."
+        ),
+    ),
+    Announcement(
         id="2026-08-20-measured-tdee",
         date="2026-08-20",
         title="Your calorie burn is now measured, not guessed",

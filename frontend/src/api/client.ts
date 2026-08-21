@@ -20,6 +20,8 @@ import type {
   TokenResponse,
   Transcription,
   User,
+  WaterDay,
+  WaterEntry,
   WeightEntry,
   WeightEntryCreate,
   WeightTrend,
@@ -218,6 +220,21 @@ export const api = {
     request<void>(`/api/weights/${id}`, { method: 'DELETE' }),
   getWeightTrend: (days = 90) =>
     request<WeightTrend>(`/api/weights/trend?days=${days}`),
+
+  // One request feeds the whole card: the day's entries, its total, and the
+  // goal with the arithmetic behind it. The goal is resolved server-side, so
+  // there is exactly one definition of it.
+  getWaterDay: (date: string) =>
+    request<WaterDay>(`/api/water?date=${encodeURIComponent(date)}`),
+  // An insert, never an upsert — a second glass of water is a second glass.
+  addWater: (date: string, ml: number) =>
+    request<WaterEntry>('/api/water', {
+      method: 'POST',
+      body: JSON.stringify({ date, ml }),
+    }),
+  // What the card's undo button calls, on the newest entry.
+  deleteWaterEntry: (id: number) =>
+    request<void>(`/api/water/${id}`, { method: 'DELETE' }),
 
   getSettings: () => request<Settings>('/api/settings'),
   getBodyTargets: () => request<BodyTargets>('/api/settings/targets'),

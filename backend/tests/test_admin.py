@@ -23,6 +23,11 @@ SECRET_INGREDIENT_NAME = "Vermillion Sprocket Oats"
 # metrics-only boundary has to cover it from the day it exists.
 SECRET_HEIGHT_CM = 173.7
 SECRET_BIRTH_DATE = "1987-03-19"
+# Water is a count on the dashboard and never an amount: how much someone drank
+# on a given day is content, the same way a weigh-in is. Both the entry and a
+# custom goal are personal figures that live in the settings row.
+SECRET_WATER_ML = 337.0
+SECRET_WATER_GOAL_ML = 3137.0
 
 
 def email_of(client) -> str:
@@ -166,6 +171,10 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         },
     )
 
+    client_b.post(
+        "/api/water", json={"date": TODAY.isoformat(), "ml": SECRET_WATER_ML}
+    )
+
     client_b.put(
         "/api/settings",
         json={
@@ -174,6 +183,7 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
             "height_cm": SECRET_HEIGHT_CM,
             "birth_date": SECRET_BIRTH_DATE,
             "sex": "female",
+            "water_goal_ml": SECRET_WATER_GOAL_ML,
         },
     )
 
@@ -186,6 +196,8 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert SECRET_INGREDIENT_NAME not in body, route
         assert str(SECRET_HEIGHT_CM) not in body, route
         assert SECRET_BIRTH_DATE not in body, route
+        assert str(SECRET_WATER_ML) not in body, route
+        assert str(SECRET_WATER_GOAL_ML) not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------

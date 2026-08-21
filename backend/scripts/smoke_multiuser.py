@@ -138,6 +138,26 @@ def main() -> None:
         b_weight_id = response.json()["id"]
         check(a_weight_id != b_weight_id, "same-date weigh-ins are distinct rows")
 
+        # Same calendar day for both accounts. Unlike weigh-ins there is no
+        # upsert here at all -- every POST inserts -- so this is checking the
+        # user_id filter on the read path rather than on a conflict key.
+        water_day = datetime.now(timezone.utc).date().isoformat()
+        response = client.post(
+            "/api/water",
+            json={"date": water_day, "ml": 250.0},
+            headers=headers_a,
+        )
+        check(response.status_code == 201, "A logs water")
+        a_water_id = response.json()["id"]
+        response = client.post(
+            "/api/water",
+            json={"date": water_day, "ml": 750.0},
+            headers=headers_b,
+        )
+        check(response.status_code == 201, "B logs water on the same date")
+        b_water_id = response.json()["id"]
+        check(a_water_id != b_water_id, "same-date water logs are distinct rows")
+
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
@@ -242,6 +262,15 @@ def main() -> None:
         b_trend = client.get("/api/weights/trend", headers=headers_b).json()
         check(b_trend["latest_trend_kg"] == 61.0, "B's trend counts only B")
 
+        b_water = client.get(
+            "/api/water", params={"date": water_day}, headers=headers_b
+        ).json()
+        check(b_water["total_ml"] == 750.0, "B's water total counts only B")
+        check(
+            b_water["goal_basis"]["weight_kg"] == 61.0,
+            "B's water goal derives from B's own weight",
+        )
+
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
 
@@ -260,6 +289,8 @@ def main() -> None:
             f"/api/meal-templates/{a_template_id}", headers=headers_b
         )
         check(response.status_code == 404, "B DELETE A's template id -> 404")
+        response = client.delete(f"/api/water/{a_water_id}", headers=headers_b)
+        check(response.status_code == 404, "B DELETE A's water id -> 404")
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -296,7 +327,7 @@ def main() -> None:
             from sqlalchemy.orm import Session
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from app.models import Food, Meal, MealTemplate, Setting, WeightEntry
+            from app.models import Food, Meal, MealTemplate, Setting, WaterLog, WeightEntry
 
             engine = create_engine(os.environ["DATABASE_URL"])
             with Session(engine) as session:
@@ -331,6 +362,16 @@ def main() -> None:
                     == sorted([user_a["id"], user_b["id"]]),
                     "DB: one template row per user despite the shared name",
                 )
+                water = session.scalars(
+                    select(WaterLog).where(
+                        WaterLog.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(w.user_id for w in water)
+                    == sorted([user_a["id"], user_b["id"]]),
+                    "DB: one water row per user on the shared date",
+                )
                 for uid in (user_a["id"], user_b["id"]):
                     check(
                         session.get(Setting, uid) is not None,
@@ -350,6 +391,8 @@ def main() -> None:
         client.delete(f"/api/weights/{b_weight_id}", headers=headers_b)
         client.delete(f"/api/meal-templates/{a_template_id}", headers=headers_a)
         client.delete(f"/api/meal-templates/{b_template_id}", headers=headers_b)
+        client.delete(f"/api/water/{a_water_id}", headers=headers_a)
+        client.delete(f"/api/water/{b_water_id}", headers=headers_b)
         # B's imported duplicate meal
         for meal in client.get("/api/meals", headers=headers_b).json():
             client.delete(f"/api/meals/{meal['id']}", headers=headers_b)

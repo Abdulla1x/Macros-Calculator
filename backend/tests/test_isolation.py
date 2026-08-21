@@ -16,6 +16,10 @@ WEIGH_DAY = (date.today() - timedelta(days=1)).isoformat()
 WEIGHT_A = {"date": WEIGH_DAY, "weight_kg": 82.0}
 WEIGHT_B = {"date": WEIGH_DAY, "weight_kg": 61.0}
 
+WATER_DAY = date.today().isoformat()
+WATER_A = {"date": WATER_DAY, "ml": 250.0}
+WATER_B = {"date": WATER_DAY, "ml": 750.0}
+
 
 def test_meal_lists_are_scoped(client, client_b):
     a_meal = client.post("/api/meals", json=MEAL_A).json()
@@ -147,6 +151,49 @@ def test_full_export_only_contains_own_weights(client, client_b):
 
     b_export = client_b.get("/api/data/export/all").json()
     assert [w["weight_kg"] for w in b_export["weights"]] == [61.0]
+
+
+def test_water_days_are_scoped(client, client_b):
+    a_entry = client.post("/api/water", json=WATER_A).json()
+    client_b.post("/api/water", json=WATER_B)
+
+    a_day = client.get("/api/water", params={"date": WATER_DAY}).json()
+    b_day = client_b.get("/api/water", params={"date": WATER_DAY}).json()
+    # Same calendar day, two accounts: neither total may include the other.
+    assert a_day["total_ml"] == 250.0
+    assert b_day["total_ml"] == 750.0
+    assert all(e["id"] != a_entry["id"] for e in b_day["entries"])
+
+
+def test_cannot_delete_another_users_water_entry(client, client_b):
+    a_entry = client.post("/api/water", json=WATER_A).json()
+
+    assert client_b.delete(f"/api/water/{a_entry['id']}").status_code == 404
+    # A's entry is untouched.
+    assert client.get("/api/water").json()["total_ml"] == 250.0
+
+
+def test_a_water_goal_never_reads_another_users_weight(client, client_b):
+    """The derived goal reaches outside the water table, which is what makes it
+    worth a test here rather than only in test_water.py: it queries `weights`,
+    and a missing user_id filter there would hand B a goal computed from A's
+    body."""
+    client.post("/api/weights", json=WEIGHT_A)   # A weighs 82 kg
+    client_b.post("/api/weights", json=WEIGHT_B)  # B weighs 61 kg
+
+    a_goal = client.get("/api/water").json()
+    b_goal = client_b.get("/api/water").json()
+    assert a_goal["goal_basis"]["weight_kg"] == 82.0
+    assert b_goal["goal_basis"]["weight_kg"] == 61.0
+    assert a_goal["goal_ml"] != b_goal["goal_ml"]
+
+
+def test_full_export_only_contains_own_water(client, client_b):
+    client.post("/api/water", json=WATER_A)
+    client_b.post("/api/water", json=WATER_B)
+
+    b_export = client_b.get("/api/data/export/all").json()
+    assert [w["ml"] for w in b_export["water_logs"]] == [750.0]
 
 
 def test_settings_are_independent(client, client_b):
