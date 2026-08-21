@@ -33,6 +33,14 @@ SECRET_WATER_GOAL_ML = 3137.0
 # goal lives in the settings row alongside the water one.
 SECRET_STEPS = 31337
 SECRET_STEPS_GOAL = 23117
+# The most disclosive thing this app stores. A supplement list can name a
+# prescription, so the name and the dose are both content in a way a step count
+# is not -- an operator learning that an account tracks a named medication has
+# learned something about that person's health. The dose string is asserted
+# separately because it is a second field on the same row and would be the
+# natural thing to "just include" for support purposes.
+SECRET_SUPPLEMENT_NAME = "Borogove Wabe Extract"
+SECRET_SUPPLEMENT_DOSE = "417 mcg"
 
 
 def email_of(client) -> str:
@@ -183,6 +191,24 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         "/api/steps", json={"date": TODAY.isoformat(), "steps": SECRET_STEPS}
     )
 
+    supplement = client_b.post(
+        "/api/supplements",
+        json={
+            "name": SECRET_SUPPLEMENT_NAME,
+            "dose": SECRET_SUPPLEMENT_DOSE,
+            "times": ["08:00"],
+            "active": True,
+        },
+    ).json()
+    client_b.post(
+        "/api/supplements/log",
+        json={
+            "supplement_id": supplement["id"],
+            "date": TODAY.isoformat(),
+            "time": "08:00",
+        },
+    )
+
     client_b.put(
         "/api/settings",
         json={
@@ -209,6 +235,8 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert str(SECRET_WATER_GOAL_ML) not in body, route
         assert str(SECRET_STEPS) not in body, route
         assert str(SECRET_STEPS_GOAL) not in body, route
+        assert SECRET_SUPPLEMENT_NAME not in body, route
+        assert SECRET_SUPPLEMENT_DOSE not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------

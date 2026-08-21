@@ -248,6 +248,19 @@ export default function Admin() {
                       </th>
                       <th className="pb-2 pr-4 text-right font-medium">Foods</th>
                       <th className="pb-2 pr-4 text-right font-medium">Templates</th>
+                      {/* The three daily trackers, by their dashboard icons.
+                          Counts only, never contents — a supplement name can
+                          disclose a prescription, so the column says how many
+                          doses were ticked and nothing about which. */}
+                      <th className="pb-2 pr-4 text-right font-medium" title="Water logs">
+                        💧
+                      </th>
+                      <th className="pb-2 pr-4 text-right font-medium" title="Days of steps logged">
+                        👟
+                      </th>
+                      <th className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
+                        💊
+                      </th>
                       <th className="pb-2 text-right font-medium">AI</th>
                     </tr>
                   </thead>
@@ -265,6 +278,14 @@ export default function Admin() {
                         <td className="py-2 pr-4 text-right">{row.weights}</td>
                         <td className="py-2 pr-4 text-right">{row.foods}</td>
                         <td className="py-2 pr-4 text-right">{row.meal_templates}</td>
+                        <td className="py-2 pr-4 text-right">{row.water_logs}</td>
+                        <td className="py-2 pr-4 text-right">{row.steps}</td>
+                        <td
+                          className="py-2 pr-4 text-right"
+                          title={`${row.supplements} supplement${row.supplements === 1 ? '' : 's'} tracked`}
+                        >
+                          {row.supplement_logs}
+                        </td>
                         <td className="py-2 text-right">{row.ai_calls}</td>
                       </tr>
                     ))}

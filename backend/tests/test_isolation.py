@@ -24,6 +24,10 @@ STEP_DAY = WATER_DAY
 STEPS_A = {"date": STEP_DAY, "steps": 4000}
 STEPS_B = {"date": STEP_DAY, "steps": 12000}
 
+DOSE_DAY = WATER_DAY
+SUPP_A = {"name": "Alpha Supplement", "dose": "5 g", "times": ["08:00"], "active": True}
+SUPP_B = {"name": "Beta Supplement", "dose": "1 cap", "times": ["21:00"], "active": True}
+
 
 def test_meal_lists_are_scoped(client, client_b):
     a_meal = client.post("/api/meals", json=MEAL_A).json()
@@ -245,6 +249,98 @@ def test_full_export_only_contains_own_steps(client, client_b):
 
     b_export = client_b.get("/api/data/export/all").json()
     assert [s["steps"] for s in b_export["steps"]] == [12000]
+
+
+def test_supplement_lists_are_scoped(client, client_b):
+    client.post("/api/supplements", json=SUPP_A)
+    client_b.post("/api/supplements", json=SUPP_B)
+
+    assert [s["name"] for s in client.get("/api/supplements").json()] == [
+        "Alpha Supplement"
+    ]
+    assert [s["name"] for s in client_b.get("/api/supplements").json()] == [
+        "Beta Supplement"
+    ]
+
+
+def test_the_same_supplement_name_is_allowed_per_user(client, client_b):
+    """The uniqueness index spans (user_id, lower(name)), not lower(name).
+
+    Half the world takes creatine; a name one account has claimed must not be
+    unavailable to everyone else.
+    """
+    assert client.post("/api/supplements", json=SUPP_A).status_code == 201
+    assert client_b.post("/api/supplements", json=SUPP_A).status_code == 201
+
+
+def test_a_dose_check_off_is_double_scoped(client, client_b):
+    """The supplement_id on a log write is an id the *client* chose.
+
+    Same shape as the analysis-to-meal link above, and the same danger: without
+    the ownership check it would write a row into someone else's history, or
+    reveal by its status code that a guessed id exists.
+    """
+    a_supp = client.post("/api/supplements", json=SUPP_A).json()
+
+    assert client_b.post(
+        "/api/supplements/log",
+        json={"supplement_id": a_supp["id"], "date": DOSE_DAY, "time": "08:00"},
+    ).status_code == 404
+
+    assert client_b.delete(
+        "/api/supplements/log",
+        params={"supplement_id": a_supp["id"], "date": DOSE_DAY, "time": "08:00"},
+    ).status_code == 404
+
+    # A's own day is untouched by both attempts.
+    assert client.get("/api/supplements/day", params={"date": DOSE_DAY}).json()[
+        "taken"
+    ] == 0
+
+
+def test_cannot_edit_or_delete_another_users_supplement(client, client_b):
+    a_supp = client.post("/api/supplements", json=SUPP_A).json()
+
+    assert client_b.put(
+        f"/api/supplements/{a_supp['id']}",
+        json={"name": "Hijacked", "dose": None, "times": ["08:00"], "active": False},
+    ).status_code == 404
+    assert client_b.delete(f"/api/supplements/{a_supp['id']}").status_code == 404
+
+    still = client.get("/api/supplements").json()
+    assert still[0]["name"] == "Alpha Supplement"
+    assert still[0]["active"] is True
+
+
+def test_supplement_days_are_scoped(client, client_b):
+    a_supp = client.post("/api/supplements", json=SUPP_A).json()
+    b_supp = client_b.post("/api/supplements", json=SUPP_B).json()
+    client.post(
+        "/api/supplements/log",
+        json={"supplement_id": a_supp["id"], "date": DOSE_DAY, "time": "08:00"},
+    )
+
+    a_day = client.get("/api/supplements/day", params={"date": DOSE_DAY}).json()
+    b_day = client_b.get("/api/supplements/day", params={"date": DOSE_DAY}).json()
+
+    assert [s["name"] for s in a_day["slots"]] == ["Alpha Supplement"]
+    assert a_day["taken"] == 1
+    assert [s["name"] for s in b_day["slots"]] == ["Beta Supplement"]
+    assert b_day["taken"] == 0
+    assert b_supp["id"] != a_supp["id"]
+
+
+def test_full_export_only_contains_own_supplements(client, client_b):
+    a_supp = client.post("/api/supplements", json=SUPP_A).json()
+    client_b.post("/api/supplements", json=SUPP_B)
+    client.post(
+        "/api/supplements/log",
+        json={"supplement_id": a_supp["id"], "date": DOSE_DAY, "time": "08:00"},
+    )
+
+    b_export = client_b.get("/api/data/export/all").json()
+    assert [s["name"] for s in b_export["supplements"]] == ["Beta Supplement"]
+    assert b_export["supplement_logs"] == []
 
 
 def test_settings_are_independent(client, client_b):

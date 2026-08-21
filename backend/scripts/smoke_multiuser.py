@@ -181,6 +181,47 @@ def main() -> None:
         )
         check(response.status_code == 200, "B re-logs the same date")
 
+        # Supplements: the same name for both users, which is what proves the
+        # uniqueness index is scoped per account rather than globally. Then a
+        # dose ticked on a shared date, and a cross-tenant tick that must 404 --
+        # supplement_id arrives from the client, so it is the same class of
+        # link as ai_analyses.meal_id.
+        dose_day = water_day
+        response = client.post(
+            "/api/supplements",
+            json={"name": "Smoke Creatine", "dose": "5 g",
+                  "times": ["08:00"], "active": True},
+            headers=headers_a,
+        )
+        check(response.status_code == 201, "A adds a supplement")
+        a_supplement_id = response.json()["id"]
+        response = client.post(
+            "/api/supplements",
+            json={"name": "Smoke Creatine", "dose": "3 g",
+                  "times": ["21:00"], "active": True},
+            headers=headers_b,
+        )
+        check(response.status_code == 201, "B adds one with the same name")
+        b_supplement_id = response.json()["id"]
+        check(a_supplement_id != b_supplement_id, "same-name supplements are distinct rows")
+
+        response = client.post(
+            "/api/supplements/log",
+            json={"supplement_id": a_supplement_id, "date": dose_day, "time": "08:00"},
+            headers=headers_a,
+        )
+        check(response.status_code == 200, "A ticks a dose")
+        check(response.json()["taken"] == 1, "A's day reports one dose taken")
+        response = client.post(
+            "/api/supplements/log",
+            json={"supplement_id": a_supplement_id, "date": dose_day, "time": "08:00"},
+            headers=headers_a,
+        )
+        check(
+            response.status_code == 200 and response.json()["taken"] == 1,
+            "ticking the same dose twice stays one dose",
+        )
+
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
@@ -307,6 +348,19 @@ def main() -> None:
         ).json()
         check(a_steps["steps"] == 4000, "A's day survived B writing the same date")
 
+        b_doses = client.get(
+            "/api/supplements/day", params={"date": dose_day}, headers=headers_b
+        ).json()
+        check(
+            [slot["dose"] for slot in b_doses["slots"]] == ["3 g"],
+            "B's supplement day shows B's own dose, not A's",
+        )
+        check(b_doses["taken"] == 0, "B has ticked nothing despite A's dose")
+        a_doses = client.get(
+            "/api/supplements/day", params={"date": dose_day}, headers=headers_a
+        ).json()
+        check(a_doses["taken"] == 1, "A's dose survived B's identical supplement")
+
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
 
@@ -346,6 +400,27 @@ def main() -> None:
             json={"date": step_day, "steps": 12500},
             headers=headers_b,
         )
+        response = client.delete(
+            f"/api/supplements/{a_supplement_id}", headers=headers_b
+        )
+        check(response.status_code == 404, "B DELETE A's supplement id -> 404")
+        response = client.post(
+            "/api/supplements/log",
+            json={"supplement_id": a_supplement_id, "date": dose_day, "time": "08:00"},
+            headers=headers_b,
+        )
+        check(response.status_code == 404, "B tick A's supplement id -> 404")
+        response = client.delete(
+            "/api/supplements/log",
+            params={"supplement_id": a_supplement_id, "date": dose_day,
+                    "time": "08:00"},
+            headers=headers_b,
+        )
+        check(response.status_code == 404, "B untick A's supplement id -> 404")
+        a_doses = client.get(
+            "/api/supplements/day", params={"date": dose_day}, headers=headers_a
+        ).json()
+        check(a_doses["taken"] == 1, "A's dose survived B's three attempts")
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -383,7 +458,8 @@ def main() -> None:
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from app.models import (
-                Food, Meal, MealTemplate, Setting, StepEntry, WaterLog, WeightEntry,
+                Food, Meal, MealTemplate, Setting, StepEntry, Supplement,
+                SupplementLog, WaterLog, WeightEntry,
             )
 
             engine = create_engine(os.environ["DATABASE_URL"])
@@ -439,6 +515,25 @@ def main() -> None:
                     == sorted([user_a["id"], user_b["id"]]),
                     "DB: one steps row per user on the shared date",
                 )
+                supplements = session.scalars(
+                    select(Supplement).where(
+                        Supplement.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(s.user_id for s in supplements)
+                    == sorted([user_a["id"], user_b["id"]]),
+                    "DB: one supplement row per user despite the shared name",
+                )
+                dose_rows = session.scalars(
+                    select(SupplementLog).where(
+                        SupplementLog.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    [log.user_id for log in dose_rows] == [user_a["id"]],
+                    "DB: the only dose row belongs to A, despite B's attempts",
+                )
                 for uid in (user_a["id"], user_b["id"]):
                     check(
                         session.get(Setting, uid) is not None,
@@ -462,6 +557,11 @@ def main() -> None:
         client.delete(f"/api/water/{b_water_id}", headers=headers_b)
         client.delete("/api/steps", params={"date": step_day}, headers=headers_a)
         client.delete("/api/steps", params={"date": step_day}, headers=headers_b)
+        # The dose rows go with the supplements by CASCADE, which is worth
+        # leaning on here rather than deleting them separately: if the cascade
+        # were missing, the next run's DB check would find an orphan.
+        client.delete(f"/api/supplements/{a_supplement_id}", headers=headers_a)
+        client.delete(f"/api/supplements/{b_supplement_id}", headers=headers_b)
         # B's imported duplicate meal
         for meal in client.get("/api/meals", headers=headers_b).json():
             client.delete(f"/api/meals/{meal['id']}", headers=headers_b)

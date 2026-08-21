@@ -55,6 +55,49 @@ export const MAX_STEPS_PER_DAY = 200_000
  *  report it alongside. */
 export const WATER_ML_PER_KG = 35
 
+/** schemas.py MAX_SUPPLEMENTS. Carries no opinion about what anyone takes —
+ *  it bounds a tick list to something a person can actually read through
+ *  every day. */
+export const MAX_SUPPLEMENTS = 30
+
+/** schemas.py MAX_SUPPLEMENT_TIMES. */
+export const MAX_SUPPLEMENT_TIMES = 6
+
+/** schemas.py MAX_SUPPLEMENT_NAME / MAX_SUPPLEMENT_DOSE. */
+export const MAX_SUPPLEMENT_NAME = 100
+export const MAX_SUPPLEMENT_DOSE = 60
+
+/** Why a supplement would be refused, or null if it would not be.
+ *
+ * Deliberately not part of `settingsFieldRules`: a supplement is a row in its
+ * own table, not a `keyof Settings`, so there is no key for that record to hang
+ * a rule on. Same job as validateWaterQuickAdd, different shape. */
+export function validateSupplement(
+  name: string,
+  dose: string,
+  times: string[],
+): string | null {
+  if (name.trim() === '') return 'Give it a name.'
+  if (name.trim().length > MAX_SUPPLEMENT_NAME) {
+    return `A name has to be ${MAX_SUPPLEMENT_NAME} characters or fewer.`
+  }
+  if (dose.trim().length > MAX_SUPPLEMENT_DOSE) {
+    return `A dose has to be ${MAX_SUPPLEMENT_DOSE} characters or fewer.`
+  }
+  if (times.length === 0) {
+    return 'Add at least one time of day — that is what there is to tick off.'
+  }
+  if (times.length > MAX_SUPPLEMENT_TIMES) {
+    return `Up to ${MAX_SUPPLEMENT_TIMES} times a day.`
+  }
+  // The server's own pattern. A <input type="time"> yields exactly this shape,
+  // so this only fires for a browser that falls back to a text input.
+  if (times.some((time) => !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(time))) {
+    return 'Times need to look like 08:00.'
+  }
+  return null
+}
+
 interface FieldRule {
   label: string
   /** Null when the value is acceptable, otherwise why it is not. */

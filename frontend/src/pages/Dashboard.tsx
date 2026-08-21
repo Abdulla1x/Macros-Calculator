@@ -4,6 +4,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
 import StepsCard from '../components/StepsCard'
+import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
@@ -204,9 +205,9 @@ export default function Dashboard() {
       {/* The daily quick-logs.
 
           One section holding a grid, not a stack of full-width cards — this is
-          where steps landed and Phase 8's supplements are meant to, and
-          three trackers each taking a full row would push the meal list off the
-          first screen on a phone. Adding one is adding a child here.
+          where steps and supplements landed, and three trackers each taking a
+          full row would push the meal list off the first screen on a phone.
+          Adding another is adding a child here.
 
           It sits below the rings because those are the primary targets, and
           above the meal list because a quick-log is a thing you tap, not a
@@ -218,6 +219,11 @@ export default function Dashboard() {
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <WaterCard date={viewedDate} />
         <StepsCard date={viewedDate} />
+        {/* Renders nothing until there is a supplement to tick, so the grid is
+            two cards wide for an account that has not set any up. The entry
+            point is Settings; a permanent empty card would spend prime space
+            explaining a feature once. */}
+        <SupplementsCard date={viewedDate} />
       </section>
 
       {/* Hidden entirely until there is something to log. The entry point is
