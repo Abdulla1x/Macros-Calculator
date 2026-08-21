@@ -17,6 +17,8 @@ import type {
   MessageResponse,
   OFFProduct,
   Settings,
+  StepDay,
+  StepEntry,
   TokenResponse,
   Transcription,
   User,
@@ -235,6 +237,23 @@ export const api = {
   // What the card's undo button calls, on the newest entry.
   deleteWaterEntry: (id: number) =>
     request<void>(`/api/water/${id}`, { method: 'DELETE' }),
+
+  // One request feeds the whole card: the count, the goal, and the walking
+  // estimate with the weight it came from.
+  getStepDay: (date: string) =>
+    request<StepDay>(`/api/steps?date=${encodeURIComponent(date)}`),
+  // An upsert, never an insert — reading the pedometer twice is the same day's
+  // walking counted later, so this replaces rather than adds.
+  saveSteps: (date: string, steps: number) =>
+    request<StepEntry>('/api/steps', {
+      method: 'POST',
+      body: JSON.stringify({ date, steps }),
+    }),
+  // Back to never having been logged, which is not the same as saving a zero.
+  clearSteps: (date: string) =>
+    request<void>(`/api/steps?date=${encodeURIComponent(date)}`, {
+      method: 'DELETE',
+    }),
 
   getSettings: () => request<Settings>('/api/settings'),
   getBodyTargets: () => request<BodyTargets>('/api/settings/targets'),

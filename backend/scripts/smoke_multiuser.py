@@ -158,6 +158,29 @@ def main() -> None:
         b_water_id = response.json()["id"]
         check(a_water_id != b_water_id, "same-date water logs are distinct rows")
 
+        # Steps upsert on (user_id, date), so the shared date is checking that
+        # the unique index is scoped per user: if it were not, B's write would
+        # overwrite A's day rather than creating a second row.
+        step_day = water_day
+        response = client.post(
+            "/api/steps",
+            json={"date": step_day, "steps": 4000},
+            headers=headers_a,
+        )
+        check(response.status_code == 200, "A logs steps")
+        response = client.post(
+            "/api/steps",
+            json={"date": step_day, "steps": 12000},
+            headers=headers_b,
+        )
+        check(response.status_code == 200, "B logs steps on the same date")
+        response = client.post(
+            "/api/steps",
+            json={"date": step_day, "steps": 12500},
+            headers=headers_b,
+        )
+        check(response.status_code == 200, "B re-logs the same date")
+
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
@@ -271,6 +294,19 @@ def main() -> None:
             "B's water goal derives from B's own weight",
         )
 
+        b_steps = client.get(
+            "/api/steps", params={"date": step_day}, headers=headers_b
+        ).json()
+        check(b_steps["steps"] == 12500, "B's step count is B's latest, not A's")
+        check(
+            b_steps["burn_weight_kg"] == 61.0,
+            "B's walking estimate uses B's own weight",
+        )
+        a_steps = client.get(
+            "/api/steps", params={"date": step_day}, headers=headers_a
+        ).json()
+        check(a_steps["steps"] == 4000, "A's day survived B writing the same date")
+
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
 
@@ -291,6 +327,25 @@ def main() -> None:
         check(response.status_code == 404, "B DELETE A's template id -> 404")
         response = client.delete(f"/api/water/{a_water_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's water id -> 404")
+        response = client.delete(
+            "/api/steps", params={"date": step_day}, headers=headers_b
+        )
+        check(response.status_code == 204, "B DELETE B's own step day -> 204")
+        a_steps = client.get(
+            "/api/steps", params={"date": step_day}, headers=headers_a
+        ).json()
+        check(
+            a_steps["steps"] == 4000 and a_steps["logged"] is True,
+            "A's step day survived B clearing the same date",
+        )
+        # Re-logged because there is no id to probe with -- /api/steps is
+        # addressed by date, so B clearing its *own* day is the only way to
+        # test the scoping, and the DB check below still expects a row each.
+        client.post(
+            "/api/steps",
+            json={"date": step_day, "steps": 12500},
+            headers=headers_b,
+        )
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -327,7 +382,9 @@ def main() -> None:
             from sqlalchemy.orm import Session
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from app.models import Food, Meal, MealTemplate, Setting, WaterLog, WeightEntry
+            from app.models import (
+                Food, Meal, MealTemplate, Setting, StepEntry, WaterLog, WeightEntry,
+            )
 
             engine = create_engine(os.environ["DATABASE_URL"])
             with Session(engine) as session:
@@ -372,6 +429,16 @@ def main() -> None:
                     == sorted([user_a["id"], user_b["id"]]),
                     "DB: one water row per user on the shared date",
                 )
+                steps_rows = session.scalars(
+                    select(StepEntry).where(
+                        StepEntry.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(s.user_id for s in steps_rows)
+                    == sorted([user_a["id"], user_b["id"]]),
+                    "DB: one steps row per user on the shared date",
+                )
                 for uid in (user_a["id"], user_b["id"]):
                     check(
                         session.get(Setting, uid) is not None,
@@ -393,6 +460,8 @@ def main() -> None:
         client.delete(f"/api/meal-templates/{b_template_id}", headers=headers_b)
         client.delete(f"/api/water/{a_water_id}", headers=headers_a)
         client.delete(f"/api/water/{b_water_id}", headers=headers_b)
+        client.delete("/api/steps", params={"date": step_day}, headers=headers_a)
+        client.delete("/api/steps", params={"date": step_day}, headers=headers_b)
         # B's imported duplicate meal
         for meal in client.get("/api/meals", headers=headers_b).json():
             client.delete(f"/api/meals/{meal['id']}", headers=headers_b)

@@ -8,6 +8,7 @@ from app.calculations import (
     KCAL_PER_G_FAT,
     KCAL_PER_G_PROTEIN,
     KCAL_PER_KG,
+    KCAL_PER_STEP_PER_KG,
     TDEE_PLAUSIBLE_BMR_RANGE,
     WATER_DEFAULT_GOAL_ML,
     WATER_ML_PER_KG,
@@ -21,6 +22,7 @@ from app.calculations import (
     macro_targets,
     measured_tdee,
     scale_macros,
+    steps_burn,
     water_goal,
     target_calories,
     total_macros,
@@ -414,3 +416,24 @@ def test_the_shipped_quick_adds_are_immutable():
     assert DEFAULT_WATER_QUICK_ADDS == (250.0, 500.0, 750.0)
     with pytest.raises(AttributeError):
         DEFAULT_WATER_QUICK_ADDS.append(1000.0)
+
+
+def test_the_walking_estimate_scales_with_both_inputs():
+    assert steps_burn(10_000, 70.0) == round(KCAL_PER_STEP_PER_KG * 70.0 * 10_000, 1)
+    # Twice the steps, twice the cost; twice the body, twice the cost.
+    assert steps_burn(20_000, 70.0) == pytest.approx(2 * steps_burn(10_000, 70.0))
+    assert steps_burn(10_000, 140.0) == pytest.approx(2 * steps_burn(10_000, 70.0))
+
+
+def test_the_walking_estimate_is_none_without_a_weight():
+    """The same choice bmi makes: unanswerable without the input, so say so.
+
+    Substituting an average body weight would produce a personal-looking figure
+    that is not about this person -- the failure `WaterGoalBasis.source` exists
+    to keep visible for the water goal.
+    """
+    assert steps_burn(10_000, None) is None
+
+
+def test_no_steps_costs_nothing_to_report():
+    assert steps_burn(0, 70.0) is None

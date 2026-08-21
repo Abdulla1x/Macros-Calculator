@@ -24,7 +24,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ### 🔐 Accounts & privacy
 - **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login, signup and password reset
-- **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
+- **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Layered AI quotas**: 20 analyses + 40 voice notes per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All three are env-tunable
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - **Password reset by email**: single-use link, hashed at rest and valid for an hour; using it revokes every existing session. `POST /api/auth/forgot-password` answers identically whether or not the address has an account
@@ -32,6 +32,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
 - **Water tracker** with configurable quick-add buttons and a goal derived from your trend weight — shown with the arithmetic, not just the answer
+- **Steps tracker**, typed in by hand — no phone or watch sync is possible in a web app, and the UI says so rather than implying one. Set a goal or don't; with none set the card shows the count alone
 - Today's meal list with inline edit and delete
 - 7-day calorie trend sparkline
 
@@ -95,12 +96,12 @@ Macros-Calculator
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, CORS, lifespan
 │   │   ├── db.py                # SQLAlchemy engine + session dependency
-│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, ai_analyses, password_resets)
+│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, steps, ai_analyses, password_resets)
 │   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
 │   │   ├── calculations.py      # Macro scaling, weight trend, BMR/TDEE/target math
 │   │   ├── targets.py           # Body profile → daily targets (the Phase 5 swap point)
 │   │   ├── schemas.py           # Pydantic models
-│   │   ├── routers/             # meals, meal_templates, foods, weights, water, analytics, settings, data (CSV), ai, admin
+│   │   ├── routers/             # meals, meal_templates, foods, weights, water, steps, analytics, settings, data (CSV), ai, admin
 │   │   └── services/
 │   │       ├── off_client.py    # Open Food Facts client
 │   │       ├── meal_ai.py       # AI meal analysis (only AI-provider-aware module)
@@ -292,6 +293,8 @@ on the caller's data, except these public ones: `/api/health`,
 | GET | `/api/ai/status` | Provider health; `?probe=true` makes one live call and classifies the failure |
 | GET/POST | `/api/water` | One day's water (entries, total, derived goal) / log a drink |
 | DELETE | `/api/water/{id}` | Remove one water entry (what the card's undo calls) |
+| GET/POST | `/api/steps` | One day's steps (count, goal, walking estimate) / save the day's count (upsert) |
+| DELETE | `/api/steps` | Clear a day's count back to never logged |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals, tracked-macro toggles, body profile |
 | GET | `/api/settings/targets` | BMI, BMR, measured-or-estimated TDEE, calorie + macro targets |

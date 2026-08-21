@@ -8,6 +8,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     false as sa_false,
@@ -221,6 +222,39 @@ class WaterLog(Base):
     __table_args__ = (Index("ix_water_logs_user_date", "user_id", "date"),)
 
 
+class StepEntry(Base):
+    """One day, not one walk.
+
+    The opposite storage choice from WaterLog, and for the opposite reason.
+    Water needs event rows because undo has to remove a *specific* drink; a
+    step count is a single figure for the day that gets corrected as the day
+    goes on -- read the phone at lunch, read it again at bedtime. There is
+    nothing to undo, only a number to replace, so this models a day the way
+    `weights` does and takes the same unique constraint.
+
+    Counted in whole steps, so Integer rather than the Float that `weights` and
+    `water_logs` use. Those two store measurements, which have fractions;
+    8,432.7 steps is not a measurement of anything.
+    """
+
+    __tablename__ = "steps"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # The day walked, user-chosen and freely backdated -- same meaning as
+    # `WaterLog.date` and `Meal.date`, so the dashboard card can follow the day
+    # being viewed rather than the day the number was typed.
+    date: Mapped[date_type] = mapped_column(Date)
+    steps: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    # One row per day: POST /api/steps upserts on this pair, so re-logging a
+    # date is a correction and not a second day's walking.
+    __table_args__ = (
+        Index("uq_steps_user_date", "user_id", "date", unique=True),
+    )
+
+
 class Setting(Base):
     __tablename__ = "settings"
 
@@ -287,6 +321,15 @@ class Setting(Base):
     # explicit conversion in routers/settings.py, exactly as `items_json` does
     # for MealTemplate.items.
     water_quick_adds_json: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Steps. Nullable like the water pair above, but NULL means something
+    # different here and the difference is visible on screen: `water_goal_ml`
+    # NULL means "derive it from my weight", where `steps_goal` NULL means "I
+    # have no goal". There is no honest derivation for a step target -- 10,000
+    # is a 1960s pedometer slogan, not arithmetic on anything about you -- so
+    # rather than invent one, the card shows the count with no bar and no
+    # percentage until a goal is set.
+    steps_goal: Mapped[int | None] = mapped_column(Integer, default=None)
 
     __table_args__ = (
         CheckConstraint(

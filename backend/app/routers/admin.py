@@ -6,10 +6,11 @@ Every other router here is scoped to the authenticated user. This one
 deliberately is not, which is exactly why it is the only router behind
 `require_admin`. What it may expose is **counts, dates and account
 identifiers**: email, signup date, last-active, and how many meals, weigh-ins,
-foods, saved meal templates and AI calls each account has.
+foods, saved meal templates, water logs, step-count days and AI calls each
+account has.
 
 Admins do **not** see meal names, weight values, food entries, meal-template
-names or voice-note transcripts. That is what keeps README.md's "every API endpoint is scoped to the
+names, how much anyone drank or walked, or voice-note transcripts. That is what keeps README.md's "every API endpoint is scoped to the
 authenticated user" and the Settings privacy copy true without a rewrite.
 `tests/test_admin.py` asserts the absence positively, so a later "just one
 useful field" commit fails a test rather than quietly failing the promise.
@@ -34,6 +35,7 @@ from ..models import (
     Food,
     Meal,
     MealTemplate,
+    StepEntry,
     User,
     WaterLog,
     WeightEntry,
@@ -57,19 +59,28 @@ ACTIVE_WINDOW_DAYS = 7
 # Tables that record a real creation timestamp, so activity can be read off
 # them directly. Meals are handled separately: see _meal_activity_at.
 #
-# MealTemplate is counted per user below but deliberately NOT listed here, even
-# though it has a non-null created_at. Saving a template is an upsert, and an
-# upsert rewrites the row without moving created_at -- so "re-saved my Breakfast
-# template today" would register as activity on the day it was first created.
-# That is the same backwards reading _meal_activity_at exists to prevent. No
-# signal is lost: the button lives in the log-meal footer, so creating a
-# template is always accompanied by a meal write in the same session.
-# WaterLog *is* listed, unlike MealTemplate: every row is an insert with a
-# fresh created_at, never an upsert, so the timestamp always means what this
-# tuple assumes it means. It is also the truest engagement signal the app has
-# -- someone tapping "+250" four times a day is using it on days they may not
-# log a single meal.
-_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog)
+# Membership is not "never upserted" -- WeightEntry and StepEntry both upsert.
+# The rule that actually holds is what the common write *does*: where it adds a
+# new row for a new date, created_at is a fresh timestamp and means what this
+# tuple assumes. Weigh-ins, step counts, foods, water and AI calls are all that
+# shape. WaterLog is the purest case, every row an insert, and the truest
+# engagement signal the app has -- someone tapping "+250" four times a day is
+# using it on days they may not log a single meal.
+#
+# MealTemplate is counted per user below but deliberately NOT listed, because
+# its common write rewrites an *old* row: re-saving Breakfast from the log-meal
+# footer leaves created_at on the day the template was first made, so today's
+# use would register as activity months ago. That is the same backwards reading
+# _meal_activity_at exists to prevent, and no signal is lost -- the button
+# lives in the log-meal footer, so a template save always rides along with a
+# meal write in the same session.
+#
+# The residual, accepted knowingly: correcting a *past* day's count on a later
+# day does not move last_active_at, because the row it rewrites already exists.
+# That undercounts a session spent only fixing history, for steps exactly as it
+# already does for a re-logged weigh-in. Logging the current day -- the common
+# case for both -- is a fresh row and reads correctly.
+_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog, StepEntry)
 
 
 def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datetime:
@@ -87,10 +98,10 @@ def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datet
 def _count_by_user(db: Session, model, user_ids: list[int]) -> dict[int, int]:
     """{user_id: row count} for one table, in one grouped query.
 
-    One query per table, not one per user: four queries total whether there are
-    three accounts or three thousand. The obvious alternative — looping the
-    users and counting inside the loop — is 4N+1 queries and gets slower in
-    exact proportion to the app succeeding.
+    One query per table, not one per user: a fixed handful of queries whether
+    there are three accounts or three thousand. The obvious alternative —
+    looping the users and counting inside the loop — is N queries per table and
+    gets slower in exact proportion to the app succeeding.
     """
     rows = db.execute(
         select(model.user_id, func.count())
@@ -164,6 +175,7 @@ def list_users(
     templates = _count_by_user(db, MealTemplate, ids)
     ai_calls = _count_by_user(db, AIAnalysis, ids)
     water_logs = _count_by_user(db, WaterLog, ids)
+    steps = _count_by_user(db, StepEntry, ids)
     last_active = _last_active_by_user(db, ids)
 
     return [
@@ -178,6 +190,7 @@ def list_users(
             meal_templates=templates.get(u.id, 0),
             ai_calls=ai_calls.get(u.id, 0),
             water_logs=water_logs.get(u.id, 0),
+            steps=steps.get(u.id, 0),
         )
         for u in users
     ]

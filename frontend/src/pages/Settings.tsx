@@ -6,6 +6,7 @@ import {
   DEFAULT_WATER_QUICK_ADDS,
   MAX_WATER_GOAL_ML,
   MAX_WATER_QUICK_ADD_ML,
+  MAX_STEPS_PER_DAY,
   MAX_WATER_QUICK_ADDS,
   WATER_ML_PER_KG,
   validateSettingsField,
@@ -342,6 +343,7 @@ export default function Settings() {
       <BodyTargetsCard reloadKey={targetsKey} unit={settings.weight_unit} />
 
       <WaterSection settings={settings} update={update} onRejected={setRejected} />
+      <StepsSection settings={settings} update={update} onRejected={setRejected} />
 
       <div className="flex items-center gap-3">
         <button
@@ -370,6 +372,68 @@ export default function Settings() {
 
 const fieldClass =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+
+/** The step goal, and the one place the app admits there is no sync.
+ *
+ * A single optional input rather than water's radio pair, because the states
+ * differ: water is always going to show *a* goal, so the choice is only where
+ * it comes from. Steps has no derivation at all, so the choice is whether a
+ * goal exists — and an empty box says that perfectly well.
+ */
+function StepsSection({
+  settings,
+  update,
+  onRejected,
+}: {
+  settings: SettingsType
+  update: (patch: Partial<SettingsType>) => void
+  onRejected: (message: string) => void
+}) {
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <h3 className="mb-1 font-semibold">👟 Steps</h3>
+      <p className="mb-4 text-sm text-slate-400">
+        Step counts are typed in by hand. Reading them from your phone or watch
+        needs Health Connect or Apple Health, and neither is open to a web app
+        like this one — so nothing here syncs, and it is better to say that than
+        to leave you waiting for numbers that will never arrive.
+      </p>
+
+      <label className="block text-sm">
+        <span className="mb-1 block text-slate-400">Daily goal</span>
+        <span className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={MAX_STEPS_PER_DAY}
+            value={settings.steps_goal ?? ''}
+            onChange={(event) => update({ steps_goal: num(event.target.value) })}
+            onBlur={() => {
+              const problem = validateSettingsField(
+                'steps_goal',
+                settings.steps_goal,
+              )
+              if (!problem) return
+              onRejected(problem)
+              // Undone back to no goal, not to an invented one — the same
+              // rule the profile fields follow, and here "unset" is a legal
+              // state to land in.
+              update({ steps_goal: null })
+            }}
+            aria-label="Daily step goal"
+            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+          />
+          <span className="text-xs text-slate-500">steps</span>
+        </span>
+      </label>
+      <p className="mt-2 text-xs text-slate-500">
+        Leave this empty and the card just shows your count. There is no default
+        here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a
+        number worked out from anything about you.
+      </p>
+    </section>
+  )
+}
 
 /** Water goal and quick-add buttons.
  *
@@ -632,8 +696,8 @@ function AccountSection() {
         <div className="mt-5 border-t border-slate-800 pt-4">
           <p className="mb-2 text-sm text-slate-400">
             Download everything stored for this account — meals, food library, saved
-            meal templates, weight entries, water logs, body profile, goals and AI
-            analyses — as a single JSON file.
+            meal templates, weight entries, water logs, step counts, body profile, goals
+            and AI analyses — as a single JSON file.
           </p>
           <button
             onClick={exportAll}
@@ -649,8 +713,8 @@ function AccountSection() {
         <h3 className="mb-1 font-semibold text-rose-300">Danger zone</h3>
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
-          weight entries, water logs, your body profile, goals and AI analyses. This
-          cannot be undone.
+          weight entries, water logs, step counts, your body profile, goals and AI
+          analyses. This cannot be undone.
         </p>
         {!confirmingDelete ? (
           <button

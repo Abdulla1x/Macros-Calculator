@@ -23,6 +23,29 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-21-steps-tracker",
+        date="2026-08-21",
+        title="Log your steps on the dashboard",
+        body=(
+            "There is a steps card next to the water one now. Type the day's "
+            "count and save it; type it again later and it replaces the "
+            "figure rather than adding to it, because it is the same day's "
+            "walking counted twice. It shows roughly what that walking cost "
+            "in calories once you have a weigh-in to work it out from. Set a "
+            "daily goal in Settings if you want one -- until you do, the card "
+            "shows the count on its own rather than measuring you against a "
+            "number nobody picked.\n\n"
+            "Entering it by hand is the only option, and that is worth being "
+            "straight about: reading step counts automatically needs Health "
+            "Connect or Apple Health, both of which are closed to a web app "
+            "like this one. Nothing here syncs with your phone or your watch. "
+            "Your calorie target does not move with your steps either -- once "
+            "your daily burn is measured from your own logs, the walking you "
+            "did is already inside that number, and adding it again would "
+            "tell you to eat for it twice."
+        ),
+    ),
+    Announcement(
         id="2026-08-21-water-tracker",
         date="2026-08-21",
         title="Track your water from the dashboard",

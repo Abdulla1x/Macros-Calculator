@@ -19,6 +19,7 @@ from ..models import (
     Meal,
     MealTemplate,
     Setting,
+    StepEntry,
     User,
     WaterLog,
     WeightEntry,
@@ -78,6 +79,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         .where(WaterLog.user_id == user.id)
         .order_by(WaterLog.date, WaterLog.id)
     ).all()
+    steps = db.scalars(
+        select(StepEntry)
+        .where(StepEntry.user_id == user.id)
+        .order_by(StepEntry.date, StepEntry.id)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
@@ -117,6 +123,9 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
                 None if setting.water_quick_adds_json is None
                 else json.loads(setting.water_quick_adds_json)
             ),
+            # Null here means "no goal set" -- the opposite of water_goal_ml
+            # above, where null means "derive it". Same shape, different claim.
+            "steps_goal": setting.steps_goal,
         },
         "meals": [
             # `date` is when it was eaten, `created_at` when it was logged.
@@ -144,6 +153,13 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             {"date": w.date.isoformat(), "ml": w.ml,
              "created_at": w.created_at.isoformat() if w.created_at else None}
             for w in water
+        ],
+        "steps": [
+            # One row per day, so created_at is when the count was first
+            # written and not when it was last corrected -- metadata about the
+            # row rather than part of the day, which is why it is not exported.
+            {"date": s.date.isoformat(), "steps": s.steps}
+            for s in steps
         ],
         "meal_templates": [
             # Same empty-string guard as ai_analyses below: items_json is

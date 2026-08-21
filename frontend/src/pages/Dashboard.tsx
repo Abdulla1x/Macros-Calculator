@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
+import StepsCard from '../components/StepsCard'
 import WaterCard from '../components/WaterCard'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
@@ -203,7 +204,7 @@ export default function Dashboard() {
       {/* The daily quick-logs.
 
           One section holding a grid, not a stack of full-width cards — this is
-          where Phase 7's steps and Phase 8's supplements are meant to land, and
+          where steps landed and Phase 8's supplements are meant to, and
           three trackers each taking a full row would push the meal list off the
           first screen on a phone. Adding one is adding a child here.
 
@@ -216,6 +217,7 @@ export default function Dashboard() {
           of this screen showing a different day from the rest. */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <WaterCard date={viewedDate} />
+        <StepsCard date={viewedDate} />
       </section>
 
       {/* Hidden entirely until there is something to log. The entry point is
