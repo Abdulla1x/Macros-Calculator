@@ -28,6 +28,11 @@ SECRET_BIRTH_DATE = "1987-03-19"
 # custom goal are personal figures that live in the settings row.
 SECRET_WATER_ML = 337.0
 SECRET_WATER_GOAL_ML = 3137.0
+# Steps are a count on the dashboard and never a figure: how far someone walked
+# on a given day is content, exactly as a weigh-in or a water entry is. The
+# goal lives in the settings row alongside the water one.
+SECRET_STEPS = 31337
+SECRET_STEPS_GOAL = 23117
 
 
 def email_of(client) -> str:
@@ -174,6 +179,9 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
     client_b.post(
         "/api/water", json={"date": TODAY.isoformat(), "ml": SECRET_WATER_ML}
     )
+    client_b.post(
+        "/api/steps", json={"date": TODAY.isoformat(), "steps": SECRET_STEPS}
+    )
 
     client_b.put(
         "/api/settings",
@@ -184,6 +192,7 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
             "birth_date": SECRET_BIRTH_DATE,
             "sex": "female",
             "water_goal_ml": SECRET_WATER_GOAL_ML,
+            "steps_goal": SECRET_STEPS_GOAL,
         },
     )
 
@@ -198,6 +207,8 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert SECRET_BIRTH_DATE not in body, route
         assert str(SECRET_WATER_ML) not in body, route
         assert str(SECRET_WATER_GOAL_ML) not in body, route
+        assert str(SECRET_STEPS) not in body, route
+        assert str(SECRET_STEPS_GOAL) not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------

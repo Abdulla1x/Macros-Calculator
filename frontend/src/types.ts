@@ -84,6 +84,10 @@ export interface Settings {
    *  is why the card falls back to DEFAULT_WATER_QUICK_ADDS rather than
    *  rendering no buttons. */
   water_quick_adds: number[] | null
+  /** Daily step goal. Null means "no goal", NOT "derive one for me" — the
+   *  opposite of water_goal_ml above, and the reason the steps card drops its
+   *  progress bar entirely rather than drawing progress towards a default. */
+  steps_goal: number | null
 }
 
 /** One logged drink. */
@@ -116,6 +120,32 @@ export interface WaterDay {
   goal_ml: number
   goal_basis: WaterGoalBasis
   entries: WaterEntry[]
+}
+
+/** One day's step count, as stored. */
+export interface StepEntry {
+  id: number
+  date: string
+  steps: number
+  created_at: string | null
+}
+
+/** One day of steps — everything the card renders, in one response.
+ *
+ * `logged` carries what `steps` cannot: zero is a legal count, so "logged a
+ * zero" and "never logged" both report `steps: 0`, and only one of them should
+ * offer a Clear button.
+ *
+ * There is no basis object beside `goal` the way WaterGoalBasis sits beside
+ * `goal_ml`. A water goal is derived and has arithmetic worth showing; a step
+ * goal is either a number the user typed or no number at all. */
+export interface StepDay {
+  date: string
+  steps: number
+  logged: boolean
+  goal: number | null
+  burn_kcal: number | null
+  burn_weight_kg: number | null
 }
 
 /** What a measured TDEE was built from, or what it is still short of. */

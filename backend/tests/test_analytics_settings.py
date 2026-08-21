@@ -104,6 +104,7 @@ UNSET_OPTIONALS = {
     "activity_level": None, "goal_rate_kg_per_week": None,
     "targets_auto": False,
     "water_goal_ml": None, "water_quick_adds": None,
+    "steps_goal": None,
 }
 
 
@@ -133,6 +134,7 @@ def test_body_profile_round_trips(client):
         "activity_level": "moderate", "goal_rate_kg_per_week": -0.5,
         "targets_auto": False,
         "water_goal_ml": None, "water_quick_adds": None,
+        "steps_goal": None,
     }
     assert client.put("/api/settings", json=profile).json() == profile
     assert client.get("/api/settings").json() == profile
@@ -312,6 +314,40 @@ def test_a_put_without_water_fields_leaves_them_alone(client):
     assert saved["water_quick_adds"] == [300.0]
     # The replaced fields did move, which is the half that should.
     assert saved["calorie_goal"] == 2300
+
+
+def test_a_put_without_steps_fields_leaves_them_alone(client):
+    """The same guarantee, extended to the step goal.
+
+    A phone still running the pre-deploy bundle PUTs a body with no steps key.
+    Under the replace semantics the four goals use, that would silently clear a
+    goal the user set -- and because null is a legal state here, nothing about
+    the result would look wrong afterwards.
+    """
+    settings = client.get("/api/settings").json()
+    client.put("/api/settings", json={**settings, "steps_goal": 9000})
+
+    legacy_body = {
+        "calorie_goal": 2300, "protein_goal": 160, "carbs_goal": 260,
+        "fat_goal": 75, "track_carbs": False, "track_fat": False,
+    }
+    saved = client.put("/api/settings", json=legacy_body).json()
+
+    assert saved["steps_goal"] == 9000
+    assert saved["calorie_goal"] == 2300
+
+
+def test_a_steps_goal_can_be_cleared_on_purpose(client):
+    """Clearing is sending null explicitly, which model_fields_set separates
+    from not sending the key at all -- the distinction the test above relies on
+    in the other direction."""
+    settings = client.get("/api/settings").json()
+    client.put("/api/settings", json={**settings, "steps_goal": 9000})
+
+    saved = client.put(
+        "/api/settings", json={**settings, "steps_goal": None}
+    ).json()
+    assert saved["steps_goal"] is None
 
 
 def test_water_settings_bounds_are_refused(client):

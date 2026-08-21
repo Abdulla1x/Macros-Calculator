@@ -294,6 +294,17 @@ def estimated_tdee(
     user typed, and it can be out by several hundred kcal for an individual.
     Phase 5 measures the same quantity from logged intake and weight change,
     and that number supersedes this one wherever both exist.
+
+    Phase 7 asked whether logged steps should refine the activity multiplier
+    here, since this is the one TDEE a step term could safely reach, and the
+    answer was no. This estimate exists for the account that has almost no
+    data -- which is the same account that has no step history either -- so the
+    refinement would only ever fire for someone logging steps but not meals.
+    It would also make today's walking move today's calorie target, which is
+    the feedback loop `measured_tdee`'s window deliberately ends yesterday to
+    avoid, and it would put a visible step in the target on the day the
+    measurement takes over and the step term disappears. Steps are recorded and
+    shown; they are an input to nothing.
     """
     bmr = bmr_mifflin_st_jeor(weight_kg, height_cm, age, sex)
     return round(bmr * activity_multiplier(activity_level), 1)
@@ -524,3 +535,27 @@ def water_goal(
     return WaterGoal(
         ml=float(ml), source="weight", ml_per_kg=ml_per_kg, weight_kg=weight_kg
     )
+
+
+# CONVENTION. Kilocalories burned per step, per kilogram of body weight. Around
+# 350 kcal for 10,000 steps at 70 kg, which is the middle of the range the
+# common estimates land in. It ignores pace, stride, terrain, gradient and
+# fitness, every one of which moves the real figure -- so this is a rule of
+# thumb for putting walking on a scale the user recognises, not a measurement.
+#
+# It feeds a caption and nothing else. See `estimated_tdee` and `measured_tdee`
+# for why no TDEE anywhere takes this as an input.
+KCAL_PER_STEP_PER_KG = 0.0005
+
+
+def steps_burn(steps: int, weight_kg: float | None) -> float | None:
+    """Roughly what walking that many steps costs, or None without a weight.
+
+    Returns None rather than raising or substituting an average body weight,
+    the same choice `bmi` makes: the number is unanswerable without the input,
+    and a stand-in weight would produce a personal-looking figure that is not
+    about this person. The caller shows the count alone in that case.
+    """
+    if weight_kg is None or steps <= 0:
+        return None
+    return round(KCAL_PER_STEP_PER_KG * weight_kg * steps, 1)

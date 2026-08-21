@@ -17,6 +17,8 @@ import type {
   MessageResponse,
   OFFProduct,
   Settings,
+  StepDay,
+  StepEntry,
   TokenResponse,
   Transcription,
   User,
@@ -236,6 +238,23 @@ export const api = {
   deleteWaterEntry: (id: number) =>
     request<void>(`/api/water/${id}`, { method: 'DELETE' }),
 
+  // One request feeds the whole card: the count, the goal, and the walking
+  // estimate with the weight it came from.
+  getStepDay: (date: string) =>
+    request<StepDay>(`/api/steps?date=${encodeURIComponent(date)}`),
+  // An upsert, never an insert — reading the pedometer twice is the same day's
+  // walking counted later, so this replaces rather than adds.
+  saveSteps: (date: string, steps: number) =>
+    request<StepEntry>('/api/steps', {
+      method: 'POST',
+      body: JSON.stringify({ date, steps }),
+    }),
+  // Back to never having been logged, which is not the same as saving a zero.
+  clearSteps: (date: string) =>
+    request<void>(`/api/steps?date=${encodeURIComponent(date)}`, {
+      method: 'DELETE',
+    }),
+
   getSettings: () => request<Settings>('/api/settings'),
   getBodyTargets: () => request<BodyTargets>('/api/settings/targets'),
   updateSettings: (settings: Settings) =>
@@ -305,6 +324,17 @@ export const api = {
     const form = new FormData()
     form.append('file', file)
     return request<ImportResult>('/api/data/import', { method: 'POST', body: form })
+  },
+  // A two-column date,steps CSV. Deliberately not tuned to any one phone's
+  // export — see the endpoint's docstring for why only a generic format is
+  // honest here.
+  importStepsCsv: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<ImportResult>('/api/data/import/steps', {
+      method: 'POST',
+      body: form,
+    })
   },
 
   // Admin-only. These 403 for anyone not on the server's allowlist, and a 403

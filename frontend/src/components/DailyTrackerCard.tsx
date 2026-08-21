@@ -21,7 +21,11 @@ interface Props {
   icon: string
   label: string
   value: number
-  goal: number
+  /** Null when the tracker has no goal to measure against, which is a state
+   *  and not a gap: steps has no honest derivation for one, so until the user
+   *  sets it the card shows the count and drops the bar rather than drawing
+   *  progress towards a number nobody chose. */
+  goal: number | null
   unit: string
   color: string
   /** Where the goal came from. Rendered under the bar, small. */
@@ -44,7 +48,8 @@ export default function DailyTrackerCard({
   // Capped at 1 for the bar's width so overshooting cannot overflow the
   // container, but the percentage below is uncapped: someone who drank 120% of
   // their goal should be told 120%, not a silently clipped 100%.
-  const ratio = goal > 0 ? value / goal : 0
+  const hasGoal = goal !== null && goal > 0
+  const ratio = hasGoal ? value / goal! : 0
   const width = Math.min(ratio, 1) * 100
 
   return (
@@ -58,26 +63,35 @@ export default function DailyTrackerCard({
           <span className="font-semibold text-slate-200">
             {Math.round(value).toLocaleString()}
           </span>{' '}
-          / {Math.round(goal).toLocaleString()} {unit}
+          {hasGoal && `/ ${Math.round(goal!).toLocaleString()} `}
+          {unit}
         </span>
       </div>
 
-      <div
-        className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-800"
-        role="progressbar"
-        aria-valuenow={Math.round(value)}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(goal)}
-        aria-label={`${label}: ${Math.round(value)} of ${Math.round(goal)} ${unit}`}
-      >
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${width}%`, background: color }}
-        />
-      </div>
-      <p className="mt-1 text-right text-xs text-slate-500">
-        {Math.round(ratio * 100)}% of goal
-      </p>
+      {/* Both the bar and the percentage are goal-relative, so with no goal
+          they have nothing to say. Rendering them anyway would draw an empty
+          track and "0% of goal" — which reads as failure rather than as a
+          setting nobody has filled in. */}
+      {hasGoal && (
+        <>
+          <div
+            className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-800"
+            role="progressbar"
+            aria-valuenow={Math.round(value)}
+            aria-valuemin={0}
+            aria-valuemax={Math.round(goal!)}
+            aria-label={`${label}: ${Math.round(value)} of ${Math.round(goal!)} ${unit}`}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${width}%`, background: color }}
+            />
+          </div>
+          <p className="mt-1 text-right text-xs text-slate-500">
+            {Math.round(ratio * 100)}% of goal
+          </p>
+        </>
+      )}
 
       {actions && <div className="mt-3">{actions}</div>}
 

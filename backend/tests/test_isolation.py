@@ -20,6 +20,10 @@ WATER_DAY = date.today().isoformat()
 WATER_A = {"date": WATER_DAY, "ml": 250.0}
 WATER_B = {"date": WATER_DAY, "ml": 750.0}
 
+STEP_DAY = WATER_DAY
+STEPS_A = {"date": STEP_DAY, "steps": 4000}
+STEPS_B = {"date": STEP_DAY, "steps": 12000}
+
 
 def test_meal_lists_are_scoped(client, client_b):
     a_meal = client.post("/api/meals", json=MEAL_A).json()
@@ -194,6 +198,53 @@ def test_full_export_only_contains_own_water(client, client_b):
 
     b_export = client_b.get("/api/data/export/all").json()
     assert [w["ml"] for w in b_export["water_logs"]] == [750.0]
+
+
+def test_step_days_are_scoped(client, client_b):
+    client.post("/api/steps", json=STEPS_A)
+    client_b.post("/api/steps", json=STEPS_B)
+
+    # Same calendar day, two accounts. Unlike water there is no summing here --
+    # the risk is the unique index being enforced across users rather than
+    # within one, so B's write would overwrite A's day instead of adding a row.
+    assert client.get("/api/steps", params={"date": STEP_DAY}).json()["steps"] == 4000
+    assert client_b.get("/api/steps", params={"date": STEP_DAY}).json()["steps"] == 12000
+
+
+def test_cannot_clear_another_users_steps(client, client_b):
+    client.post("/api/steps", json=STEPS_A)
+
+    assert client_b.delete("/api/steps", params={"date": STEP_DAY}).status_code == 404
+    # A's day is untouched, and still logged rather than merely reading zero.
+    a_day = client.get("/api/steps", params={"date": STEP_DAY}).json()
+    assert a_day["steps"] == 4000
+    assert a_day["logged"] is True
+
+
+def test_a_steps_burn_never_reads_another_users_weight(client, client_b):
+    """The walking estimate reaches outside the steps table, exactly the way the
+    water goal reaches outside its own -- it queries `weights`, and a missing
+    user_id filter there would hand B a figure computed from A's body."""
+    client.post("/api/weights", json=WEIGHT_A)   # A weighs 82 kg
+    client_b.post("/api/weights", json=WEIGHT_B)  # B weighs 61 kg
+    client.post("/api/steps", json=STEPS_A)
+    client_b.post("/api/steps", json={**STEPS_B, "steps": 4000})
+
+    a_day = client.get("/api/steps", params={"date": STEP_DAY}).json()
+    b_day = client_b.get("/api/steps", params={"date": STEP_DAY}).json()
+    assert a_day["burn_weight_kg"] == 82.0
+    assert b_day["burn_weight_kg"] == 61.0
+    # Same step count, different bodies, so the same filter failure would show
+    # up as identical burns.
+    assert a_day["burn_kcal"] != b_day["burn_kcal"]
+
+
+def test_full_export_only_contains_own_steps(client, client_b):
+    client.post("/api/steps", json=STEPS_A)
+    client_b.post("/api/steps", json=STEPS_B)
+
+    b_export = client_b.get("/api/data/export/all").json()
+    assert [s["steps"] for s in b_export["steps"]] == [12000]
 
 
 def test_settings_are_independent(client, client_b):

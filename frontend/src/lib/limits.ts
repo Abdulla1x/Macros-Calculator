@@ -45,6 +45,11 @@ export const MAX_WATER_QUICK_ADDS = 4
  *  values, so the client is what turns "unset" into buttons. */
 export const DEFAULT_WATER_QUICK_ADDS = [250, 500, 750]
 
+/** schemas.py MAX_STEPS_PER_DAY. Carries no health opinion, unlike the water
+ *  ceiling above — there is no amount of walking this app declines to help
+ *  anyone do. It only catches a figure that is not a step count at all. */
+export const MAX_STEPS_PER_DAY = 200_000
+
 /** calculations.py WATER_ML_PER_KG. Needed here for one message only: the
  *  card has to name the rate before any weigh-in exists for the server to
  *  report it alongside. */
@@ -69,6 +74,16 @@ export const settingsFieldRules: Partial<Record<keyof Settings, FieldRule>> = {
       if (value <= 0) return 'Water goal has to be greater than zero.'
       if (value > MAX_WATER_GOAL_ML) {
         return `A daily goal above ${MAX_WATER_GOAL_ML.toLocaleString()} ml is more than the body can safely clear — this app will not set one.`
+      }
+      return null
+    },
+  },
+  steps_goal: {
+    label: 'Step goal',
+    check: (value) => {
+      if (value <= 0) return 'A step goal has to be greater than zero.'
+      if (value > MAX_STEPS_PER_DAY) {
+        return `A daily goal above ${MAX_STEPS_PER_DAY.toLocaleString()} steps is not a step count — check for a stray digit.`
       }
       return null
     },

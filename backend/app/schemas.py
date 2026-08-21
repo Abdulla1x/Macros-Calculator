@@ -319,6 +319,63 @@ class WaterDay(BaseModel):
     entries: list[WaterEntry] = []
 
 
+# Steps bound. Unlike MAX_WATER_GOAL_ML this carries no health opinion -- there
+# is no amount of walking this app declines to help anyone do. It exists only
+# to catch a figure that is not a step count at all, which is nearly always a
+# stray digit, and it sits well past any distance a person covers in a day.
+MAX_STEPS_PER_DAY = 200_000
+
+
+class StepEntryCreate(BaseModel):
+    date: date_type
+    # ge=0, not gt=0. Water refuses a zero because nobody logs drinking no
+    # water, but a day with no walking on it is a real day worth recording --
+    # and a count typed in error has to be correctable down to zero.
+    steps: int = Field(ge=0, le=MAX_STEPS_PER_DAY)
+
+    @field_validator("date")
+    @classmethod
+    def not_in_future(cls, value: date_type) -> date_type:
+        # Same grace as a weigh-in and a water log: the server's today may be a
+        # day behind the user's.
+        limit = date_type.today() + timedelta(days=FUTURE_DATE_GRACE_DAYS)
+        if value > limit:
+            raise ValueError("step count date cannot be in the future")
+        return value
+
+
+class StepEntry(StepEntryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime | None = None
+
+
+class StepDay(BaseModel):
+    """Everything the steps card needs, in one response.
+
+    There is no StepGoalBasis here and the absence is deliberate. A water goal
+    is derived from body weight, so it has arithmetic that has to travel with
+    it; a step goal is either a number the user typed or no number at all.
+    `goal` is None in the second case and the card drops its bar rather than
+    drawing progress towards an invented target.
+
+    `logged` carries what `steps` cannot. Since zero is a legal count, "logged
+    a zero" and "has not logged" are two different days that both report
+    `steps == 0`, and only one of them should offer to be cleared.
+    """
+
+    date: date_type
+    steps: int
+    logged: bool
+    goal: int | None = None
+    # The walking estimate and the weight it was worked out from, together --
+    # the standing rule that no derived number reaches the screen without its
+    # inputs beside it. Both None when there is no weigh-in to derive from.
+    burn_kcal: float | None = None
+    burn_weight_kg: float | None = None
+
+
 ACTIVITY_LEVELS = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 
@@ -372,6 +429,12 @@ class Settings(BaseModel):
     water_quick_adds: list[WaterQuickAddMl] | None = Field(
         default=None, min_length=1, max_length=MAX_WATER_QUICK_ADDS
     )
+    # None here means "I have no step goal", not "derive one for me" -- the
+    # one place where two neighbouring nullable settings mean opposite things
+    # by their emptiness. See the column comment in models.py. The field name
+    # matches its column exactly, so from_attributes reads it directly and this
+    # one needs no _settings_out() conversion.
+    steps_goal: int | None = Field(default=None, gt=0, le=MAX_STEPS_PER_DAY)
 
     @field_validator("birth_date")
     @classmethod
@@ -656,3 +719,4 @@ class AdminUserRow(BaseModel):
     meal_templates: int = 0
     ai_calls: int = 0
     water_logs: int = 0
+    steps: int = 0

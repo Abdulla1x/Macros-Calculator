@@ -29,6 +29,7 @@ _PATCHED_FIELDS = (
     "goal_rate_kg_per_week",
     "targets_auto",
     "water_goal_ml",
+    "steps_goal",
 )
 
 
