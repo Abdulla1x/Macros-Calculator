@@ -91,3 +91,128 @@ def test_import_dedupe_considers_carbs_and_fat(client):
     ).json()
     assert result["inserted"] == 2
     assert result["skipped_duplicates"] == 1
+
+
+# -- Steps import ---------------------------------------------------------
+#
+# Dates are relative because the importer refuses future ones, the same way the
+# manual path does -- a fixed calendar date would eventually start failing.
+
+def steps_csv(client, content):
+    return client.post(
+        "/api/data/import/steps",
+        files={"file": ("steps.csv", content, "text/csv")},
+    ).json()
+
+
+def a_day(n):
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+def test_steps_import_inserts_and_reports(client):
+    result = steps_csv(
+        client,
+        f"date,steps\n{a_day(3)},8000\n{a_day(2)},12000\n{a_day(1)},0\n",
+    )
+    assert result == {"inserted": 3, "skipped_duplicates": 0, "skipped_invalid": 0}
+    # Zero is a real count, not a refusal -- it must land as a logged day.
+    day = client.get("/api/steps", params={"date": a_day(1)}).json()
+    assert day["steps"] == 0 and day["logged"] is True
+
+
+def test_steps_import_accepts_mixed_case_headers_and_extra_columns(client):
+    """Samsung's export carries a dozen columns beside the count."""
+    result = steps_csv(
+        client,
+        f"Date,Steps,Calories,Distance\n{a_day(1)},9000,320,6.4\n",
+    )
+    assert result["inserted"] == 1
+
+
+def test_steps_import_never_overwrites_a_day_already_logged(client):
+    """The decision that separates this from the meals importer.
+
+    A collision here is a date, not a whole row. A count already stored was
+    typed by hand or imported earlier, and replacing it from a file cannot be
+    undone -- so it is skipped, and the stored value is what must still be
+    there afterwards.
+    """
+    client.post("/api/steps", json={"date": a_day(1), "steps": 4321})
+
+    result = steps_csv(client, f"date,steps\n{a_day(1)},99999\n")
+    assert result == {"inserted": 0, "skipped_duplicates": 1, "skipped_invalid": 0}
+    assert client.get("/api/steps", params={"date": a_day(1)}).json()["steps"] == 4321
+
+
+def test_steps_import_catches_a_date_repeated_inside_one_file(client):
+    """The per-row flush is what makes the second row see the first."""
+    result = steps_csv(client, f"date,steps\n{a_day(1)},8000\n{a_day(1)},9000\n")
+    assert result["inserted"] == 1
+    assert result["skipped_duplicates"] == 1
+    assert client.get("/api/steps", params={"date": a_day(1)}).json()["steps"] == 8000
+
+
+def test_steps_import_refuses_every_shape_of_bad_count(client):
+    """One row each for the four rejections in _parse_steps, plus a bad date.
+
+    1e999 is the non-finite trap `_parse_float` was written for; 8000.5 is the
+    one specific to an integer column, where a bare int() would raise and take
+    the whole file down instead of reporting one row.
+    """
+    result = steps_csv(
+        client,
+        "date,steps\n"
+        f"{a_day(9)},-1\n"
+        f"{a_day(8)},200001\n"
+        f"{a_day(7)},1e999\n"
+        f"{a_day(6)},8000.5\n"
+        f"{a_day(5)},nan\n"
+        f"{a_day(4)},\n"
+        "not-a-date,8000\n"
+        ",,\n"
+        f"{a_day(3)},7500\n"
+    )
+    assert result["inserted"] == 1
+    assert result["skipped_invalid"] == 8
+    # And the good row still landed -- a bad row is reported, never fatal.
+    assert client.get("/api/steps", params={"date": a_day(3)}).json()["steps"] == 7500
+
+
+def test_steps_import_refuses_a_future_date(client):
+    from datetime import date, timedelta
+    future = (date.today() + timedelta(days=30)).isoformat()
+    result = steps_csv(client, f"date,steps\n{future},8000\n")
+    assert result["skipped_invalid"] == 1
+    assert result["inserted"] == 0
+
+
+def test_steps_import_rejects_missing_columns(client):
+    response = client.post(
+        "/api/data/import/steps",
+        files={"file": ("steps.csv", "date,walked\n2026-07-01,8000\n", "text/csv")},
+    )
+    assert response.status_code == 400
+
+
+def test_steps_import_rejects_oversized_file(client):
+    response = client.post(
+        "/api/data/import/steps",
+        files={"file": ("steps.csv", "date,steps\n" + ("x" * (1024 * 1024)), "text/csv")},
+    )
+    assert response.status_code == 413
+
+
+def test_the_full_export_round_trips_into_the_steps_importer(client):
+    """export/all already emits steps as {date, steps} -- the importer's two
+    columns exactly. Worth pinning, because it makes the JSON export a usable
+    backup rather than a one-way dump."""
+    client.post("/api/steps", json={"date": a_day(2), "steps": 8000})
+    client.post("/api/steps", json={"date": a_day(1), "steps": 9500})
+
+    rows = client.get("/api/data/export/all").json()["steps"]
+    content = "date,steps\n" + "".join(f"{r['date']},{r['steps']}\n" for r in rows)
+
+    assert steps_csv(client, content) == {
+        "inserted": 0, "skipped_duplicates": 2, "skipped_invalid": 0,
+    }

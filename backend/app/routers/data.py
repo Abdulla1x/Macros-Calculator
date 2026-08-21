@@ -4,7 +4,7 @@ import io
 import json
 import math
 from datetime import date as date_type
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -24,7 +24,11 @@ from ..models import (
     WaterLog,
     WeightEntry,
 )
-from ..schemas import ImportResult
+from ..schemas import (
+    FUTURE_DATE_GRACE_DAYS,
+    MAX_STEPS_PER_DAY,
+    ImportResult,
+)
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
@@ -211,6 +215,112 @@ def _parse_float(raw, required: bool) -> tuple[float | None, bool]:
         return (value, True) if math.isfinite(value) and value >= 0 else (None, False)
     except ValueError:
         return None, False
+
+
+def _parse_steps(raw) -> tuple[int | None, bool]:
+    """Returns (value, ok) for a step count. Never optional -- a row without one
+    is not a row.
+
+    Four rejections, and the last two are the ones a plainer `int(raw)` would
+    get wrong in opposite directions. Non-finite comes straight from
+    `_parse_float`'s lesson: this importer is the only path that writes a
+    StepEntry without going through StepEntryCreate, so the schema's bounds do
+    not protect it, and `float("1e999")` is `inf` with `inf >= 0` True.
+    Fractional is the new one: `int("8000.5")` raises rather than truncating,
+    so parsing through float first is what lets a half-step be *reported* as a
+    bad row instead of blowing up the whole file.
+    """
+    if raw is None or str(raw).strip() == "":
+        return None, False
+    try:
+        value = float(raw)
+    except ValueError:
+        return None, False
+    if not math.isfinite(value) or value < 0 or value > MAX_STEPS_PER_DAY:
+        return None, False
+    if not value.is_integer():
+        return None, False
+    return int(value), True
+
+
+@router.post("/import/steps", response_model=ImportResult)
+async def import_steps_csv(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Import a step history from a two-column `date,steps` CSV.
+
+    Deliberately generic rather than tuned to any one phone's export, because
+    only one of the four is simple and it is not testable here. Samsung Health's
+    `step_daily_trend` file is already one row per day and drops in; Apple
+    Health ships a single 200 MB+ XML of per-sample records whose iPhone/Watch
+    duplicates cannot be resolved reliably, Health Connect ships a SQLite
+    database, and Huawei mails a zip of per-activity JSON hours later. A parser
+    for any of those would be guessing at a file nobody here has, and a step
+    history silently inflated by double-counted samples is worse than no import
+    at all -- nothing on screen would look wrong.
+
+    So: one honest format, extra columns ignored, and a per-row count of what
+    was refused. Anyone else converts once, which the Settings copy says.
+
+    Nothing here recomputes calorie targets, matching the meals importer above
+    and routers/steps.py. Steps are an input to no target.
+    """
+    raw = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="CSV too large (max 1 MB).")
+    content = raw.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(content))
+    if reader.fieldnames is None:
+        raise HTTPException(status_code=400, detail="Empty CSV file")
+
+    fields = {name.strip().lower() for name in reader.fieldnames}
+    if not {"date", "steps"}.issubset(fields):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid CSV format. Required columns: date, steps",
+        )
+
+    # The same grace the manual path allows, so an import is not a hole through
+    # a rule the form enforces.
+    future_limit = date_type.today() + timedelta(days=FUTURE_DATE_GRACE_DAYS)
+
+    inserted = skipped_duplicates = skipped_invalid = 0
+    for row in reader:
+        row = {(k or "").strip().lower(): v for k, v in row.items()}
+
+        date = _parse_date(row.get("date") or "")
+        steps, steps_ok = _parse_steps(row.get("steps"))
+
+        if not (date and steps_ok) or date > future_limit:
+            skipped_invalid += 1
+            continue
+
+        # A collision is a *date*, not a whole row -- `steps` is unique on
+        # (user_id, date). Skipped rather than overwritten, on purpose: a count
+        # already stored was either typed by hand or imported earlier, and
+        # replacing it from a file is not recoverable. The flush below means a
+        # file containing the same date twice hits this on the second one.
+        existing = db.scalars(
+            select(StepEntry.id).where(
+                StepEntry.user_id == user.id, StepEntry.date == date
+            )
+        ).first()
+        if existing is not None:
+            skipped_duplicates += 1
+            continue
+
+        db.add(StepEntry(user_id=user.id, date=date, steps=steps))
+        db.flush()
+        inserted += 1
+    db.commit()
+
+    return ImportResult(
+        inserted=inserted,
+        skipped_duplicates=skipped_duplicates,
+        skipped_invalid=skipped_invalid,
+    )
 
 
 @router.post("/import", response_model=ImportResult)

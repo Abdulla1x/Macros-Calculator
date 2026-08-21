@@ -32,7 +32,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
 - **Water tracker** with configurable quick-add buttons and a goal derived from your trend weight — shown with the arithmetic, not just the answer
-- **Steps tracker**, typed in by hand — no phone or watch sync is possible in a web app, and the UI says so rather than implying one. Set a goal or don't; with none set the card shows the count alone
+- **Steps tracker**, typed in by hand or imported from a `date,steps` CSV — no phone or watch sync is possible in a web app, and the UI says so rather than implying one. Set a goal or don't; with none set the card shows the count alone
 - Today's meal list with inline edit and delete
 - 7-day calorie trend sparkline
 
@@ -295,6 +295,7 @@ on the caller's data, except these public ones: `/api/health`,
 | DELETE | `/api/water/{id}` | Remove one water entry (what the card's undo calls) |
 | GET/POST | `/api/steps` | One day's steps (count, goal, walking estimate) / save the day's count (upsert) |
 | DELETE | `/api/steps` | Clear a day's count back to never logged |
+| POST | `/api/data/import/steps` | Import a step history from a two-column `date,steps` CSV; days already logged are kept |
 | GET | `/api/analytics/daily` | Per-day totals + averages for a date range |
 | GET/PUT | `/api/settings` | Daily goals, tracked-macro toggles, body profile |
 | GET | `/api/settings/targets` | BMI, BMR, measured-or-estimated TDEE, calorie + macro targets |

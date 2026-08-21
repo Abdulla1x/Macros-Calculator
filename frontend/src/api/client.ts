@@ -325,6 +325,17 @@ export const api = {
     form.append('file', file)
     return request<ImportResult>('/api/data/import', { method: 'POST', body: form })
   },
+  // A two-column date,steps CSV. Deliberately not tuned to any one phone's
+  // export — see the endpoint's docstring for why only a generic format is
+  // honest here.
+  importStepsCsv: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<ImportResult>('/api/data/import/steps', {
+      method: 'POST',
+      body: form,
+    })
+  },
 
   // Admin-only. These 403 for anyone not on the server's allowlist, and a 403
   // falls through the handler above as an ordinary ApiError — unlike a 401,
