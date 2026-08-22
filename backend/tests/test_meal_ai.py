@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fastapi import HTTPException
 # Importing the provider's errors is fine *here*: these tests exist to prove
 # meal_ai.py translates them, so nothing else has to know they exist.
 from google.genai import errors as genai_errors
@@ -195,6 +196,69 @@ def test_analyze_rejects_oversized_image(client, monkeypatch):
         "/api/ai/analyze", files={"image": ("meal.jpg", big, "image/jpeg")}
     )
     assert response.status_code == 413
+
+
+class _RecordingUpload:
+    """An UploadFile stand-in that reports what `read()` was asked for.
+
+    The 413 alone cannot tell the fix from the bug -- reading the whole body and
+    measuring it afterwards refuses the same upload with the same status. What
+    changed is how much was held to reach that answer, and only the argument
+    passed to read() shows it.
+    """
+
+    def __init__(self, size, content_type="image/jpeg"):
+        self._data = b"x" * size
+        self.content_type = content_type
+        self.read_args = []
+
+    async def read(self, size=-1):
+        self.read_args.append(size)
+        return self._data if size is None or size < 0 else self._data[:size]
+
+
+def test_read_media_never_reads_more_than_the_limit_plus_one():
+    """A 512 MB upload must not become 512 MB of memory before it is refused."""
+    upload = _RecordingUpload(512 * 1024 * 1024)
+
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(
+            ai_router._read_media(
+                upload, "image", ai_router.MAX_IMAGE_BYTES, "an image", "Image"
+            )
+        )
+
+    assert excinfo.value.status_code == 413
+    assert upload.read_args == [ai_router.MAX_IMAGE_BYTES + 1]
+
+
+def test_read_media_returns_a_file_that_exactly_fills_the_limit():
+    """The +1 is a probe, not a smaller budget: max_bytes itself still passes."""
+    upload = _RecordingUpload(ai_router.MAX_IMAGE_BYTES)
+
+    data, mime = asyncio.run(
+        ai_router._read_media(
+            upload, "image", ai_router.MAX_IMAGE_BYTES, "an image", "Image"
+        )
+    )
+
+    assert len(data) == ai_router.MAX_IMAGE_BYTES
+    assert mime == "image/jpeg"
+
+
+def test_read_media_rejects_a_wrong_type_without_reading_it_at_all():
+    """The cheapest refusal should also be the earliest one."""
+    upload = _RecordingUpload(1024, content_type="text/plain")
+
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(
+            ai_router._read_media(
+                upload, "image", ai_router.MAX_IMAGE_BYTES, "an image", "Image"
+            )
+        )
+
+    assert excinfo.value.status_code == 415
+    assert upload.read_args == []
 
 
 def image_parts(count, size=16, mime="image/jpeg"):

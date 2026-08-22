@@ -207,7 +207,14 @@ async def _read_media(
     """
     if upload.content_type and not upload.content_type.startswith(f"{kind}/"):
         raise HTTPException(status_code=415, detail=f"File must be {a_noun}.")
-    data = await upload.read()
+    # One byte past the limit, not the whole body. `len(data) > max_bytes` is
+    # still an exact test for "there was more", but an oversized upload is now
+    # refused having held max_bytes + 1 rather than however much the client
+    # chose to send. Reading first and measuring afterwards let any signed-up
+    # account make this free instance spool an arbitrary body to disk -- and it
+    # happened before _reserve_call, so it never cost them a single quota slot.
+    # The CSV importers in routers/data.py already read this way.
+    data = await upload.read(max_bytes + 1)
     if len(data) > max_bytes:
         raise HTTPException(
             status_code=413,
