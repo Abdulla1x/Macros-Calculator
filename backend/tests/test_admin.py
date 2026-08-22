@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import Meal, utcnow
+from conftest import utc_today
 
 ADMIN_ROUTES = ("/api/admin/stats", "/api/admin/users")
 
-TODAY = date.today()
+TODAY = utc_today()
 YESTERDAY = TODAY - timedelta(days=1)
 
 # Deliberately distinctive so the privacy test can grep whole payloads for them
