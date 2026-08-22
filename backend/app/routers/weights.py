@@ -12,6 +12,7 @@ from ..models import Setting, User
 from ..models import WeightEntry as WeightRow
 from ..schemas import WeightEntry, WeightEntryCreate, WeightTrend, WeightTrendPoint
 from ..targets import apply_auto_targets
+from ..upsert import upsert
 
 router = APIRouter(prefix="/api/weights", tags=["weights"])
 
@@ -81,34 +82,39 @@ def save_weight(
     upsert syntax differs between SQLite (dev/tests) and Postgres (production)
     and this runs on both.
     """
-    row = db.scalars(
-        select(WeightRow).where(
-            WeightRow.user_id == user.id, WeightRow.date == entry.date
-        )
-    ).first()
-    if row is None:
-        row = WeightRow(
-            user_id=user.id, date=entry.date, weight_kg=entry.weight_kg
-        )
-        db.add(row)
-    else:
-        row.weight_kg = entry.weight_kg
+    def build() -> WeightRow:
+        row = db.scalars(
+            select(WeightRow).where(
+                WeightRow.user_id == user.id, WeightRow.date == entry.date
+            )
+        ).first()
+        if row is None:
+            row = WeightRow(
+                user_id=user.id, date=entry.date, weight_kg=entry.weight_kg
+            )
+            db.add(row)
+        else:
+            row.weight_kg = entry.weight_kg
 
-    # A weigh-in is an input to the calorie target, so an account with
-    # targets_auto on gets its goals recomputed here rather than only when it
-    # next opens Settings. Without this the target would lag the weight by
-    # however long it took the user to visit that page -- which is precisely
-    # the "static number you guessed once" problem the profile exists to fix.
-    #
-    # Flushed first so the new row is visible to the query inside
-    # compute_targets; both writes then land on one commit.
-    setting = db.get(Setting, user.id)
-    if setting is not None:
-        db.flush()
-        apply_auto_targets(setting, db)
+        # A weigh-in is an input to the calorie target, so an account with
+        # targets_auto on gets its goals recomputed here rather than only when
+        # it next opens Settings. Without this the target would lag the weight
+        # by however long it took the user to visit that page -- which is
+        # precisely the "static number you guessed once" problem the profile
+        # exists to fix.
+        #
+        # Flushed first so the new row is visible to the query inside
+        # compute_targets; both writes then land on one commit. Inside build()
+        # so a retry recomputes them too: a rollback discards this write along
+        # with the weigh-in, and a target left at the pre-weigh-in value would
+        # be the silent half of the bug.
+        setting = db.get(Setting, user.id)
+        if setting is not None:
+            db.flush()
+            apply_auto_targets(setting, db)
+        return row
 
-    db.commit()
-    return row
+    return upsert(db, build)
 
 
 @router.delete("/{weight_id}", status_code=204)

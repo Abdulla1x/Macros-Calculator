@@ -8,6 +8,7 @@ from ..models import Food as FoodRow
 from ..models import User
 from ..schemas import Food, FoodCreate, OFFProduct
 from ..services import off_client
+from ..upsert import upsert
 
 router = APIRouter(prefix="/api/foods", tags=["foods"])
 
@@ -80,23 +81,26 @@ def save_food(
 ):
     """Save a food to the user's library; updates macros if the name exists."""
     name = food.name.strip()
-    row = db.scalars(
-        select(FoodRow).where(
-            FoodRow.user_id == user.id,
-            func.lower(FoodRow.name) == name.lower(),
-        )
-    ).first()
-    if row is None:
-        row = FoodRow(user_id=user.id, name=name)
-        db.add(row)
-    row.serving_size = food.serving_size
-    row.calories = food.calories
-    row.protein = food.protein
-    row.carbs = food.carbs
-    row.fat = food.fat
-    row.source = food.source
-    db.commit()
-    return row
+
+    def build() -> FoodRow:
+        row = db.scalars(
+            select(FoodRow).where(
+                FoodRow.user_id == user.id,
+                func.lower(FoodRow.name) == name.lower(),
+            )
+        ).first()
+        if row is None:
+            row = FoodRow(user_id=user.id, name=name)
+            db.add(row)
+        row.serving_size = food.serving_size
+        row.calories = food.calories
+        row.protein = food.protein
+        row.carbs = food.carbs
+        row.fat = food.fat
+        row.source = food.source
+        return row
+
+    return upsert(db, build)
 
 
 @router.delete("/{food_id}", status_code=204)
