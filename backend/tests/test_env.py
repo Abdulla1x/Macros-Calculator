@@ -5,11 +5,14 @@ is in reading the value -- a full round trip would only add ways for the test to
 fail for unrelated reasons. The exceptions are the login and signup cases, which
 exist precisely to prove the request survives, and so have to be requests.
 """
+import math
+
 import pytest
 
 from app.auth import security
 from app.auth.security import DEFAULT_TOKEN_DAYS, TOKEN_DAYS_ENV, token_lifetime
 from app.env import env_float, env_int
+from app.services import meal_ai
 
 # "2O" is the letter O. "²" is the superscript two, which .isdigit() accepts and
 # int() then raises on -- the exact input that made the old guard worse than
@@ -123,3 +126,29 @@ def test_a_malformed_token_lifetime_is_reported_at_startup(monkeypatch, caplog):
     with caplog.at_level("WARNING", logger=security.__name__):
         token_lifetime()
     assert TOKEN_DAYS_ENV in caplog.text
+
+
+# --- MEAL_AI_DEADLINE_S ------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["²", "60s", "abc", "0", "-1"])
+def test_deadline_falls_back_on_junk(monkeypatch, raw):
+    """The old guard was raw.replace(".", "", 1).isdigit() -- a hand-rolled
+    float parser that accepted "²" and then raised inside float(), on every
+    analyze and every transcribe."""
+    monkeypatch.setenv("MEAL_AI_DEADLINE_S", raw)
+    assert meal_ai._deadline(60.0) == 60.0
+
+
+@pytest.mark.parametrize("raw,expected", [("90", 90.0), ("1.5", 1.5), ('"45"', 45.0), ("1e2", 100.0)])
+def test_deadline_reads_a_valid_value(monkeypatch, raw, expected):
+    """1e2 is the case the old guard rejected: a legitimate float spelling that
+    .isdigit() has no idea what to do with."""
+    monkeypatch.setenv("MEAL_AI_DEADLINE_S", raw)
+    assert meal_ai._deadline(60.0) == expected
+
+
+def test_non_finite_deadline_cannot_produce_an_infinite_retry_budget(monkeypatch):
+    monkeypatch.setenv("MEAL_AI_DEADLINE_S", "inf")
+    value = meal_ai._deadline(60.0)
+    assert math.isfinite(value) and value == 60.0

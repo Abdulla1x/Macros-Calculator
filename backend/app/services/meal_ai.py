@@ -21,6 +21,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import ValidationError
 
+from ..env import env_float
 from ..schemas import MealAnalysis
 
 logger = logging.getLogger(__name__)
@@ -275,8 +276,8 @@ def _deadline(default: float) -> float:
     wrong cost. Raising it also means raising the frontend's budget, which is
     why it is not raised lightly.
     """
-    raw = _env(DEADLINE_ENV)
-    return float(raw) if raw.replace(".", "", 1).isdigit() and float(raw) > 0 else default
+    value = env_float(DEADLINE_ENV, default)
+    return value if value > 0 else default
 
 
 def _backoff(attempt: int) -> float:
