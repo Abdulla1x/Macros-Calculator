@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { readNoteDraft, writeNoteDraft } from '../lib/draft'
 import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
 
@@ -32,10 +33,13 @@ const RETRY_NOTICE_AFTER_MS = 5_000
 const MAX_IMAGES = 4
 
 export default function MealAnalyzer({ settings, onApply }: Props) {
-  const [expanded, setExpanded] = useState(false)
+  // Seeded from the draft so a note survives a trip to another page and back.
+  // Expanded too when there is one, or the restored text would sit inside a
+  // collapsed panel and read as lost anyway.
+  const [note, setNote] = useState(readNoteDraft)
+  const [expanded, setExpanded] = useState(() => readNoteDraft() !== '')
   const [files, setFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
-  const [note, setNote] = useState('')
   const [analysis, setAnalysis] = useState<MealAnalysisResponse | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
@@ -57,6 +61,14 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     const timer = setTimeout(() => setRetrying(true), RETRY_NOTICE_AFTER_MS)
     return () => clearTimeout(timer)
   }, [analyzing])
+
+  // Mirrored to the draft on every keystroke rather than on unmount: a
+  // navigation can unmount this component without warning, and an effect
+  // cleanup that runs on every `note` change would be the same number of writes
+  // anyway.
+  useEffect(() => {
+    writeNoteDraft(note)
+  }, [note])
 
   // Every object URL created here must be revoked, or each re-pick leaks a
   // blob for the lifetime of the tab. The cleanup closes over the exact array

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import { localIsoDate } from '../lib/dates'
+import { clearNoteDraft } from '../lib/draft'
 import { useSettings } from '../settings/SettingsContext'
 import type { FoodCreate, Meal, MealAnalysisResponse, MealTemplate } from '../types'
 
@@ -140,6 +141,11 @@ export default function LogMeal() {
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
+  // Bumped to remount MealAnalyzer. Its state is deliberately its own -- the
+  // parent has no business reaching into ten pieces of it -- so a key is both
+  // the smallest and the most complete way to reset it.
+  const [analyzerNonce, setAnalyzerNonce] = useState(0)
+  const lastContext = useRef(`${editMeal?.id ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`)
 
   // Covers both mount and in-place navigation (edit → "Log a meal" and back).
   //
@@ -155,6 +161,25 @@ export default function LogMeal() {
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
     setMessage(null)
+    // Switching what this page is for -- a new meal, an edit, a template --
+    // must take the analyzer with it. Without this, opening a meal to edit
+    // leaves the previous meal's photos and estimate sitting above the form.
+    //
+    // Compared against the last context rather than guarded by a "first run"
+    // ref: this effect also fires on mount, where there is nothing to switch
+    // away from, and StrictMode double-invokes effects in development, which a
+    // one-shot ref gets wrong on the second pass. Comparing identity is right
+    // in both cases and needs no special-casing of either.
+    //
+    // The draft note is deliberately *not* cleared here. It is text the user
+    // typed, and carrying it into an edit is a much smaller harm than deleting
+    // it because they tapped a different button. Only a completed save clears
+    // it, because only then is it certainly spent.
+    const context = `${editMeal?.id ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`
+    if (lastContext.current !== context) {
+      lastContext.current = context
+      setAnalyzerNonce((n) => n + 1)
+    }
   }, [editMeal, template, logDate])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
@@ -275,6 +300,21 @@ export default function LogMeal() {
       setMessage({ kind: 'success', text: `Saved "${mealName.trim()}" ✓` })
       setRows([emptyRow()])
       setMealName('')
+      // Remount the analyzer, which is the only way to clear all of its state
+      // at once -- photos, previews, note, the estimate and the "Use these
+      // ingredients" button. Leaving it standing meant the next meal opened
+      // with the last one's photos still attached, and tapping apply again
+      // pushed the previous meal's ingredients into a blank form.
+      //
+      // A remount rather than a pile of setters because MealAnalyzer's cleanup
+      // effect revokes its object URLs; clearing the state by hand and
+      // forgetting that leaks every preview blob for the life of the tab.
+      //
+      // The draft is cleared here too, and must be: the note is restored on
+      // mount, so a remount that left it behind would hand the next meal the
+      // description of the one just saved.
+      clearNoteDraft()
+      setAnalyzerNonce((n) => n + 1)
     } catch (error) {
       setMessage({
         kind: 'error',
@@ -362,7 +402,7 @@ export default function LogMeal() {
         </p>
       </header>
 
-      <MealAnalyzer settings={settings} onApply={applyAnalysis} />
+      <MealAnalyzer key={analyzerNonce} settings={settings} onApply={applyAnalysis} />
 
       <section className="space-y-4">
         {rows.map((row, index) => (
