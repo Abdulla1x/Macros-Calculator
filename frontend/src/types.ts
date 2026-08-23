@@ -334,10 +334,26 @@ export interface DayTotals {
   fat: number | null
 }
 
+/** The four macros, always all present.
+ *
+ *  routers/analytics.py builds these by looping over a fixed tuple of the four
+ *  names, so every key is written on every response — a day with no carbs
+ *  logged gets 0, not a missing key. Typed as Record<string, number> the
+ *  compiler could not know that, and under noUncheckedIndexedAccess every read
+ *  became `number | undefined`, pushing a non-null assertion onto each of five
+ *  call sites to restate what the server already guarantees. Saying it once,
+ *  here, is both shorter and true. */
+export interface MacroTotals {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
 export interface AnalyticsSummary {
   days: DayTotals[]
-  totals: Record<string, number>
-  averages: Record<string, number>
+  totals: MacroTotals
+  averages: MacroTotals
   /** Days in the range that actually have meals — the denominator the
    *  averages are built from. */
   logged_days: number

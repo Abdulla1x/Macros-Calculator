@@ -98,6 +98,10 @@ export default function WaterCard({ date }: Props) {
     )
   }
 
+  // Bound once so the guard below and the value it protects are the same read.
+  // `day.entries.length > 0` told the compiler nothing about `day.entries[0]`.
+  const lastEntry = day.entries[0]
+
   return (
     <DailyTrackerCard
       icon="💧"
@@ -144,13 +148,13 @@ export default function WaterCard({ date }: Props) {
               Add
             </button>
           </div>
-          {day.entries.length > 0 && (
+          {lastEntry && (
             <button
               onClick={undo}
               disabled={busy}
               className="ml-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40"
             >
-              Undo last (−{Math.round(day.entries[0].ml)})
+              Undo last (−{Math.round(lastEntry.ml)})
             </button>
           )}
         </div>
