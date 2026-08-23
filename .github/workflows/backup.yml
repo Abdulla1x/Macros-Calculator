@@ -11,13 +11,24 @@
 #  1. It needs the account password, because logging in is the only way to mint
 #     a token -- there is no API key. That password is a repository secret, so
 #     anyone who can write to this repo or read its secrets can reach the
-#     account. Use a dedicated account, or accept that.
+#     account.
+#
+#     A separate "backup-only" account is NOT a mitigation, though it reads like
+#     one. Every query behind /api/data/export/all is scoped to the authenticated
+#     user -- that isolation is the property test_isolation.py exists to defend
+#     -- so a fresh account would export nothing, and the empty-export check
+#     below would (correctly) fail the run. It has to be the account whose data
+#     you actually want kept. The exposure is real and nothing in this file can
+#     reduce it; closing it properly means an API token in the app itself.
+#
 #  2. The artifact is a plaintext JSON dump of personal health data sitting in
 #     GitHub for the retention window below. That is the trade being made: a
 #     backup that is readable is a backup that works.
+#
 #  3. GitHub disables scheduled workflows in repositories with no activity for
 #     60 days. A backup that silently stops is worse than none, so this also has
 #     workflow_dispatch, and the run summary says when the last copy was taken.
+#
 #  4. The login endpoint is rate limited to 10/minute per IP. Fine for a daily
 #     job; not fine if this is ever turned into a tight loop.
 #
