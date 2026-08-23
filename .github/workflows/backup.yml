@@ -1,0 +1,141 @@
+# Daily off-site copy of the account's data.
+#
+# Every byte this app stores lives on free tiers: Neon can suspend or reclaim an
+# idle project, Render suspends a service that runs out of monthly instance
+# hours, and until now the only way to get the data out was a human clicking
+# Export in Settings. This is the same export, on a schedule, kept somewhere
+# neither of those providers controls.
+#
+# Four things about it that are true and worth knowing before relying on it:
+#
+#  1. It needs the account password, because logging in is the only way to mint
+#     a token -- there is no API key. That password is a repository secret, so
+#     anyone who can write to this repo or read its secrets can reach the
+#     account. Use a dedicated account, or accept that.
+#  2. The artifact is a plaintext JSON dump of personal health data sitting in
+#     GitHub for the retention window below. That is the trade being made: a
+#     backup that is readable is a backup that works.
+#  3. GitHub disables scheduled workflows in repositories with no activity for
+#     60 days. A backup that silently stops is worse than none, so this also has
+#     workflow_dispatch, and the run summary says when the last copy was taken.
+#  4. The login endpoint is rate limited to 10/minute per IP. Fine for a daily
+#     job; not fine if this is ever turned into a tight loop.
+#
+# Required repository secrets:
+#   BACKUP_API_BASE   e.g. https://macros-calculator-api.onrender.com
+#   BACKUP_EMAIL      the account to back up
+#   BACKUP_PASSWORD   its password
+
+name: Backup
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour on purpose: GitHub queues scheduled jobs, and the
+    # top of the hour is where every cron in the world piles up.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in and export everything
+        env:
+          BACKUP_API_BASE: ${{ secrets.BACKUP_API_BASE }}
+          BACKUP_EMAIL: ${{ secrets.BACKUP_EMAIL }}
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKUP_API_BASE:-}" ] || [ -z "${BACKUP_EMAIL:-}" ] || [ -z "${BACKUP_PASSWORD:-}" ]; then
+            echo "::error::BACKUP_API_BASE, BACKUP_EMAIL and BACKUP_PASSWORD must all be set." >&2
+            exit 1
+          fi
+
+          api="${BACKUP_API_BASE%/}"
+
+          # Every file below either holds a credential or is derived from one.
+          # A trap rather than `rm` after each step, because `set -e` means a
+          # failed login exits before any cleanup line it has not reached yet --
+          # which left the password sitting in login.json on exactly the runs
+          # where something had already gone wrong.
+          umask 077
+          cleanup() {
+            rm -f login.json token.json "${RUNNER_TEMP:-.}/curl.conf"
+          }
+          trap cleanup EXIT
+
+          # The free instance sleeps after 15 minutes idle and takes up to a
+          # minute to wake, so the first call has to be patient rather than
+          # treated as an outage.
+          echo "Waking $api …"
+          curl -sS --fail --max-time 120 --retry 3 --retry-delay 15 \
+            --retry-all-errors "$api/api/health" > /dev/null
+          echo "awake"
+
+          # Credentials via jq's env access and curl's stdin, never argv --
+          # anything on a command line is visible to `ps` for the life of the
+          # process, on a runner shared with whatever else this job installs.
+          jq -n '{email: env.BACKUP_EMAIL, password: env.BACKUP_PASSWORD}' > login.json
+          curl -sS --fail --max-time 60 \
+            -H 'Content-Type: application/json' \
+            --data @login.json \
+            "$api/api/auth/login" > token.json
+
+          token="$(jq -r '.access_token' token.json)"
+          if [ -z "$token" ] || [ "$token" = "null" ]; then
+            echo "::error::Login succeeded but returned no access token." >&2
+            exit 1
+          fi
+          # Masked so a later `set -x` or an error dump cannot print it.
+          echo "::add-mask::$token"
+
+          # Same reasoning as above: the header goes in a config file rather
+          # than on the command line.
+          printf 'header = "Authorization: Bearer %s"\n' "$token" > "$RUNNER_TEMP/curl.conf"
+
+          curl -sS --fail --max-time 300 -K "$RUNNER_TEMP/curl.conf" \
+            "$api/api/data/export/all" > backup.json
+
+          # An export that is not valid JSON, or that carries no meals, is a
+          # failure wearing a success's clothes -- an error page or an empty
+          # account would otherwise be archived and reported as a good backup.
+          jq -e 'type == "object" and has("exported_at") and has("meals")' backup.json > /dev/null
+
+          meals=$(jq '.meals | length' backup.json)
+          weights=$(jq '.weights | length' backup.json)
+          analyses=$(jq '.ai_analyses | length' backup.json)
+          bytes=$(wc -c < backup.json)
+
+          if [ "$meals" -eq 0 ] && [ "$weights" -eq 0 ]; then
+            echo "::error::Export contains no meals and no weigh-ins; refusing to call this a backup." >&2
+            exit 1
+          fi
+
+          {
+            echo "### Backup taken"
+            echo ""
+            echo "- When: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "- Meals: $meals"
+            echo "- Weigh-ins: $weights"
+            echo "- AI analyses: $analyses"
+            echo "- Size: $bytes bytes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep it
+        uses: actions/upload-artifact@v4
+        with:
+          name: macros-backup-${{ github.run_id }}
+          path: backup.json
+          # Deliberate, not the 90-day default. Long enough that a problem
+          # noticed weeks late is still recoverable, short enough that health
+          # data is not accumulating in GitHub indefinitely.
+          retention-days: 30
+          if-no-files-found: error
