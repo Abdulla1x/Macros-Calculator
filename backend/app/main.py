@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from .auth import router as auth_router
-from .auth.security import get_jwt_secret
+from .auth.security import get_jwt_secret, token_lifetime
 from .db import get_engine
 from .models import Base
 from .rate_limit import limiter
@@ -45,6 +45,12 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_jwt_secret()  # fail fast in production if JWT_SECRET is missing
+    # Read the token lifetime once at boot so a bad ACCESS_TOKEN_DAYS logs its
+    # warning here, next to the deploy that introduced it, rather than on some
+    # user's login hours later. Deliberately not fatal, unlike JWT_SECRET above:
+    # that has no safe default, this one has a good one, and refusing to serve
+    # anything over a mistyped token lifetime is a worse outage than the bug.
+    token_lifetime()
     # SQLite (dev/tests) gets its schema from the models directly; Postgres
     # schema is owned by Alembic (`alembic upgrade head` in the start command).
     engine = get_engine()

@@ -13,10 +13,20 @@ from pathlib import Path
 
 from app.routers import supplements as app_supplements
 from app.schemas import MAX_SUPPLEMENTS
+from conftest import utc_today
 
 
 def days_ago(n: int) -> str:
-    return (date.today() - timedelta(days=n)).isoformat()
+    """A day in the past, measured on the clock the *server* compares against.
+
+    `_day`'s rule 1 skips a supplement whose `created_at.date()` is after the
+    day being asked about, and `created_at` is naive UTC. Counting back from the
+    local date instead would, at a positive UTC offset, hand back a "yesterday"
+    that is still today in UTC -- so the supplement counts as scheduled and a
+    test about a settled past day sees a live one. Same clock, same answer,
+    everywhere.
+    """
+    return (utc_today() - timedelta(days=n)).isoformat()
 
 
 def add(client, name="Vitamin D", dose="5000 IU", times=("08:00",), active=True):

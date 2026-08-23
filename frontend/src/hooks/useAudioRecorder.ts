@@ -13,7 +13,11 @@ const EXTENSION_OVERRIDES: Record<string, string> = {
  * only for logs and error messages — but a `.webm` name on an MP4 recording
  * sends whoever reads those logs chasing the wrong bug. */
 export function voiceNoteFilename(mimeType: string): string {
-  const subtype = mimeType.split(';')[0].trim().toLowerCase().split('/')[1] ?? ''
+  // split() always returns at least one element, so [0] is never actually
+  // undefined -- but ?? '' states that in code instead of asserting it away,
+  // and costs nothing.
+  const base = mimeType.split(';')[0] ?? ''
+  const subtype = base.trim().toLowerCase().split('/')[1] ?? ''
   const extension = EXTENSION_OVERRIDES[subtype] ?? subtype
   return `voice-note.${/^[a-z0-9]+$/.test(extension) ? extension : 'webm'}`
 }

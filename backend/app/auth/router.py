@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..env import env_int
 from ..models import PasswordReset, Setting, User, utcnow
 from ..rate_limit import (
     ACCOUNT_LIMIT,
@@ -95,13 +96,18 @@ def _hash_token(raw: str) -> str:
 
 
 def _ttl_minutes() -> int:
-    raw = os.environ.get(TTL_ENV, "").strip()
-    return int(raw) if raw.isdigit() and int(raw) > 0 else DEFAULT_TTL_MINUTES
+    value = env_int(TTL_ENV, DEFAULT_TTL_MINUTES)
+    # A non-positive TTL is not a gate being closed, it is a link that is dead
+    # on arrival, so it falls back rather than clamping. Same call-site policy
+    # as token_lifetime, and the reason env_int does not decide this itself.
+    return value if value > 0 else DEFAULT_TTL_MINUTES
 
 
 def _global_daily_limit() -> int:
-    raw = os.environ.get(GLOBAL_LIMIT_ENV, "").strip()
-    return int(raw) if raw.isdigit() else DEFAULT_GLOBAL_DAILY_LIMIT
+    # .isdigit() rejected "-1" and fell back to the shipped 100, so a limit set
+    # negative to shut the feature off quietly reopened it at full allowance.
+    # env_int clamps to 0 instead, which is what closing it was meant to mean.
+    return env_int(GLOBAL_LIMIT_ENV, DEFAULT_GLOBAL_DAILY_LIMIT)
 
 
 def _reset_url(raw_token: str) -> str:

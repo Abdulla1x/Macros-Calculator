@@ -28,6 +28,7 @@ from ..models import Setting, User
 from ..models import StepEntry as StepRow
 from ..schemas import StepDay, StepEntry, StepEntryCreate
 from ..targets import _latest_trend_weight
+from ..upsert import upsert
 
 router = APIRouter(prefix="/api/steps", tags=["steps"])
 
@@ -111,15 +112,16 @@ def save_steps(
     upsert syntax differs between SQLite (dev/tests) and Postgres (production)
     and this runs on both.
     """
-    row = _row(db, user.id, entry.date)
-    if row is None:
-        row = StepRow(user_id=user.id, date=entry.date, steps=entry.steps)
-        db.add(row)
-    else:
-        row.steps = entry.steps
+    def build() -> StepRow:
+        row = _row(db, user.id, entry.date)
+        if row is None:
+            row = StepRow(user_id=user.id, date=entry.date, steps=entry.steps)
+            db.add(row)
+        else:
+            row.steps = entry.steps
+        return row
 
-    db.commit()
-    return row
+    return upsert(db, build)
 
 
 @router.delete("", status_code=204)

@@ -13,6 +13,14 @@
     "moduleDetection": "force",
     "noEmit": true,
 
+    /* Type checking. `strict` was already true of the code before it was
+       declared -- turning it on produced zero errors across all 40 files -- so
+       it is a ratchet: it locks in what is already the case rather than
+       demanding a cleanup. noUncheckedIndexedAccess is the one that found real
+       bugs, in lib/dates.ts and in an under-typed analytics response. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

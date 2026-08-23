@@ -1,5 +1,6 @@
 import itertools
 import json
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +12,29 @@ from app.rate_limit import limiter
 TEST_PASSWORD = "test-password-123"
 
 _user_counter = itertools.count(1)
+
+
+def utc_today() -> date:
+    """Today by the UTC clock -- the day boundary the *counters* bucket on.
+
+    This app has two day notions and they are not interchangeable:
+
+    * **Counters** bucket by UTC, because they count `created_at` timestamps,
+      which are stored naive UTC (`routers/admin.py`, `calls_today` in
+      `routers/ai.py`, the reset quota in `auth/router.py`).
+    * **User-facing dates** -- a meal's date, a water log's day -- use the
+      server's *local* date via `date_type.today()`, because they are calendar
+      dates the client sends.
+
+    On Render both are UTC, so the two coincide in production and no test ever
+    noticed. On a developer's machine east of UTC they diverge for the first
+    hours of the morning, and a test that indexes a UTC-bucketed series with
+    `date.today()` fails at 02:00 for reasons unrelated to the code.
+
+    Use this only where the code under test buckets by UTC. Everywhere else
+    `date.today()` is correct, because it is what the server itself will use.
+    """
+    return datetime.now(timezone.utc).date()
 
 
 def post_raw_json(client, path, body):

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
@@ -351,8 +352,23 @@ async def import_steps_csv(
             skipped_duplicates += 1
             continue
 
-        db.add(StepEntry(user_id=user.id, date=date, steps=steps))
-        db.flush()
+        # A SAVEPOINT, not a bare try/commit: this is one transaction over the
+        # whole file, so a rollback here would discard every row imported
+        # before this one. begin_nested unwinds just the failed insert and
+        # leaves the rest of the import intact.
+        #
+        # The SELECT above catches the ordinary duplicate. This catches the one
+        # it cannot: a row inserted for the same date by a concurrent request
+        # between that query and this flush. Same outcome either way -- counted
+        # as a duplicate and skipped, because a stored count is not something a
+        # file should silently overwrite.
+        try:
+            with db.begin_nested():
+                db.add(StepEntry(user_id=user.id, date=date, steps=steps))
+                db.flush()
+        except IntegrityError:
+            skipped_duplicates += 1
+            continue
         inserted += 1
     db.commit()
 

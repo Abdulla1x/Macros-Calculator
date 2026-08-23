@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { isSessionPersistent } from '../auth/token'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
@@ -11,6 +12,8 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Probed once per mount: the answer cannot change while the page is open.
+  const [persistentSession] = useState(isSessionPersistent)
   const [submitting, setSubmitting] = useState(false)
   const announcements = useAnnouncements()
 
@@ -45,6 +48,13 @@ export default function Signup() {
           className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
         >
           <h2 className="text-lg font-semibold">Create your account</h2>
+          {!persistentSession && (
+            <p className="text-sm text-amber-400">
+              This browser is blocking site data, so you&rsquo;ll stay signed in
+              only until you close this tab. Allowing it for this site, or
+              leaving private browsing, keeps you signed in.
+            </p>
+          )}
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Email</span>
             <input

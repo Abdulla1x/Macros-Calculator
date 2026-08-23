@@ -20,6 +20,7 @@ from ..db import get_db
 from ..models import MealTemplate as MealTemplateRow
 from ..models import User
 from ..schemas import MealTemplate, MealTemplateCreate, TemplateItem
+from ..upsert import upsert
 
 logger = logging.getLogger(__name__)
 
@@ -105,26 +106,38 @@ def save_meal_template(
     says which of the two happened and the client words its message accordingly.
     """
     name = body.name.strip()
-    row = db.scalars(
-        select(MealTemplateRow).where(
-            MealTemplateRow.user_id == user.id,
-            func.lower(MealTemplateRow.name) == name.lower(),
+    created = False
+
+    def build() -> MealTemplateRow:
+        nonlocal created
+        row = db.scalars(
+            select(MealTemplateRow).where(
+                MealTemplateRow.user_id == user.id,
+                func.lower(MealTemplateRow.name) == name.lower(),
+            )
+        ).first()
+        # Recomputed on every attempt, not captured once. If a concurrent save
+        # created the row first, this call replaced a composition rather than
+        # creating one, and the response has to say so -- the client words an
+        # irreversible overwrite differently from a new save.
+        created = row is None
+        if row is None:
+            row = MealTemplateRow(user_id=user.id, name=name)
+            db.add(row)
+        row.calories = body.calories
+        row.protein = body.protein
+        row.carbs = body.carbs
+        row.fat = body.fat
+        # NULL rather than "[]" when there are no items, so the column's
+        # nullability keeps meaning "this template is totals only".
+        row.items_json = (
+            json.dumps([item.model_dump() for item in body.items])
+            if body.items
+            else None
         )
-    ).first()
-    created = row is None
-    if row is None:
-        row = MealTemplateRow(user_id=user.id, name=name)
-        db.add(row)
-    row.calories = body.calories
-    row.protein = body.protein
-    row.carbs = body.carbs
-    row.fat = body.fat
-    # NULL rather than "[]" when there are no items, so the column's nullability
-    # keeps meaning "this template is totals only".
-    row.items_json = (
-        json.dumps([item.model_dump() for item in body.items]) if body.items else None
-    )
-    db.commit()
+        return row
+
+    row = upsert(db, build)
     return _template_out(row, created=created)
 
 
