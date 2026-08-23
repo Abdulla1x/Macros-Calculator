@@ -911,8 +911,13 @@ function WaterSection({
   const derived = settings.water_goal_ml === null
   const quickAdds = settings.water_quick_adds ?? DEFAULT_WATER_QUICK_ADDS
 
-  // A blank box drops that button rather than storing a zero, so the three
-  // inputs can express one, two or three buttons without extra UI.
+  // A blank box drops that button rather than storing a zero, so the inputs can
+  // express anywhere from one button up to MAX_WATER_QUICK_ADDS without extra
+  // UI. The count comes from the constant rather than from the length of
+  // DEFAULT_WATER_QUICK_ADDS, which has three entries and is where the
+  // off-by-one came from: the server accepts four and the fourth box was never
+  // rendered, so the last slot was unreachable from the only screen that sets
+  // it.
   //
   // The list is compacted on every edit, and that is not tidiness. Assigning
   // past the end of a shorter array leaves a *hole* — clear two boxes, type
@@ -1006,7 +1011,7 @@ function WaterSection({
       <div>
         <p className="mb-2 text-sm text-slate-400">Quick-add buttons</p>
         <div className="flex flex-wrap items-center gap-2">
-          {Array.from({ length: MAX_WATER_QUICK_ADDS - 1 }).map((_, index) => (
+          {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
             <span key={index} className="flex items-center gap-1">
               <span className="text-xs text-slate-600">+</span>
               <input
