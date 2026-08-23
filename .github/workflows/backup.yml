@@ -37,6 +37,8 @@ on:
 
 permissions:
   contents: read
+  # Only for the failure alert below, which opens (or comments on) an issue.
+  issues: write
 
 concurrency:
   group: backup
@@ -59,7 +61,43 @@ jobs:
             exit 1
           fi
 
-          api="${BACKUP_API_BASE%/}"
+          # Trim whitespace and wrapping quotes before using any of this.
+          # GitHub's secret field stores exactly what was pasted, and a leading
+          # space or a stray pair of quotes is invisible in a masked value --
+          # the failure surfaces much later as `curl: (3) URL rejected`, four
+          # retries deep, with the value starred out of the log. This is the
+          # same treatment services/meal_ai.py gives its string settings, and
+          # for the same reason.
+          #
+          # The password is deliberately NOT trimmed: a space is a legal
+          # character in a password, and silently altering it would turn a
+          # correct credential into a 401 nobody could explain.
+          trim() {
+            local v="$1"
+            v="${v#"${v%%[![:space:]]*}"}"
+            v="${v%"${v##*[![:space:]]}"}"
+            v="${v%\"}"; v="${v#\"}"
+            v="${v%\'}"; v="${v#\'}"
+            v="${v#"${v%%[![:space:]]*}"}"
+            v="${v%"${v##*[![:space:]]}"}"
+            printf '%s' "$v"
+          }
+
+          api="$(trim "$BACKUP_API_BASE")"
+          api="${api%/}"
+          BACKUP_EMAIL="$(trim "$BACKUP_EMAIL")"
+          export BACKUP_EMAIL
+
+          # Checked here rather than left to curl, which reports a malformed URL
+          # as exit 3 after burning every retry -- and cannot say which of the
+          # three secrets was wrong, because they are all masked by then.
+          case "$api" in
+            http://*|https://*) ;;
+            *)
+              echo "::error::BACKUP_API_BASE must start with https:// (its value is masked in this log; check the secret for a stray space, quote or missing scheme). Expected something like https://your-api.onrender.com" >&2
+              exit 1
+              ;;
+          esac
 
           # Every file below either holds a credential or is derived from one.
           # A trap rather than `rm` after each step, because `set -e` means a
@@ -130,7 +168,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: macros-backup-${{ github.run_id }}
           path: backup.json
@@ -139,3 +177,68 @@ jobs:
           # data is not accumulating in GitHub indefinitely.
           retention-days: 30
           if-no-files-found: error
+
+      # A backup nobody is watching is a backup nobody knows has stopped. Until
+      # now a failed nightly run and a successful one looked identical unless
+      # someone opened the Actions tab, which is precisely the habit a working
+      # backup destroys.
+      #
+      # An issue rather than email: it needs no ESP account and no new secret --
+      # both of which this project has already lost time to -- and it lands in
+      # the same place the work is. GitHub notifies on issue activity, so the
+      # email arrives anyway, by a route that cannot be rate limited or bounced.
+      #
+      # ⚠️ This catches a run that FAILED. It cannot catch a run that never
+      # happened, which is the other way this stops: GitHub disables scheduled
+      # workflows after 60 days of repository inactivity. Nothing inside a
+      # workflow can report its own absence.
+      - name: Say so if the backup failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          api="https://api.github.com/repos/$REPO"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
+
+          # Reuse an open report rather than filing a fresh one every night. A
+          # backup that has been broken for a week is one problem, not seven,
+          # and seven issues is how an alert trains you to ignore it.
+          #
+          # The type guard and the `|| true` are load-bearing. When this API
+          # answers with an error *object* rather than an array, `.[0]` makes jq
+          # exit 5, and under `set -o pipefail` that fails this step -- so the
+          # one run that most needs to raise the alarm raises nothing at all.
+          # Treating anything unreadable as "no existing issue" files a
+          # duplicate at worst, which is strictly better than silence.
+          existing="$(curl -sS "${auth[@]}" \
+            "$api/issues?state=open&labels=backup-failure&per_page=1" \
+            | jq -r 'if type == "array" then (.[0].number // empty) else empty end' \
+            2>/dev/null || true)"
+
+          if [ -n "$existing" ]; then
+            jq -n --arg url "$RUN_URL" \
+              '{body: ("Still failing: \($url)")}' > comment.json
+            curl -sS --fail "${auth[@]}" -X POST --data @comment.json \
+              "$api/issues/$existing/comments" > /dev/null
+            echo "Commented on existing issue #$existing"
+          else
+            jq -n --arg url "$RUN_URL" '{
+              title: "Backup failed",
+              labels: ["backup-failure"],
+              body: (
+                "The nightly backup run failed, so there is no fresh copy of the account data.\n\n" +
+                "Run: \($url)\n\n" +
+                "Common causes, in the order they happen:\n" +
+                "- A secret was re-pasted with a stray space or quote (BACKUP_API_BASE, BACKUP_EMAIL).\n" +
+                "- The account password changed and BACKUP_PASSWORD was not updated.\n" +
+                "- The API host moved, or the free instance would not wake.\n\n" +
+                "The run log names which one. Close this issue once a run goes green."
+              )}' > issue.json
+            number="$(curl -sS --fail "${auth[@]}" -X POST --data @issue.json \
+              "$api/issues" | jq -r '.number')"
+            echo "Opened issue #$number"
+          fi
