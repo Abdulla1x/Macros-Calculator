@@ -23,6 +23,29 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-23-fewer-quiet-failures",
+        date="2026-08-23",
+        title="Three things that were quietly wrong",
+        body=(
+            "Nothing new to look at this time -- this was a pass over the ways "
+            "the app could fail without telling you.\n\n"
+            "If your browser blocks site data, or you are in private mode, the "
+            "app used to show you a blank white page and no explanation. It now "
+            "loads normally, and the login screen warns you that you will be "
+            "signed out when you close the tab, because in that mode it cannot "
+            "store anything to keep you signed in.\n\n"
+            "Water quick-add buttons: there is a fourth box in Settings. There "
+            "always should have been -- the server accepted four all along and "
+            "the screen only ever drew three, so the last one was impossible to "
+            "set.\n\n"
+            "The AI estimate box now clears itself after you save a meal, "
+            "instead of leaving the last meal's photos and description sitting "
+            "above the next one. The description you type is kept if you "
+            "navigate away mid-thought and come back, which is the opposite of "
+            "what it did before, and the right way round."
+        ),
+    ),
+    Announcement(
         id="2026-08-21-supplement-tracker",
         date="2026-08-21",
         title="Tick off your supplements",
