@@ -373,6 +373,12 @@ def main() -> None:
         check(response.status_code == 404, "B DELETE A's meal id -> 404")
         response = client.delete(f"/api/foods/{a_food_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's food id -> 404")
+        response = client.put(
+            f"/api/foods/{a_food_id}",
+            json={**food, "name": "Renamed By B", "calories": 999},
+            headers=headers_b,
+        )
+        check(response.status_code == 404, "B PUT A's food id -> 404")
         response = client.delete(f"/api/weights/{a_weight_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's weight id -> 404")
         response = client.delete(
