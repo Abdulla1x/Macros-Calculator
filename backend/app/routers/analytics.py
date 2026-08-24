@@ -57,23 +57,41 @@ def daily_summary(
     # Dividing by calendar days treats a day with no meals as a day of zero
     # intake, and that is a claim about the user, not a neutral convention:
     # nobody eats nothing. In practice an unlogged day means "did not log",
-    # so the old denominator quietly reported people as eating hundreds of
-    # kcal less than they did — the more days they missed, the further off it
-    # got, and the number gave no hint it was happening.
+    # so that denominator quietly reported people as eating hundreds of kcal
+    # less than they did — the more days they missed, the further off it got,
+    # and the number gave no hint it was happening.
     #
-    # Every macro still shares one denominator, so a macro recorded on only
-    # some days is not inflated relative to the others. `logged_days` is
-    # returned alongside so the UI can show what the average is built from
-    # rather than implying more data than exists.
+    # Each macro divides by the days *it* was recorded on. This reverses an
+    # earlier decision here, and the reasoning is worth keeping: one shared
+    # denominator was chosen so a macro logged on only some days could not look
+    # inflated beside the others. It bought that at the cost of the number
+    # being wrong. Someone who recorded carbs on 2 of 10 logged days was shown
+    # a carbs "average" a fifth of what they actually ate on the days they
+    # recorded it — a figure labelled "average" that was not the average of
+    # anything. The comparability problem is real but it is a *presentation*
+    # problem, and it is answered by `average_days` travelling with the numbers
+    # so each average renders beside the sample it was built from.
+    #
+    # calories and protein are NOT NULL on meals, so their counts always equal
+    # logged_days; only carbs and fat can differ.
     logged_days = len(days)
 
     totals: dict[str, float] = {}
     averages: dict[str, float] = {}
+    average_days: dict[str, int] = {}
     for macro in ("calories", "protein", "carbs", "fat"):
+        # `day.<macro>` is None only when no meal that day recorded it, so this
+        # already drops exactly the days the macro is absent from — the
+        # numerator was never the wrong half.
         values = [v for day in days if (v := getattr(day, macro)) is not None]
         totals[macro] = round(sum(values), 2)
-        averages[macro] = round(sum(values) / logged_days, 2) if logged_days else 0.0
+        average_days[macro] = len(values)
+        averages[macro] = round(sum(values) / len(values), 2) if values else 0.0
 
     return AnalyticsSummary(
-        days=days, totals=totals, averages=averages, logged_days=logged_days
+        days=days,
+        totals=totals,
+        averages=averages,
+        logged_days=logged_days,
+        average_days=average_days,
     )

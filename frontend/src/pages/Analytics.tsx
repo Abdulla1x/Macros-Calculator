@@ -13,6 +13,29 @@ import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
 
+/** One average tile, with its sample size when that is not the obvious one.
+ *
+ *  Zero recorded days renders an em dash rather than "0 g". An average over no
+ *  observations is not zero, it is nothing, and printing a number there would
+ *  invent data — which is precisely what the per-macro denominator was changed
+ *  to stop doing. */
+const macroStat = (
+  label: string,
+  average: number,
+  unit: string,
+  days: number,
+  loggedDays: number,
+) => ({
+  label,
+  value: days === 0 ? '—' : `${Math.round(average)} ${unit}`,
+  note:
+    days === 0
+      ? 'not recorded in this range'
+      : days === loggedDays
+        ? null
+        : `over the ${days} day${days === 1 ? '' : 's'} you recorded it`,
+})
+
 const defaultStart = () => {
   const date = new Date()
   date.setDate(date.getDate() - 29)
@@ -131,14 +154,25 @@ export default function Analytics() {
         <>
           <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {[
-              { label: 'Days logged', value: String(summary.days.length) },
-              { label: 'Avg calories / day', value: `${Math.round(summary.averages.calories)} kcal` },
-              { label: 'Avg protein / day', value: `${Math.round(summary.averages.protein)} g` },
-              { label: 'Total calories', value: Math.round(summary.totals.calories).toLocaleString() },
+              { label: 'Days logged', value: String(summary.days.length), note: null },
+              macroStat('Avg calories / day', summary.averages.calories, 'kcal', summary.average_days.calories, summary.logged_days),
+              macroStat('Avg protein / day', summary.averages.protein, 'g', summary.average_days.protein, summary.logged_days),
+              ...(settings?.track_carbs
+                ? [macroStat('Avg carbs / day', summary.averages.carbs, 'g', summary.average_days.carbs, summary.logged_days)]
+                : []),
+              ...(settings?.track_fat
+                ? [macroStat('Avg fat / day', summary.averages.fat, 'g', summary.average_days.fat, summary.logged_days)]
+                : []),
+              { label: 'Total calories', value: Math.round(summary.totals.calories).toLocaleString(), note: null },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                 <p className="text-xs text-slate-400">{stat.label}</p>
                 <p className="mt-1 text-xl font-bold">{stat.value}</p>
+                {/* Only when this macro's denominator differs from the number
+                    of logged days. Printing "over 12 of 12 days" on every tile
+                    would be noise that trains people to stop reading the one
+                    time it matters. */}
+                {stat.note && <p className="mt-1 text-xs text-slate-400">{stat.note}</p>}
               </div>
             ))}
           </section>
@@ -146,9 +180,12 @@ export default function Analytics() {
           {/* States the denominator so "Days logged" and "Avg / day" read as
               the pair they are. Widening the range over days you never logged
               no longer moves these numbers, which is the whole point. */}
-          <p className="-mt-2 text-xs text-slate-500">
+          <p className="-mt-2 text-xs text-slate-400">
             Averages are per day you logged, not per day in the range — a day
             with nothing recorded is missing data, not a day of zero intake.
+            Each macro is averaged over the days it was actually recorded on, so
+            tracking carbs or fat only sometimes does not drag their average
+            down; where that differs from the days you logged, the tile says so.
           </p>
 
           {visibleCharts.map((chart) => (
