@@ -350,13 +350,30 @@ export interface MacroTotals {
   fat: number
 }
 
+/** How many days each macro's average was actually built from.
+ *
+ *  Fixed keys for the same reason MacroTotals has them — the server writes all
+ *  four on every response. Separate from MacroTotals because these are sample
+ *  sizes, not quantities: they are never formatted with a unit and never
+ *  summed. calories and protein always equal `logged_days`, since a meal
+ *  cannot be saved without them; carbs and fat are nullable and so can be
+ *  lower. */
+export interface MacroDayCounts {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
 export interface AnalyticsSummary {
   days: DayTotals[]
   totals: MacroTotals
   averages: MacroTotals
-  /** Days in the range that actually have meals — the denominator the
-   *  averages are built from. */
+  /** Days in the range that have any meal at all. */
   logged_days: number
+  /** The per-macro denominators. No average should be rendered without the
+   *  matching count beside it when the two disagree. */
+  average_days: MacroDayCounts
 }
 
 export interface ImportResult {

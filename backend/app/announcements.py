@@ -23,6 +23,41 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-24-food-library",
+        date="2026-08-24",
+        title="Your saved foods, where you can finally fix them",
+        body=(
+            "Settings has a new **Food library** section listing every food the "
+            "app will autocomplete for you -- and you can now correct one, "
+            "rename it, or delete it.\n\n"
+            "This needed fixing. Every result you pick from Open Food Facts has "
+            "always been saved to your library automatically, and so has "
+            "anything you ticked \"save to library\" on while logging. Until now "
+            "nothing showed you the result, so if one of them had the wrong "
+            "serving size, it kept filling in that wrong number on every meal "
+            "you built from it and there was no way to reach it. Now there is.\n\n"
+            "Each food is badged with where its numbers came from -- **yours** "
+            "or **Open Food Facts** -- because those deserve different amounts "
+            "of trust. Correct any of the numbers on an Open Food Facts entry "
+            "and it becomes yours, since they are no longer what Open Food "
+            "Facts said.\n\n"
+            "One thing worth being clear about: editing a food changes what "
+            "gets filled in **next** time. Meals you have already logged keep "
+            "the numbers they were saved with -- a meal records its own macros, "
+            "so nothing here rewrites your history.\n\n"
+            "Two smaller fixes alongside it. **Your carbs and fat averages on "
+            "the Analytics page were wrong, and are now right** -- they used to "
+            "be divided by every day you logged rather than the days you "
+            "actually recorded that macro on, so if you only tracked carbs "
+            "occasionally the average came out far below what you really ate. "
+            "Each macro is now averaged over its own days, the tile tells you "
+            "how many days that was, and carbs and fat have tiles of their own "
+            "if you track them. Expect those numbers to move up.\n\n"
+            "And a mistyped or out-of-date address now gets a proper \"page not "
+            "found\" with a way back, instead of an empty screen."
+        ),
+    ),
+    Announcement(
         id="2026-08-23-fewer-quiet-failures",
         date="2026-08-23",
         title="Three things that were quietly wrong",

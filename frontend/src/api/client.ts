@@ -199,12 +199,24 @@ export const api = {
   deleteMealTemplate: (id: number) =>
     request<void>(`/api/meal-templates/${id}`, { method: 'DELETE' }),
 
+  // The whole library, unbounded and sorted by name -- what the Settings
+  // editor lists. searchFoods below is the autocomplete's query and caps at 10,
+  // which is right for a dropdown and wrong for "show me everything I have".
+  getFoods: () => request<Food[]>('/api/foods'),
   searchFoods: (q: string) =>
     request<Food[]>(`/api/foods/search?q=${encodeURIComponent(q)}`),
   lookupOpenFoodFacts: (q: string) =>
     request<OFFProduct[]>(`/api/foods/lookup?q=${encodeURIComponent(q)}`),
+  // An upsert on (user, lower(name)): the two callers that reach for this --
+  // caching an Open Food Facts pick, and LogMeal's "save to library" tick --
+  // hold a name and cannot know whether the row exists. updateFood is the
+  // by-id edit, and the only way to rename without leaving the old row behind.
   saveFood: (food: FoodCreate) =>
     request<Food>('/api/foods', { method: 'POST', body: JSON.stringify(food) }),
+  updateFood: (id: number, food: FoodCreate) =>
+    request<Food>(`/api/foods/${id}`, { method: 'PUT', body: JSON.stringify(food) }),
+  deleteFood: (id: number) =>
+    request<void>(`/api/foods/${id}`, { method: 'DELETE' }),
 
   getWeights: (start?: string, end?: string) => {
     const params = new URLSearchParams()

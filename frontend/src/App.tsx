@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import ForgotPassword from './pages/ForgotPassword'
 import Login from './pages/Login'
 import LogMeal from './pages/LogMeal'
+import NotFound from './pages/NotFound'
 import ResetPassword from './pages/ResetPassword'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
@@ -44,6 +45,9 @@ export default function App() {
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<Admin />} />
           </Route>
+          {/* Last, so every real route above wins. Inside Layout so an
+              unmatched address still arrives with the nav to leave by. */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
     </Routes>

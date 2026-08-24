@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
+import FoodLibrarySection from '../components/FoodLibrarySection'
 import {
   DEFAULT_WATER_QUICK_ADDS,
   MAX_WATER_GOAL_ML,
@@ -351,9 +352,11 @@ export default function Settings() {
 
       <WaterSection settings={settings} update={update} onRejected={setRejected} />
       <StepsSection settings={settings} update={update} onRejected={setRejected} />
-      {/* Last of the three trackers, and the only section here that does not
-          feed the Save button below — see the note on the component. */}
+      {/* Last of the three trackers. It and the food library below are the two
+          sections here that write straight away rather than feeding the Save
+          button — both say so in their own copy. */}
       <SupplementsSection onRejected={setRejected} />
+      <FoodLibrarySection onRejected={setRejected} />
 
       <div className="flex items-center gap-3">
         <button

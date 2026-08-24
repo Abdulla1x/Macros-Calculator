@@ -92,7 +92,19 @@ def test_food_library_is_scoped(client, client_b):
     assert client_b.get("/api/foods").json() == []
     assert client_b.get("/api/foods/search", params={"q": "Shared"}).json() == []
     assert client_b.delete(f"/api/foods/{a_food['id']}").status_code == 404
+    # The edit verb, probed with values that differ from A's on every field, so
+    # a scope failure could not pass as a no-op: if this ever stopped being a
+    # 404 the assertions below would show exactly what B managed to rewrite.
+    assert (
+        client_b.put(
+            f"/api/foods/{a_food['id']}",
+            json={**FOOD_A, "name": "Renamed By B", "calories": 999},
+        ).status_code
+        == 404
+    )
     assert [f["id"] for f in client.get("/api/foods").json()] == [a_food["id"]]
+    assert client.get("/api/foods").json()[0]["name"] == FOOD_A["name"]
+    assert client.get("/api/foods").json()[0]["calories"] == FOOD_A["calories"]
 
 
 def test_same_food_name_allowed_per_user_and_upsert_stays_scoped(client, client_b):

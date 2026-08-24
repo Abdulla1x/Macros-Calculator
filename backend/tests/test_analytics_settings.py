@@ -21,10 +21,17 @@ def test_daily_summary_totals_and_averages(client):
     assert summary["totals"]["calories"] == 1400
     assert summary["averages"]["calories"] == 700
     assert summary["logged_days"] == 2
-    # Every macro averages over the same denominator (days with meals), so a
-    # macro logged on only some days is not inflated: carbs appear on one of
-    # the two days, and 80 / 2 is reported rather than 80 / 1.
-    assert summary["averages"]["carbs"] == 40
+    # Reverses an earlier decision, deliberately. This used to assert 40 --
+    # 80 / 2 -- on the grounds that one shared denominator keeps a partly
+    # tracked macro from looking inflated beside the others. But carbs were
+    # recorded on exactly one day, so 40 was not the average of anything the
+    # user ate; it was the right answer to a question nobody asked. Each macro
+    # now divides by its own days, and the sample size travels with it so the
+    # two are never silently compared.
+    assert summary["averages"]["carbs"] == 80
+    assert summary["average_days"] == {
+        "calories": 2, "protein": 2, "carbs": 1, "fat": 0,
+    }
 
 
 def test_daily_summary_range_filter(client):
@@ -44,6 +51,33 @@ def test_daily_summary_empty_when_no_meals(client):
     assert summary["averages"] == {
         "calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0,
     }
+    # Zero, not absent: the UI reads these unconditionally, and every average
+    # here is built from no days at all, which is what the caller must render.
+    assert summary["average_days"] == {
+        "calories": 0, "protein": 0, "carbs": 0, "fat": 0,
+    }
+
+
+def test_a_partly_tracked_macro_averages_over_its_own_days(client):
+    """The bug the shared denominator caused, in the shape a user would hit it.
+
+    Someone logs every day but only bothers with carbs occasionally. Dividing
+    their carbs total by every logged day reported a fifth of what they ate on
+    the days they actually recorded — and called it an average.
+    """
+    for day in range(1, 11):
+        _add_meal(client, f"2026-07-{day:02d}", 2000, 150)
+    # Carbs on two of those ten days, 200 g each.
+    _add_meal(client, "2026-07-01", 0, 0, carbs=200)
+    _add_meal(client, "2026-07-02", 0, 0, carbs=200)
+
+    summary = client.get("/api/analytics/daily").json()
+    assert summary["logged_days"] == 10
+    assert summary["averages"]["calories"] == 2000
+    assert summary["average_days"]["calories"] == 10
+    # 400 / 2, not 400 / 10.
+    assert summary["averages"]["carbs"] == 200
+    assert summary["average_days"]["carbs"] == 2
 
 
 def test_daily_summary_rejects_inverted_range(client):

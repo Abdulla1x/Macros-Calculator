@@ -88,6 +88,111 @@ def test_delete_food(client):
     assert client.delete(f"/api/foods/{food_id}").status_code == 404
 
 
+def test_put_renames_in_place_instead_of_creating_a_second_row(client):
+    """The hole PUT exists to close.
+
+    POST upserts on the *name*, so a changed name matches nothing and inserts.
+    Before this endpoint there was no way to correct a name -- only to end up
+    with the typo and the fix sitting in the library side by side.
+    """
+    food_id = client.post("/api/foods", json=_chicken(name="Chikcen Breast")).json()["id"]
+
+    response = client.put(f"/api/foods/{food_id}", json=_chicken(name="Chicken Breast"))
+    assert response.status_code == 200
+
+    foods = client.get("/api/foods").json()
+    assert [food["name"] for food in foods] == ["Chicken Breast"]
+    assert foods[0]["id"] == food_id
+
+
+def test_put_onto_an_existing_name_is_refused_and_changes_nothing(client):
+    """409 rather than merging the two rows.
+
+    Folding them together would delete a row the user never asked to lose, so
+    the conflict goes back to them to resolve. Both rows must survive intact --
+    a refusal that half-applied would be worse than either outcome.
+    """
+    keeper = client.post("/api/foods", json=_chicken()).json()
+    other = client.post(
+        "/api/foods", json=_chicken(name="Chickpeas", calories=164)
+    ).json()
+
+    # Case-insensitively the same name, because the index is on lower(name).
+    response = client.put(
+        f"/api/foods/{other['id']}", json=_chicken(name="chicken BREAST")
+    )
+    assert response.status_code == 409
+
+    foods = {food["name"]: food for food in client.get("/api/foods").json()}
+    assert set(foods) == {"Chicken Breast", "Chickpeas"}
+    assert foods["Chicken Breast"]["id"] == keeper["id"]
+    assert foods["Chickpeas"]["calories"] == 164
+
+
+def test_put_unknown_id_is_404(client):
+    assert client.put("/api/foods/9999", json=_chicken()).status_code == 404
+
+
+def test_correcting_a_number_makes_an_off_row_yours(client):
+    """An edited Open Food Facts row is no longer what Open Food Facts said.
+
+    The badge is the app telling the user which figures to trust. Leaving it on
+    numbers they typed themselves would be the one lie this section cannot
+    afford.
+    """
+    food = client.post(
+        "/api/foods", json=_chicken(source="openfoodfacts")
+    ).json()
+    assert food["source"] == "openfoodfacts"
+
+    updated = client.put(
+        f"/api/foods/{food['id']}", json=_chicken(source="openfoodfacts", calories=170)
+    ).json()
+    assert updated["source"] == "user"
+    assert updated["calories"] == 170
+
+
+def test_renaming_an_off_row_keeps_its_badge(client):
+    """The other half of the rule, and the reason it is not "any save".
+
+    A rename changes no number, so Open Food Facts still supplied every figure
+    on the row. Flipping the badge here would throw away true provenance.
+    """
+    food = client.post("/api/foods", json=_chicken(source="openfoodfacts")).json()
+
+    updated = client.put(
+        f"/api/foods/{food['id']}",
+        json=_chicken(source="openfoodfacts", name="Chicken breast, raw"),
+    ).json()
+    assert updated["source"] == "openfoodfacts"
+    assert updated["name"] == "Chicken breast, raw"
+
+
+def test_the_body_cannot_set_source_in_either_direction(client):
+    """Provenance is the server's call, not the client's.
+
+    FoodCreate carries a `source` because POST needs it -- that is the caller
+    saying where a *new* row came from. On an existing row it is a claim about
+    history the server already knows, so PUT ignores it and derives the answer
+    from whether the numbers moved.
+    """
+    mine = client.post("/api/foods", json=_chicken(source="user")).json()
+    theirs = client.post(
+        "/api/foods", json=_chicken(name="Oat Flakes", source="openfoodfacts")
+    ).json()
+
+    # Nothing changed but the claimed source: both rows keep what they had.
+    kept = client.put(
+        f"/api/foods/{mine['id']}", json=_chicken(source="openfoodfacts")
+    ).json()
+    assert kept["source"] == "user"
+
+    still_off = client.put(
+        f"/api/foods/{theirs['id']}", json=_chicken(name="Oat Flakes", source="user")
+    ).json()
+    assert still_off["source"] == "openfoodfacts"
+
+
 def test_lookup_returns_normalized_products(client, monkeypatch):
     async def fake_search(query, limit=8):
         return [OFFProduct(name="Oat Flakes", brand="Quaker", serving_size=40,

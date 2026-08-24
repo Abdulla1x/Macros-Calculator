@@ -98,6 +98,57 @@ export function validateSupplement(
   return null
 }
 
+/** schemas.py FoodCreate.name max_length. */
+export const MAX_FOOD_NAME = 200
+
+/** Why a food would be refused, or null if it would not be.
+ *
+ * Same shape and same reasoning as validateSupplement above: a food is a row in
+ * its own table, not a `keyof Settings`.
+ *
+ * Carbs and fat arrive already parsed to `number | null` rather than as
+ * strings, because "not recorded" and "zero" are different claims and only the
+ * caller's input handling can tell them apart -- `Number('')` is 0, which would
+ * turn a blank box into a positive assertion that the food contains no carbs. */
+export function validateFood(
+  name: string,
+  servingSize: number | null,
+  calories: number | null,
+  protein: number | null,
+  carbs: number | null,
+  fat: number | null,
+): string | null {
+  if (name.trim() === '') return 'Give it a name.'
+  if (name.trim().length > MAX_FOOD_NAME) {
+    return `A name has to be ${MAX_FOOD_NAME} characters or fewer.`
+  }
+  // schemas.py has serving_size gt=0: it is a divisor. LogMeal scales a food by
+  // weight / serving_size, so a zero here is not merely wrong, it is the one
+  // value that makes every future meal built from this food NaN.
+  if (servingSize === null || !Number.isFinite(servingSize) || servingSize <= 0) {
+    return 'Serving size has to be a number greater than zero — it is what the macros are per.'
+  }
+  const required: [string, number | null][] = [
+    ['Calories', calories],
+    ['Protein', protein],
+  ]
+  for (const [label, value] of required) {
+    if (value === null || !Number.isFinite(value) || value < 0) {
+      return `${label} has to be zero or more.`
+    }
+  }
+  const optional: [string, number | null][] = [
+    ['Carbs', carbs],
+    ['Fat', fat],
+  ]
+  for (const [label, value] of optional) {
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      return `${label} has to be zero or more, or left blank.`
+    }
+  }
+  return null
+}
+
 interface FieldRule {
   label: string
   /** Null when the value is acceptable, otherwise why it is not. */
