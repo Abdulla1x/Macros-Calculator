@@ -98,6 +98,50 @@ export function validateSupplement(
   return null
 }
 
+/** banking.py MAX_PLAN_DAYS. A plan, not a diet: spreading further than a
+ *  fortnight is a change to the calorie goal itself, where the TDEE machinery
+ *  can see it. */
+export const MAX_PLAN_DAYS = 14
+
+/** banking.py MAX_DAY_DELTA_KCAL. Carries no health opinion — the calorie
+ *  floors do that, and they refuse rather than clamp. This one only catches a
+ *  misplaced zero before it reaches the server. */
+export const MAX_DAY_DELTA_KCAL = 3000
+
+/** schemas.py MAX_PLAN_HORIZON_DAYS. Bounds how far away a plan's days are,
+ *  which MAX_PLAN_DAYS does not: fourteen days scattered across a decade would
+ *  satisfy that bound and mean nothing. */
+export const MAX_PLAN_HORIZON_DAYS = 365
+
+/** Why a plan would be refused before it is sent, or null if it would not be.
+ *
+ * Only the bounds the client can check. The calorie floors are deliberately
+ * NOT mirrored here: they depend on a measured expenditure this screen does not
+ * have, and a floor guessed at client-side would refuse plans the server would
+ * allow — which is worse than the round trip, because the user cannot tell a
+ * wrong refusal from a right one. Those come back from the server naming the
+ * day and the reason. */
+export function validatePlan(
+  dates: string[],
+  amount: number | null,
+  needsAmount: boolean,
+): string | null {
+  if (dates.length === 0) {
+    return 'Pick at least one day to absorb the change.'
+  }
+  if (dates.length > MAX_PLAN_DAYS) {
+    return `A plan can cover at most ${MAX_PLAN_DAYS} days.`
+  }
+  if (!needsAmount) return null
+  if (amount === null || !Number.isFinite(amount) || amount === 0) {
+    return 'Say how many calories to move onto the day you are planning for.'
+  }
+  if (Math.abs(amount) > MAX_DAY_DELTA_KCAL) {
+    return `A single day cannot move by more than ${MAX_DAY_DELTA_KCAL.toLocaleString()} kcal — check for a stray digit.`
+  }
+  return null
+}
+
 /** schemas.py FoodCreate.name max_length. */
 export const MAX_FOOD_NAME = 200
 

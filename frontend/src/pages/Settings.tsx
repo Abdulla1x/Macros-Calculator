@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
+import CaloriePlanSection from '../components/CaloriePlanSection'
 import FoodLibrarySection from '../components/FoodLibrarySection'
 import {
   DEFAULT_WATER_QUICK_ADDS,
@@ -77,6 +79,11 @@ export default function Settings() {
   // numbers it shows are derived from the row that was just written, and a
   // stale card beside a fresh form is how you end up trusting the wrong one.
   const [targetsKey, setTargetsKey] = useState(0)
+  // The day the dashboard was showing when the planning link was followed, so
+  // the planner opens on it rather than on today. Read from router state the
+  // same way LogMeal reads `logDate`. Undefined when Settings is reached any
+  // other way, which is the ordinary case.
+  const planDate = (useLocation().state as { planDate?: string } | null)?.planDate
   // The refusal message for a value that has just been rejected and undone.
   const [rejected, setRejected] = useState<string | null>(null)
 
@@ -356,6 +363,7 @@ export default function Settings() {
           sections here that write straight away rather than feeding the Save
           button — both say so in their own copy. */}
       <SupplementsSection onRejected={setRejected} />
+      <CaloriePlanSection onRejected={setRejected} initialDate={planDate} />
       <FoodLibrarySection onRejected={setRejected} />
 
       <div className="flex items-center gap-3">
@@ -1163,8 +1171,8 @@ function AccountSection() {
           <p className="mb-2 text-sm text-slate-400">
             Download everything stored for this account — meals, food library, saved
             meal templates, weight entries, water logs, step counts, supplements and
-            the doses you ticked, body profile, goals and AI analyses — as a single
-            JSON file.
+            the doses you ticked, calorie plans, body profile, goals and AI analyses
+            — as a single JSON file.
           </p>
           <button
             onClick={exportAll}
@@ -1181,7 +1189,8 @@ function AccountSection() {
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
           weight entries, water logs, step counts, supplements and their check-offs,
-          your body profile, goals and AI analyses. This cannot be undone.
+          calorie plans, your body profile, goals and AI analyses. This cannot be
+          undone.
         </p>
         {!confirmingDelete ? (
           <button
