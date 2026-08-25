@@ -302,12 +302,19 @@ def _macro(
     if len(corrected) < min_samples:
         # The counts survive the refusal; only the rates are withheld.
         short = min_samples - len(corrected)
-        reason = (
-            f"You have changed the {noun} on {len(corrected)} of {total} "
-            f"estimates you saved. {short} more and the app can measure how "
-            f"often that range was right — below that, the rate would move "
-            f"further than the answer it is meant to give."
-        )
+        if total == 0:
+            reason = (
+                f"No estimates saved yet. Once {min_samples} of them have had "
+                f"their {noun} corrected, the app can measure how often that "
+                f"range was right."
+            )
+        else:
+            reason = (
+                f"You have changed the {noun} on {len(corrected)} of {total} "
+                f"estimates you saved. {short} more and the app can measure how "
+                f"often that range was right — below that, the rate would move "
+                f"further than the answer it is meant to give."
+            )
         return (
             MacroCalibration(len(corrected), hits, None, None, None, None, None, reason),
             corrected,
@@ -400,14 +407,26 @@ def summarise(
 
     # Section-wide, and only when neither macro can say anything -- otherwise the
     # per-macro sentences carry it and this would contradict one of them.
+    #
+    # The two cases are genuinely different and must not share a sentence. With
+    # no pairs at all there is nothing to characterise; saying someone "left
+    # them as they were" describes a choice they never made.
     reason = None
     if calories.coverage_pct is None and protein.coverage_pct is None:
-        reason = (
-            f"Nothing to measure yet. You have saved {len(pairs)} meals from an AI "
-            f"estimate and left almost all of them as they were, so there is no "
-            f"corrected value to compare against. Correcting an estimate before "
-            f"saving is what gives the app something to check itself against."
-        )
+        if not pairs:
+            reason = (
+                "Nothing to measure yet. Analyse a meal, use the ingredients it "
+                "finds, and save it — once you correct an estimate before "
+                "saving, the app has something to check itself against."
+            )
+        else:
+            reason = (
+                f"Nothing to measure yet. You have saved {len(pairs)} "
+                f"{'meal' if len(pairs) == 1 else 'meals'} from an AI estimate "
+                f"and changed almost nothing, so there is little to compare "
+                f"against. Correcting an estimate before saving is what gives "
+                f"the app something to check itself against."
+            )
 
     return CalibrationSummary(
         analyses=analyses,
