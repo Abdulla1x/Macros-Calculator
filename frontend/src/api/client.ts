@@ -5,6 +5,7 @@ import type {
   AnalyticsSummary,
   Announcements,
   BodyTargets,
+  Calibration,
   CaloriePlan,
   CaloriePlanCreate,
   DaySurplus,
@@ -369,6 +370,7 @@ export const api = {
   // why" without a log dig. `probe` spends one provider call.
   getAIStatus: (probe = false) =>
     request<AIStatus>(`/api/ai/status${probe ? '?probe=true' : ''}`),
+  getCalibration: () => request<Calibration>('/api/ai/calibration'),
   linkAnalysis: (analysisId: number, mealId: number) =>
     request<void>(`/api/ai/analyses/${analysisId}`, {
       method: 'PATCH',

@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+from datetime import date
 from types import SimpleNamespace
 
 import httpx
@@ -1113,3 +1114,99 @@ def test_env_limit_reads_a_valid_value(monkeypatch):
         # Surrounding whitespace is a dashboard copy-paste artefact, not a typo.
         monkeypatch.setenv(name, " 7 ")
         assert reader() == 7, name
+
+
+# --- calibration -------------------------------------------------------------
+
+
+def _analyse_and_save(client, monkeypatch, calories, protein=None):
+    """Run an analysis, save a meal from it, and link the two.
+
+    Goes through the routes rather than inserting rows, because the link is what
+    creates a calibration pair and the router owns both halves of it.
+    """
+    configure(monkeypatch)
+    analysis = client.post("/api/ai/analyze", data={"text": "chicken and rice"}).json()
+    meal = client.post(
+        "/api/meals",
+        json={
+            "date": date.today().isoformat(),
+            "name": "Chicken & Rice",
+            "calories": calories,
+            "protein": SAMPLE.protein.estimate if protein is None else protein,
+        },
+    ).json()
+    client.patch(
+        f"/api/ai/analyses/{analysis['analysis_id']}", json={"meal_id": meal["id"]}
+    )
+    return analysis, meal
+
+
+def test_calibration_is_empty_before_anything_is_linked(client):
+    body = client.get("/api/ai/calibration").json()
+
+    assert body["analyses"] == 0
+    assert body["linked"] == 0
+    assert body["calories"]["coverage_pct"] is None
+    assert body["unavailable_reason"] is not None
+
+
+def test_calibration_spends_no_quota_and_writes_no_row(client, monkeypatch):
+    """A read about billable calls must not itself be a billable call.
+
+    Every ai_analyses row is one provider call by definition, which is what
+    calls_today and the admin stats count. Reserving a slot here would corrupt
+    the very counter this endpoint reports on.
+    """
+    _analyse_and_save(client, monkeypatch, calories=SAMPLE.calories.estimate)
+
+    with Session(get_engine()) as db:
+        before = db.query(AIAnalysis).count()
+
+    for _ in range(3):
+        assert client.get("/api/ai/calibration").status_code == 200
+
+    with Session(get_engine()) as db:
+        assert db.query(AIAnalysis).count() == before
+
+
+def test_calibration_counts_an_untouched_estimate_as_accepted(client, monkeypatch):
+    """The saved value *is* the estimate, so it cannot be evidence about range."""
+    _analyse_and_save(client, monkeypatch, calories=SAMPLE.calories.estimate)
+
+    body = client.get("/api/ai/calibration").json()
+    assert body["linked"] == 1
+    assert body["accepted_unchanged"] == 1
+    assert body["corrected"] == 0
+    assert body["calories"]["corrected"] == 0
+
+
+def test_calibration_counts_a_changed_value_as_a_correction(client, monkeypatch):
+    _analyse_and_save(client, monkeypatch, calories=SAMPLE.calories.estimate + 120)
+
+    body = client.get("/api/ai/calibration").json()
+    assert body["accepted_unchanged"] == 0
+    assert body["corrected"] == 1
+    assert body["calories"]["corrected"] == 1
+
+
+def test_calibration_ignores_an_analysis_that_was_never_saved(client, monkeypatch):
+    """An estimate the user looked at and abandoned says nothing about accuracy."""
+    configure(monkeypatch)
+    client.post("/api/ai/analyze", data={"text": "chicken and rice"})
+
+    body = client.get("/api/ai/calibration").json()
+    assert body["analyses"] == 1
+    assert body["linked"] == 0
+
+
+def test_calibration_ignores_transcription_rows(client, monkeypatch):
+    """They carry an empty analysis_json and are not estimates at all."""
+    configure_transcribe(monkeypatch)
+    client.post(
+        "/api/ai/transcribe", files={"audio": ("a.webm", b"xx", "audio/webm")}
+    )
+
+    body = client.get("/api/ai/calibration").json()
+    assert body["analyses"] == 0
+    assert body["unreadable"] == 0

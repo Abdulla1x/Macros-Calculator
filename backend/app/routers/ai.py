@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
+from ..calibration import Pair, parse_estimate, summarise
 from ..db import get_db
 from ..env import env_int
 from ..models import AIAnalysis, Meal, User
@@ -17,6 +18,7 @@ from ..schemas import (
     AIProbe,
     AIStatus,
     AnalysisLink,
+    Calibration,
     MealAnalysis,
     MealAnalysisResponse,
     TranscriptionResponse,
@@ -521,3 +523,61 @@ def link_analysis(
         raise HTTPException(status_code=404, detail="Meal not found")
     record.meal_id = link.meal_id
     db.commit()
+
+
+@router.get("/calibration", response_model=Calibration)
+def calibration(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """How this account's saved meals compare to the estimates behind them.
+
+    Read-only, and deliberately spends no quota: every row in ai_analyses *is*
+    one billable provider call, which is what `calls_today` and the admin stats
+    count. Reserving a slot to answer a question about slots already spent would
+    corrupt the counter it reports on.
+
+    No date window. The corrected subset is small by nature -- correcting an
+    estimate is the rare path -- and slicing it by the Analytics page's 30-day
+    range would empty it for most accounts. Calibration is a property of the
+    model and this user, not of a month.
+    """
+    rows = db.execute(
+        select(AIAnalysis.analysis_json, Meal.calories, Meal.protein)
+        .join(Meal, Meal.id == AIAnalysis.meal_id)
+        .where(
+            AIAnalysis.user_id == user.id,
+            AIAnalysis.kind == KIND_ANALYSIS,
+            AIAnalysis.meal_id.is_not(None),
+            # Both sides are ownership-checked when the link is written, so this
+            # is redundant today. It is here because every other router states
+            # the scope at the query rather than trusting a distant invariant.
+            Meal.user_id == user.id,
+        )
+    ).all()
+
+    # Counted from the table before anything is parsed, so a refusal reports the
+    # true size of the log rather than the size of the subset that survived.
+    analyses = db.scalar(
+        select(func.count())
+        .select_from(AIAnalysis)
+        .where(AIAnalysis.user_id == user.id, AIAnalysis.kind == KIND_ANALYSIS)
+    )
+
+    pairs: list[Pair] = []
+    unreadable = 0
+    for analysis_json, saved_calories, saved_protein in rows:
+        estimate = parse_estimate(analysis_json)
+        if estimate is None:
+            unreadable += 1
+            continue
+        # protein is NOT NULL on meals, but read defensively rather than assume
+        # a column constraint at a distance.
+        pairs.append(Pair(estimate, saved_calories, saved_protein or 0.0))
+
+    return summarise(
+        pairs,
+        analyses=analyses or 0,
+        linked=len(rows),
+        unreadable=unreadable,
+    )

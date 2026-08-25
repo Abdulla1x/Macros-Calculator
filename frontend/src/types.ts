@@ -388,6 +388,49 @@ export interface ImportResult {
   skipped_invalid: number
 }
 
+/** One macro's range accuracy, and the sample behind it.
+ *
+ *  Every rate is null together. Below the minimum sample the counts still
+ *  arrive, because "you are seven corrections away" is more useful than a bare
+ *  refusal — `unavailable_reason` is null exactly when a rate was produced,
+ *  the same contract TdeeBasis carries. */
+export interface MacroCalibration {
+  corrected: number
+  covered: number
+  coverage_pct: number | null
+  coverage_low_pct: number | null
+  coverage_high_pct: number | null
+  median_abs_error_pct: number | null
+  median_signed_error_pct: number | null
+  unavailable_reason: string | null
+}
+
+export interface ConfidenceBucket {
+  confidence: Confidence
+  corrected: number
+  covered: number
+  coverage_pct: number | null
+}
+
+/** How the saved meals compare to the AI estimates behind them.
+ *
+ *  `accepted_unchanged` is not a success rate. It counts meals saved with
+ *  nothing moved, which is equally consistent with trusting the number and with
+ *  never checking it — so it must never be rendered as evidence of accuracy.
+ *  Coverage is measured over the corrected rows only, which is why the two
+ *  counts are reported separately rather than as one ratio. */
+export interface Calibration {
+  analyses: number
+  linked: number
+  unreadable: number
+  accepted_unchanged: number
+  corrected: number
+  calories: MacroCalibration
+  protein: MacroCalibration
+  by_confidence: ConfidenceBucket[]
+  unavailable_reason: string | null
+}
+
 export type Confidence = 'high' | 'medium' | 'low'
 
 export interface AnalyzedItem {
