@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
+import CalibrationSection from '../components/CalibrationSection'
 import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
@@ -259,6 +260,8 @@ export default function Analytics() {
           No meals in this date range yet.
         </p>
       )}
+
+      <CalibrationSection />
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="mb-3 font-semibold">Backup & restore</h3>
