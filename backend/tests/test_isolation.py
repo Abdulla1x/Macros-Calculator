@@ -688,3 +688,93 @@ def test_calibration_never_measures_another_users_corrections(client, client_b, 
     assert a_calibration["corrected"] == 0
     assert a_calibration["calories"]["coverage_pct"] is None
     assert a_calibration["unavailable_reason"] is not None
+
+
+def test_a_code_is_not_a_capability_over_the_row_it_came_from(client, client_b):
+    """The property that makes sharing safe here: a code carries numbers, not a
+    pointer at a row.
+
+    A shares a meal, corrects it, then deletes it. The code B is holding must
+    still decode to the ORIGINAL numbers -- which is only possible if decoding
+    never reads A's row. If it ever did, this would answer with the corrected
+    figures or a 404, and either would mean the code had quietly become a handle
+    on someone else's data that survives their deleting it.
+    """
+    a_meal = client.post("/api/meals", json=MEAL_A).json()
+    code = client.get(f"/api/share/meal/{a_meal['id']}").json()["code"]
+
+    client.put(
+        f"/api/meals/{a_meal['id']}",
+        json={**MEAL_A, "name": "Corrected By A", "calories": 999},
+    )
+    assert client.delete(f"/api/meals/{a_meal['id']}").status_code == 204
+
+    decoded = client_b.post("/api/share/decode", json={"code": code})
+    assert decoded.status_code == 200
+    assert decoded.json()["name"] == MEAL_A["name"]
+    assert decoded.json()["calories"] == MEAL_A["calories"]
+
+
+def test_decoding_a_code_writes_nothing_into_either_account(client, client_b):
+    """Decode reads a string. It is not a create, and 200 is not 201.
+
+    Worth asserting on both accounts: a decoder that helpfully saved the meal
+    would be writing a row nobody asked for, and doing it under whichever
+    identity the handler happened to be holding.
+    """
+    a_meal = client.post("/api/meals", json=MEAL_A).json()
+    code = client.get(f"/api/share/meal/{a_meal['id']}").json()["code"]
+
+    assert client_b.post("/api/share/decode", json={"code": code}).status_code == 200
+
+    assert client_b.get("/api/meals").json() == []
+    assert client_b.get("/api/meal-templates").json() == []
+    assert [m["id"] for m in client.get("/api/meals").json()] == [a_meal["id"]]
+
+
+def test_a_meal_saved_from_a_code_belongs_to_the_recipient(client, client_b):
+    """The whole feature end to end, and the only shape of sharing this app
+    permits: two rows with the same numbers, different ids, different owners.
+
+    The id is the tell. If the import ever produced a second reference to A's
+    row instead of a copy, B editing their meal would rewrite A's history and
+    either deleting it would take the other's with it.
+    """
+    a_meal = client.post("/api/meals", json=MEAL_A).json()
+    code = client.get(f"/api/share/meal/{a_meal['id']}").json()["code"]
+
+    shared = client_b.post("/api/share/decode", json={"code": code}).json()
+    b_meal = client_b.post(
+        "/api/meals",
+        json={
+            "date": MEAL_B["date"],
+            "name": shared["name"],
+            "calories": shared["calories"],
+            "protein": shared["protein"],
+        },
+    ).json()
+
+    assert b_meal["id"] != a_meal["id"]
+
+    # B edits their copy; A's original is untouched.
+    client_b.put(f"/api/meals/{b_meal['id']}", json={**MEAL_B, "calories": 111})
+    assert client.get("/api/meals").json()[0]["calories"] == MEAL_A["calories"]
+
+    # ...and neither can reach the other's row by id, code or no code.
+    assert client.delete(f"/api/meals/{b_meal['id']}").status_code == 404
+    assert client_b.delete(f"/api/meals/{a_meal['id']}").status_code == 404
+
+
+def test_b_cannot_mint_a_code_for_as_meal_or_template(client, client_b):
+    """Encoding is the verb that reads a row, so it is the one that needs the
+    scope check. A 404 rather than a 403, like every other direct-id probe here.
+    """
+    a_meal = client.post("/api/meals", json=MEAL_A).json()
+    a_template = client.post("/api/meal-templates", json=TEMPLATE_A).json()
+
+    assert client_b.get(f"/api/share/meal/{a_meal['id']}").status_code == 404
+    assert client_b.get(f"/api/share/template/{a_template['id']}").status_code == 404
+
+    # A's rows survived the attempt, and A can still share them.
+    assert client.get(f"/api/share/meal/{a_meal['id']}").status_code == 200
+    assert client.get(f"/api/share/template/{a_template['id']}").status_code == 200
