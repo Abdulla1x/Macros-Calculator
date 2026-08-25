@@ -149,12 +149,15 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "steps_goal": setting.steps_goal,
         },
         "meals": [
-            # `date` is when it was eaten, `created_at` when it was logged.
-            # The latter is null for rows written before migration 0006 and is
-            # exported as null rather than guessed at -- this endpoint promises
-            # everything the account owns, including the gaps.
+            # `date` is when it was eaten, `created_at` when it was logged,
+            # `updated_at` when it was last corrected. The last two are null
+            # for rows written before migrations 0006 and 0012, and updated_at
+            # is null on any meal never edited since. Both are exported as null
+            # rather than guessed at -- this endpoint promises everything the
+            # account owns, including the gaps.
             {"date": m.date.isoformat(),
              "created_at": m.created_at.isoformat() if m.created_at else None,
+             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
              "name": m.name, "calories": m.calories,
              "protein": m.protein, "carbs": m.carbs, "fat": m.fat}
             for m in meals

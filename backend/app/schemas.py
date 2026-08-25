@@ -91,6 +91,12 @@ class Meal(MealCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # Response-only, and deliberately not on MealCreate: the client states what
+    # was eaten, the server states when the row last changed. Declared without
+    # a default so that a row missing the attribute raises here instead of
+    # silently reporting an unedited meal -- the from_attributes trap. Null is
+    # the honest value for a meal with no recorded edit, not a missing one.
+    updated_at: datetime | None
 
 
 # Bounds the size of MealTemplate.items_json. Named for the same reason

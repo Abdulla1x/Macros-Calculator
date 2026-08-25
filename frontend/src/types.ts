@@ -265,9 +265,15 @@ export interface Meal {
   protein: number
   carbs: number | null
   fat: number | null
+  /**
+   * When the row was last corrected; null if it never has been. Server-set --
+   * hence the omit below. Widening `Meal` without widening that omit would
+   * silently make this a required field on every create form.
+   */
+  updated_at: string | null
 }
 
-export type MealCreate = Omit<Meal, 'id'>
+export type MealCreate = Omit<Meal, 'id' | 'updated_at'>
 
 /** One ingredient row inside a saved template. */
 export interface TemplateItem {

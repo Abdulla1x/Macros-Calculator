@@ -92,6 +92,14 @@ class Meal(Base):
     # fabricating an observation. NULL means "unknown"; readers fall back to
     # `date` and get eat-date precision for history, real precision after.
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=utcnow)
+    # `updated_at` is when the row was last REWRITTEN, and is null until it is.
+    # Null therefore means "no recorded edit" -- either the meal has never been
+    # corrected, or it was corrected before this column existed. It is not
+    # defaulted to `created_at` on insert: a row that was never edited has no
+    # edit time, and stamping one would make every meal look revised. Readers
+    # wanting "when did this row last change" take updated_at or created_at,
+    # in that order.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     name: Mapped[str] = mapped_column(String(200))
     calories: Mapped[float] = mapped_column(Float)
     protein: Mapped[float] = mapped_column(Float)
