@@ -23,6 +23,47 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-25-calorie-planning",
+        date="2026-08-25",
+        title="Move calories between days, on purpose",
+        body=(
+            "Settings has a new **Calorie planning** section. It does two "
+            "things, and they are opposites of each other.\n\n"
+            "**Plan a bigger day.** Going out on Saturday? Say how many extra "
+            "calories you want that day and pick which days around it give them "
+            "up. Saturday's target goes up, those days' targets come down by "
+            "the same total, and your week is unchanged.\n\n"
+            "**Make up a day that already happened.** Went over last night? "
+            "Pick that day, and the app works out how far over it ran from the "
+            "meals you logged. Then *you* choose which of the days ahead absorb "
+            "it. It works the same way in reverse if you are bulking and came "
+            "in under.\n\n"
+            "Some things worth saying plainly, because they are choices rather "
+            "than accidents:\n\n"
+            "**None of this is a debt, and the app will never chase you for "
+            "it.** Your expenditure is measured from your average intake "
+            "against your weight trend, so one large day already shows up as a "
+            "slightly slower week whether or not you do anything about it. This "
+            "only lets you decide where it lands.\n\n"
+            "**Nothing here will pop up at you.** There is no prompt after a "
+            "big day, and no notification. There is one link under your calorie "
+            "ring, and it is there whether the day went well or badly. Being "
+            "asked \"shall we cut the next four days?\" every time you overshoot "
+            "is how a planning tool turns into something worse.\n\n"
+            "**You pick the days, not the app.** All the server does is refuse "
+            "a spread that would take any day below a safe calorie floor -- and "
+            "when it refuses, it names the day and tells you to spread wider "
+            "rather than quietly shaving less than you asked for.\n\n"
+            "**Protein never moves.** Carbohydrate and fat absorb the "
+            "difference. Protein comes off your body weight rather than your "
+            "calorie budget, and it matters more on a smaller day, not less.\n\n"
+            "One related change you will notice straight away: your calorie "
+            "ring now shows the real percentage when you go over. It used to "
+            "stop at 100%, so a 2,400 kcal day against a 2,000 kcal goal read "
+            "as if you had landed exactly on it."
+        ),
+    ),
+    Announcement(
         id="2026-08-24-food-library",
         date="2026-08-24",
         title="Your saved foods, where you can finally fix them",
