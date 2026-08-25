@@ -636,3 +636,55 @@ def test_full_export_only_contains_own_plans(client, client_b):
 
     b_export = client_b.get("/api/data/export/all").json()
     assert sorted(r["calorie_delta"] for r in b_export["calorie_plans"]) == [-600, 600]
+
+
+def test_calibration_never_measures_another_users_corrections(client, client_b, monkeypatch):
+    """Calibration reads a *second* user-owned table, so the gate needs widening.
+
+    An unscoped join would not leak a meal name anywhere visible. It would fold
+    a stranger's corrections into this account's coverage rate and print the
+    result as a statement about their own estimates -- a leak that shows up only
+    as a wrong number, which is the kind this suite exists to catch.
+
+    B corrects a dense history. A runs the same analyses and saves none of them,
+    so if the join were unscoped A would inherit B's entire correction record.
+    """
+    from app.calibration import CALIBRATION_MIN_SAMPLES
+    from tests.test_meal_ai import SAMPLE
+
+    configure(monkeypatch)
+    today = date.today().isoformat()
+
+    for index in range(CALIBRATION_MIN_SAMPLES):
+        # B saves a corrected value, well outside the estimate.
+        analysis = client_b.post("/api/ai/analyze", data={"text": "dinner"}).json()
+        meal = client_b.post(
+            "/api/meals",
+            json={
+                "date": today,
+                "name": f"Beta Meal {index}",
+                "calories": SAMPLE.calories.estimate + 100,
+                "protein": SAMPLE.protein.estimate + 10,
+            },
+        ).json()
+        client_b.patch(
+            f"/api/ai/analyses/{analysis['analysis_id']}", json={"meal_id": meal["id"]}
+        )
+        # A runs the analysis but never saves a meal from it.
+        client.post("/api/ai/analyze", data={"text": "dinner"})
+
+    a_calibration = client.get("/api/ai/calibration").json()
+    b_calibration = client_b.get("/api/ai/calibration").json()
+
+    # B did the work, so B gets the measurement.
+    assert b_calibration["linked"] == CALIBRATION_MIN_SAMPLES
+    assert b_calibration["calories"]["corrected"] == CALIBRATION_MIN_SAMPLES
+    assert b_calibration["calories"]["coverage_pct"] is not None
+
+    # A logged the same number of analyses and linked none of them, so A must
+    # measure nothing rather than inherit B's record.
+    assert a_calibration["analyses"] == CALIBRATION_MIN_SAMPLES
+    assert a_calibration["linked"] == 0
+    assert a_calibration["corrected"] == 0
+    assert a_calibration["calories"]["coverage_pct"] is None
+    assert a_calibration["unavailable_reason"] is not None

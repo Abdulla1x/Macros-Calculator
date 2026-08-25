@@ -33,6 +33,24 @@ def pairs(saved_calories: list[float], confidence: str = "high") -> list[Pair]:
     return [Pair(estimate(confidence), value, PROTEIN.estimate) for value in saved_calories]
 
 
+def test_the_summary_dataclass_and_its_response_schema_stay_identical():
+    """The asdict trap, pinned.
+
+    FastAPI runs the dataclass through `dataclasses.asdict` before validating it
+    against the response model, so a field the schema declares and the dataclass
+    omits does not fail -- it serializes as the schema's default, silently. A
+    drift here would ship a number that is always the same wrong value.
+    """
+    import dataclasses
+
+    from app.calibration import CalibrationSummary
+    from app.schemas import Calibration
+
+    assert {f.name for f in dataclasses.fields(CalibrationSummary)} == set(
+        Calibration.model_fields
+    )
+
+
 # --- parsing -----------------------------------------------------------------
 
 

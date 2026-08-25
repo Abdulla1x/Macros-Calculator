@@ -877,6 +877,55 @@ class AnalysisLink(BaseModel):
     meal_id: int
 
 
+class MacroCalibration(BaseModel):
+    """One macro's range accuracy, and the sample it rests on.
+
+    Every rate here is None together: below the minimum sample the counts are
+    still reported, because "you are seven corrections away" is more useful than
+    a bare refusal. `unavailable_reason` is None exactly when a rate was
+    produced, the same contract TdeeBasis carries.
+    """
+
+    corrected: int
+    covered: int
+    coverage_pct: float | None
+    coverage_low_pct: float | None
+    coverage_high_pct: float | None
+    median_abs_error_pct: float | None
+    median_signed_error_pct: float | None
+    unavailable_reason: str | None
+
+
+class ConfidenceBucket(BaseModel):
+    """Calorie coverage split by the badge the user was shown."""
+
+    confidence: str
+    corrected: int
+    covered: int
+    coverage_pct: float | None
+
+
+class Calibration(BaseModel):
+    """How this account's saved meals compare to the estimates behind them.
+
+    Field-for-field identical to `calibration.CalibrationSummary`, and it has to
+    stay that way: FastAPI runs the dataclass through `dataclasses.asdict`
+    before validating it here, so a field declared here and missing there
+    serializes silently as the default below rather than failing. targets.py
+    carries the same warning over TdeeBasis.
+    """
+
+    analyses: int
+    linked: int
+    unreadable: int
+    accepted_unchanged: int
+    corrected: int
+    calories: MacroCalibration
+    protein: MacroCalibration
+    by_confidence: list[ConfidenceBucket] = []
+    unavailable_reason: str | None = None
+
+
 class AIProbe(BaseModel):
     """What one minimal live call to the AI provider actually did."""
 
