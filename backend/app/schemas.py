@@ -1005,3 +1005,9 @@ class AdminUserRow(BaseModel):
     # use. Counts only -- never a name, see the privacy note on the router.
     supplements: int = 0
     supplement_logs: int = 0
+    # Rows, not plans: one banked Saturday is four or five of these. The count
+    # answers "does anyone use this", which is what it is here for, and a
+    # per-plan figure would need a grouping query for a number nobody acts on.
+    # Never an event_date -- see the privacy note on the router. A date is the
+    # disclosive part: it says this person has something on the 5th.
+    calorie_plan_days: int = 0

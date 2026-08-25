@@ -28,6 +28,16 @@ DOSE_DAY = WATER_DAY
 SUPP_A = {"name": "Alpha Supplement", "dose": "5 g", "times": ["08:00"], "active": True}
 SUPP_B = {"name": "Beta Supplement", "dose": "1 cap", "times": ["21:00"], "active": True}
 
+# Plans are the one feature whose dates are deliberately ahead of today, so
+# these are relative in the opposite direction from WEIGH_DAY above.
+PLAN_EVENT = (date.today() + timedelta(days=3)).isoformat()
+PLAN_A = {"kind": "planned", "event_date": PLAN_EVENT,
+          "dates": [(date.today() + timedelta(days=4)).isoformat()],
+          "calorie_delta": 400}
+PLAN_B = {"kind": "planned", "event_date": PLAN_EVENT,
+          "dates": [(date.today() + timedelta(days=5)).isoformat()],
+          "calorie_delta": 600}
+
 
 def test_meal_lists_are_scoped(client, client_b):
     a_meal = client.post("/api/meals", json=MEAL_A).json()
@@ -558,3 +568,71 @@ def test_auto_targets_are_computed_from_your_own_body(client, client_b):
     b_goal = client_b.get("/api/settings").json()["calorie_goal"]
     # 82 kg and 61 kg cannot produce the same maintenance target.
     assert a_goal != b_goal
+
+
+def test_plan_lists_are_scoped(client, client_b):
+    assert client.post("/api/plan", json=PLAN_A).status_code == 201
+    # The same event day, which the unique index allows across accounts and
+    # must: two people may both be going out on the 28th.
+    assert client_b.post("/api/plan", json=PLAN_B).status_code == 201
+
+    a_deltas = [d["calorie_delta"] for d in client.get("/api/plan").json()[0]["days"]]
+    b_deltas = [d["calorie_delta"] for d in client_b.get("/api/plan").json()[0]["days"]]
+    assert sorted(a_deltas) == [-400, 400]
+    assert sorted(b_deltas) == [-600, 600]
+
+
+def test_a_planned_day_never_moves_another_users_target(client, client_b):
+    """The read path that composes an adjustment onto the stored goals.
+
+    Every ring on the dashboard is drawn from this endpoint, so a scoping miss
+    here would not show up as someone else's data on screen -- it would show up
+    as your own calorie target quietly being wrong.
+    """
+    client.post("/api/plan", json=PLAN_A)
+
+    a_day = client.get("/api/plan/day", params={"date": PLAN_EVENT}).json()
+    b_day = client_b.get("/api/plan/day", params={"date": PLAN_EVENT}).json()
+    assert a_day["calorie_delta"] == 400
+    assert b_day["calorie_delta"] is None
+    assert b_day["calorie_goal"] == 2000
+
+
+def test_a_surplus_is_measured_from_your_own_meals(client, client_b):
+    """The surplus reaches outside the plan table into meals, exactly the way
+    the steps burn reaches into weights -- and the same scoping question."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    client.post("/api/meals", json={**MEAL_A, "date": yesterday, "calories": 2600})
+
+    a = client.get("/api/plan/surplus", params={"date": yesterday}).json()
+    b = client_b.get("/api/plan/surplus", params={"date": yesterday}).json()
+    assert a["consumed_calories"] == 2600
+    assert b["consumed_calories"] == 0
+    assert b["meal_count"] == 0
+
+
+def test_cannot_cancel_another_users_plan(client, client_b):
+    client.post("/api/plan", json=PLAN_A)
+
+    assert client_b.delete(f"/api/plan/{PLAN_EVENT}").status_code == 404
+    # And A still has it, whole.
+    assert len(client.get("/api/plan").json()[0]["days"]) == 2
+
+
+def test_one_users_plan_does_not_block_anothers_day(client, client_b):
+    """The unique index spans (user_id, date), not date.
+
+    Overlap is refused *within* an account, and the 409 that enforces it must
+    not leak across one -- being told your Saturday is taken because a stranger
+    banked theirs would be both wrong and disclosive.
+    """
+    client.post("/api/plan", json=PLAN_A)
+    assert client_b.post("/api/plan", json=PLAN_A).status_code == 201
+
+
+def test_full_export_only_contains_own_plans(client, client_b):
+    client.post("/api/plan", json=PLAN_A)
+    client_b.post("/api/plan", json=PLAN_B)
+
+    b_export = client_b.get("/api/data/export/all").json()
+    assert sorted(r["calorie_delta"] for r in b_export["calorie_plans"]) == [-600, 600]

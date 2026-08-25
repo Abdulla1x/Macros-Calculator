@@ -42,6 +42,12 @@ SECRET_STEPS_GOAL = 23117
 # natural thing to "just include" for support purposes.
 SECRET_SUPPLEMENT_NAME = "Borogove Wabe Extract"
 SECRET_SUPPLEMENT_DOSE = "417 mcg"
+# A calorie plan's event_date is disclosive in a way none of the above are: it
+# says nothing about health and everything about a life -- that this person has
+# something on a particular day. Far enough out that it cannot collide with a
+# created_at or a signup date already in the payload.
+SECRET_PLAN_EVENT_DATE = (TODAY + timedelta(days=137)).isoformat()
+SECRET_PLAN_FUNDING_DATE = (TODAY + timedelta(days=139)).isoformat()
 
 
 def email_of(client) -> str:
@@ -210,6 +216,16 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         },
     )
 
+    client_b.post(
+        "/api/plan",
+        json={
+            "kind": "planned",
+            "event_date": SECRET_PLAN_EVENT_DATE,
+            "dates": [SECRET_PLAN_FUNDING_DATE],
+            "calorie_delta": 400,
+        },
+    )
+
     client_b.put(
         "/api/settings",
         json={
@@ -238,6 +254,8 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert str(SECRET_STEPS_GOAL) not in body, route
         assert SECRET_SUPPLEMENT_NAME not in body, route
         assert SECRET_SUPPLEMENT_DOSE not in body, route
+        assert SECRET_PLAN_EVENT_DATE not in body, route
+        assert SECRET_PLAN_FUNDING_DATE not in body, route
 
 
 # --- Metrics -----------------------------------------------------------------
@@ -305,6 +323,34 @@ def test_user_rows_carry_counts_and_last_active(client, client_b, monkeypatch):
     assert rows[address_b]["foods"] == 0
     assert rows[address_b]["meal_templates"] == 1
     assert rows[address_b]["ai_calls"] == 0
+    assert rows[address_b]["calorie_plan_days"] == 0
+    assert rows[address_b]["last_active_at"] is not None
+
+
+def test_planning_counts_rows_and_registers_as_activity(client, client_b, monkeypatch):
+    """CaloriePlanDay is in _TIMESTAMPED, which is a claim worth checking.
+
+    It passes that tuple's rule cleanly -- there is no update path, so every
+    row's created_at is the moment a plan was actually made -- and MealTemplate
+    and Supplement are both out of it for failing exactly that test. An
+    assertion is cheaper than trusting the reasoning.
+    """
+    plan = client_b.post(
+        "/api/plan",
+        json={
+            "kind": "planned",
+            "event_date": (TODAY + timedelta(days=3)).isoformat(),
+            "dates": [(TODAY + timedelta(days=i)).isoformat() for i in (4, 5)],
+            "calorie_delta": 400,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    address_b = email_of(client_b)
+    make_admin(client, monkeypatch)
+
+    rows = {row["email"]: row for row in client.get("/api/admin/users").json()}
+    # Rows, not plans: one banked day plus the two funding it.
+    assert rows[address_b]["calorie_plan_days"] == 3
     assert rows[address_b]["last_active_at"] is not None
 
 

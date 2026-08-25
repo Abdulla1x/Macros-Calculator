@@ -496,4 +496,8 @@ export interface AdminUserRow {
   steps: number
   supplements: number
   supplement_logs: number
+  /** Adjusted *days*, not plans — one banked Saturday is four or five of these.
+   *  Never the dates themselves: which day someone has plans on says nothing
+   *  about health and a good deal about their life. */
+  calorie_plan_days: number
 }

@@ -248,10 +248,11 @@ export default function Admin() {
                       </th>
                       <th className="pb-2 pr-4 text-right font-medium">Foods</th>
                       <th className="pb-2 pr-4 text-right font-medium">Templates</th>
-                      {/* The three daily trackers, by their dashboard icons.
-                          Counts only, never contents — a supplement name can
-                          disclose a prescription, so the column says how many
-                          doses were ticked and nothing about which. */}
+                      {/* The daily trackers, by their dashboard icons. Counts
+                          only, never contents — a supplement name can disclose
+                          a prescription, and a plan's date discloses a
+                          calendar, so these columns say how many and never
+                          which. */}
                       <th className="pb-2 pr-4 text-right font-medium" title="Water logs">
                         💧
                       </th>
@@ -260,6 +261,9 @@ export default function Admin() {
                       </th>
                       <th className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
                         💊
+                      </th>
+                      <th className="pb-2 pr-4 text-right font-medium" title="Days adjusted by a calorie plan">
+                        📅
                       </th>
                       <th className="pb-2 text-right font-medium">AI</th>
                     </tr>
@@ -286,6 +290,7 @@ export default function Admin() {
                         >
                           {row.supplement_logs}
                         </td>
+                        <td className="py-2 pr-4 text-right">{row.calorie_plan_days}</td>
                         <td className="py-2 text-right">{row.ai_calls}</td>
                       </tr>
                     ))}
