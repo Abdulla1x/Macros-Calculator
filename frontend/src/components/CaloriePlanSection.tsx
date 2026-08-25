@@ -61,7 +61,9 @@ export default function CaloriePlanSection({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mode, setMode] = useState<PlanKind | null>(null)
-  const [eventDate, setEventDate] = useState(initialDate ?? localIsoDate())
+  // Today until a mode is opened, at which point `open` clamps the prefill to
+  // that mode's range. There is no form on screen before then.
+  const [eventDate, setEventDate] = useState(localIsoDate)
   const [amount, setAmount] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [surplus, setSurplus] = useState<DaySurplus | null>(null)
@@ -137,9 +139,17 @@ export default function CaloriePlanSection({
     setMode(kind)
     setSelected([])
     setAmount('')
-    // A day to compensate for has to have happened; a day to plan for does not
-    // have to be in the future, since today can still be adjusted.
-    setEventDate(kind === 'compensating' ? addDays(today, -1) : (initialDate ?? today))
+    // Clamped to each mode's own legal range rather than used as given. The
+    // prefill is whatever day the dashboard was showing, and that day is often
+    // wrong for the mode being opened -- arriving from yesterday and choosing
+    // "Plan a bigger day" would otherwise open the form on a date the server is
+    // certain to refuse. A day to compensate for has to have happened; a day to
+    // plan for cannot have.
+    if (kind === 'compensating') {
+      setEventDate(initialDate && initialDate <= today ? initialDate : addDays(today, -1))
+    } else {
+      setEventDate(initialDate && initialDate >= today ? initialDate : today)
+    }
   }
 
   const close = () => {
@@ -243,6 +253,12 @@ export default function CaloriePlanSection({
                     ? `Planning for ${short(plan.event_date)}`
                     : `Making up ${short(plan.event_date)}`}
                 </span>
+                {/* GET /api/plan only returns plans with a day still ahead,
+                    so this is always true today. Kept as a condition rather
+                    than dropped: the server refuses to cancel a fully-past
+                    plan with a 409, and if this list ever widens to show
+                    finished plans, a Cancel button that 409s is the failure
+                    that would appear. */}
                 {plan.can_cancel && (
                   <button
                     onClick={() => cancel(plan.event_date)}
@@ -272,13 +288,7 @@ export default function CaloriePlanSection({
                   </li>
                 ))}
               </ul>
-              {!plan.can_cancel && (
-                <p className="mt-2 text-xs text-slate-600">
-                  Every day in this plan has passed, so there is nothing left to
-                  cancel. The days it adjusted keep their targets — those are
-                  what you ate against.
-                </p>
-              )}
+
             </li>
           ))}
         </ul>
