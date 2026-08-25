@@ -267,6 +267,21 @@ def test_one_macro_can_answer_while_the_other_refuses():
     assert summary.unavailable_reason is None
 
 
+def test_an_empty_log_is_not_described_as_a_choice_the_user_made():
+    """Found in production, on a brand-new account.
+
+    The refusal used to read "you have saved 0 meals ... and left almost all of
+    them as they were", which asserts a decision nobody took. The UI happens to
+    short-circuit before rendering it, which is exactly the "known, therefore
+    harmless" shape this project has shipped three times already.
+    """
+    summary = summarise([], analyses=0, linked=0, unreadable=0)
+
+    assert "0 meals" not in summary.unavailable_reason
+    assert "left almost all" not in summary.unavailable_reason
+    assert "0 of 0" not in summary.calories.unavailable_reason
+
+
 def test_the_section_refuses_only_when_no_macro_can_speak():
     summary = summarise(pairs([CALORIES.estimate] * 5), analyses=5, linked=5, unreadable=0)
 
