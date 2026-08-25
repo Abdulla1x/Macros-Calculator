@@ -305,7 +305,7 @@ def _macro(
         reason = (
             f"You have changed the {noun} on {len(corrected)} of {total} "
             f"estimates you saved. {short} more and the app can measure how "
-            f"often that range was right -- below that, the rate would move "
+            f"often that range was right — below that, the rate would move "
             f"further than the answer it is meant to give."
         )
         return (

@@ -63,6 +63,7 @@ def main() -> None:
             ("GET", "/api/plan/day"),
             ("GET", "/api/plan/surplus"),
             ("POST", "/api/ai/analyze"),
+            ("GET", "/api/ai/calibration"),
         ]:
             response = client.request(method, path)
             check(response.status_code == 401, f"anon {method} {path} -> 401")
@@ -407,6 +408,19 @@ def main() -> None:
 
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
+
+        # Calibration is an aggregate over a *second* table (the meals each
+        # analysis was saved into). An unscoped join would not show a stranger's
+        # meal name anywhere -- it would fold their corrections into this
+        # account's accuracy figure, which is a leak that only ever surfaces as
+        # a wrong number. Neither account has linked an analysis here, so both
+        # must report an empty log rather than each other's.
+        for label, headers in (("A", headers_a), ("B", headers_b)):
+            calibration = client.get("/api/ai/calibration", headers=headers).json()
+            check(
+                calibration["linked"] == 0 and calibration["corrected"] == 0,
+                f"{label}'s calibration counts only {label}",
+            )
 
         b_export = client.get("/api/data/export", headers=headers_b).text
         check("Smoke Beta One" in b_export, "B's export has B's meal")
