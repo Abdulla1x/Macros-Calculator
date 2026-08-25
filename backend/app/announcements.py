@@ -23,6 +23,43 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-26-estimate-accuracy",
+        date="2026-08-26",
+        title="The app now keeps score of its own estimates",
+        body=(
+            "Every AI meal estimate has always come with a range -- "
+            "\"~580 kcal (500-680)\" -- and until now nothing had ever "
+            "checked whether the range was any good. The Analytics page has a "
+            "new section that checks it, against your own meals.\n\n"
+            "**It measures against what you saved, not against a scale.** If "
+            "you corrected an estimate before saving, the app compares the two "
+            "and asks whether your number fell inside the range it showed you. "
+            "That is honestly described as how far you moved its number, not "
+            "how wrong it was -- unless you weighed the food, your correction "
+            "is an estimate too.\n\n"
+            "**Saving an estimate untouched proves nothing, so it is not "
+            "counted.** If you accept a number as-is, the saved value *is* the "
+            "estimate, so of course it sits inside its own range. Counting "
+            "those would produce a score near 100% that measures nothing but "
+            "its own definition. Only the meals you actually corrected can "
+            "test the range, so those are counted separately -- and on most "
+            "accounts there will be far fewer of them than you would expect.\n\n"
+            "**Where there isn't enough to say, it says so instead of "
+            "guessing.** Each macro needs ten corrections before a percentage "
+            "appears; below that you get the count and how many more are "
+            "needed. Calories and protein fill up at different rates, so one "
+            "may be answering while the other is still waiting.\n\n"
+            "**Every percentage arrives with a range of its own.** A rate "
+            "built from eleven corrections is not a precise number, so it is "
+            "shown as \"91%, plausibly 62-98%\". It would be a strange "
+            "feature about honest uncertainty that reported its own findings "
+            "with false confidence.\n\n"
+            "One limitation worth stating: only meals saved straight after an "
+            "analysis are counted, and editing a meal later is not reflected. "
+            "Every figure here is a lower bound."
+        ),
+    ),
+    Announcement(
         id="2026-08-25-calorie-planning",
         date="2026-08-25",
         title="Move calories between days, on purpose",
