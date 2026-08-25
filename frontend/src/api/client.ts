@@ -5,6 +5,9 @@ import type {
   AnalyticsSummary,
   Announcements,
   BodyTargets,
+  CaloriePlan,
+  CaloriePlanCreate,
+  DaySurplus,
   Food,
   FoodCreate,
   HealthStatus,
@@ -16,6 +19,7 @@ import type {
   MealTemplateCreate,
   MessageResponse,
   OFFProduct,
+  PlanDay,
   Settings,
   StepDay,
   StepEntry,
@@ -271,6 +275,25 @@ export const api = {
 
   // One request feeds the whole card: every scheduled dose for the day, and
   // which of them are ticked.
+  // Calorie plans. getPlanDay is the one the dashboard rings depend on: it
+  // returns the targets *in force* on a date, which is not what
+  // getSettings() returns on any day a plan touches.
+  getPlanDay: (date: string) =>
+    request<PlanDay>(`/api/plan/day?date=${encodeURIComponent(date)}`),
+  getPlans: () => request<CaloriePlan[]>('/api/plan'),
+  getDaySurplus: (date: string) =>
+    request<DaySurplus>(`/api/plan/surplus?date=${encodeURIComponent(date)}`),
+  createPlan: (body: CaloriePlanCreate) =>
+    request<CaloriePlan>('/api/plan', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  // Addressed by event date, not id — the group key is the plan's identity.
+  cancelPlan: (eventDate: string) =>
+    request<void>(`/api/plan/${encodeURIComponent(eventDate)}`, {
+      method: 'DELETE',
+    }),
+
   getSupplementDay: (date: string) =>
     request<SupplementDay>(
       `/api/supplements/day?date=${encodeURIComponent(date)}`,

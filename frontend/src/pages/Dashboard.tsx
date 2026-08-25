@@ -8,7 +8,37 @@ import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
-import type { AnalyticsSummary, Meal, MealTemplate } from '../types'
+import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
+
+// What the caption under the calorie ring says, if anything.
+//
+// Only the calorie ring gets one. Protein does not move under a plan at all,
+// and captioning carbs and fat with the same sentence three times would be
+// noise around a fact that belongs to the day, not to each macro.
+function planCaption(plan: PlanDay | null, failed: boolean): string | undefined {
+  if (failed) {
+    return "Couldn't check for a plan on this day — showing your usual target."
+  }
+  if (!plan || plan.calorie_delta === null) return undefined
+
+  const sign = plan.calorie_delta > 0 ? '+' : '−'
+  const moved = `${sign}${Math.abs(Math.round(plan.calorie_delta))} kcal`
+  // The event day of a planned group is one of its own adjusted days, so this
+  // is the day being planned for rather than a day funding one.
+  if (plan.event_date === plan.date) return `${moved} — a day you planned for`
+
+  const when = plan.event_date
+    ? parseIsoDate(plan.event_date).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      })
+    : null
+  if (!when) return moved
+  return plan.kind === 'planned'
+    ? `${moved} — funding ${when}`
+    : `${moved} — making up ${when}`
+}
 
 export default function Dashboard() {
   const { settings } = useSettings()
@@ -18,6 +48,8 @@ export default function Dashboard() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [planDay, setPlanDay] = useState<PlanDay | null>(null)
+  const [planFailed, setPlanFailed] = useState(false)
   const [viewedDate, setViewedDate] = useState(localIsoDate)
   const todayRef = useRef(localIsoDate())
   const realToday = localIsoDate()
@@ -65,6 +97,25 @@ export default function Dashboard() {
       .getAnalytics(addDays(today, -7), addDays(today, -1))
       .then(setWeek)
       .catch(() => setWeek(null))
+    // The targets actually in force on the viewed day. These are NOT
+    // settings.calorie_goal: a calorie plan adjusts a single day, and the
+    // server composes the adjustment on top of the stored goals. Resolved
+    // there and never recomputed here -- a second definition of these numbers
+    // in the client is a second thing that can be wrong, and this one would be
+    // wrong invisibly, as a ring quietly drawn against the wrong target.
+    api
+      .getPlanDay(viewedDate)
+      .then((day) => {
+        setPlanDay(day)
+        setPlanFailed(false)
+      })
+      .catch(() => {
+        // Falls back to the stored goals, and SAYS SO under the ring. A ring
+        // silently drawn against a target that may be wrong is the kind of
+        // wrong nobody reports, because nothing about it looks wrong.
+        setPlanDay(null)
+        setPlanFailed(true)
+      })
     // Quick log is a shortcut, not content: if it fails to load the panel is
     // simply absent, the same way a failed trend leaves the chart out. Raising
     // an error banner for it would be louder than the feature is important.
@@ -105,6 +156,15 @@ export default function Dashboard() {
     carbs: meals.reduce((sum, meal) => sum + (meal.carbs ?? 0), 0),
     fat: meals.reduce((sum, meal) => sum + (meal.fat ?? 0), 0),
   }
+
+  // Checked at render rather than trusted from state. Two day-switches in
+  // quick succession can land their responses out of order, and the late one
+  // would otherwise draw this day's rings against the other day's target --
+  // silently, since a ring gives no sign which day it was told about. The
+  // stale value is dropped instead, and the goals fall back for the moment it
+  // takes the right response to arrive.
+  const dayPlan = planDay?.date === viewedDate ? planDay : null
+  const goals = dayPlan ?? settings
 
   return (
     <div className="space-y-6">
@@ -165,19 +225,20 @@ export default function Dashboard() {
         </Link>
       </header>
 
-      {settings && (
+      {settings && goals && (
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MacroRing
             label="Calories"
             value={consumed.calories}
-            goal={settings.calorie_goal}
+            goal={goals.calorie_goal}
             unit="kcal"
             color="#f59e0b"
+            caption={planCaption(dayPlan, planFailed)}
           />
           <MacroRing
             label="Protein"
             value={consumed.protein}
-            goal={settings.protein_goal}
+            goal={goals.protein_goal}
             unit="g"
             color="#34d399"
           />
@@ -185,7 +246,7 @@ export default function Dashboard() {
             <MacroRing
               label="Carbs"
               value={consumed.carbs}
-              goal={settings.carbs_goal}
+              goal={goals.carbs_goal}
               unit="g"
               color="#38bdf8"
             />
@@ -194,12 +255,31 @@ export default function Dashboard() {
             <MacroRing
               label="Fat"
               value={consumed.fat}
-              goal={settings.fat_goal}
+              goal={goals.fat_goal}
               unit="g"
               color="#fb7185"
             />
           )}
         </section>
+      )}
+
+      {/* The entire discovery path for calorie planning, and deliberately a
+          plain standing link rather than something that appears when you go
+          over. A link that shows up only after an overage is still the app
+          offering, just wearing a quieter coat -- and being asked "shall we cut
+          the next four days?" every time you overshoot is the thing that turns
+          a planning tool into a loop. This is here whether the day went well or
+          badly, and it waits to be looked for. */}
+      {settings && (
+        <div className="-mt-2 text-right">
+          <Link
+            to="/settings"
+            state={{ planDate: viewedDate }}
+            className="text-xs text-slate-500 hover:text-slate-300"
+          >
+            Plan a bigger day, or spread one you already had →
+          </Link>
+        </div>
       )}
 
       {/* The daily quick-logs.

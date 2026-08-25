@@ -477,6 +477,69 @@ export interface AdminStats {
   activity: AdminDailyActivity[]
 }
 
+/** One day's effective calorie and macro targets — what its rings are drawn
+ *  against, after any plan adjustment. Not the same as the four goals on
+ *  `Settings`: those are the STORED numbers, these are the ones in force on a
+ *  particular day. They differ on exactly the days a plan touches.
+ *
+ *  `calorie_delta` is null on an ordinary day rather than 0 — a day no plan
+ *  touches and a day a plan moves by nothing are different, and only the
+ *  second has anything to cancel. */
+export interface PlanDay {
+  date: string
+  calorie_goal: number
+  protein_goal: number
+  carbs_goal: number
+  fat_goal: number
+  calorie_delta: number | null
+  kind: PlanKind | null
+  event_date: string | null
+}
+
+/** 'planned' is a day arranged in advance and funded by the others, so it has
+ *  a row of its own. 'compensating' spreads a day that already ran over or
+ *  under, and that day has NO row — the meals logged on it are the other side
+ *  of the ledger. */
+export type PlanKind = 'planned' | 'compensating'
+
+export interface CaloriePlan {
+  event_date: string
+  kind: PlanKind
+  created_at: string | null
+  days: PlanDay[]
+  /** Zero for a planned group by definition; shown so it can be checked
+   *  rather than taken on trust. */
+  total_delta: number
+  /** False once every day in the plan is in the past, which is not the same
+   *  as the plan not existing. */
+  can_cancel: boolean
+}
+
+export interface CaloriePlanCreate {
+  kind: PlanKind
+  event_date: string
+  /** The days that ABSORB the change, never including the event day. */
+  dates: string[]
+  /** Only meaningful for 'planned'. A compensating amount is measured from the
+   *  meals server-side and anything sent here is ignored. */
+  calorie_delta?: number | null
+}
+
+/** How far a finished day ran from the target it actually had.
+ *
+ *  Consumed and reference arrive separately rather than pre-subtracted because
+ *  the reference is the weak half: this app stores no historical target, so it
+ *  is what that day's target is *now*. The screen has to be able to say so. */
+export interface DaySurplus {
+  date: string
+  consumed_calories: number
+  reference_calories: number
+  surplus_calories: number
+  /** Zero means nobody logged that day, not that nobody ate. */
+  meal_count: number
+  calorie_delta: number | null
+}
+
 export interface AdminUserRow {
   id: number
   email: string
