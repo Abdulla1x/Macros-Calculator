@@ -26,6 +26,7 @@ from .routers import (
     meals,
     plan,
     settings,
+    share,
     steps,
     supplements,
     water,
@@ -121,6 +122,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(meals.router)
 app.include_router(meal_templates.router)
+app.include_router(share.router)
 app.include_router(foods.router)
 app.include_router(weights.router)
 app.include_router(analytics.router)

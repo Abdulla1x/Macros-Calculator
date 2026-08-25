@@ -269,3 +269,176 @@ def test_a_payload_that_is_not_a_json_object_is_refused():
     for bad in ([1, 2, 3], "hello", None, 42):
         with pytest.raises(ShareCodeError):
             decode_share_code(hand_built(bad))
+
+
+# --- the endpoints ---------------------------------------------------------
+
+
+MEAL = {
+    "date": "2026-07-01",
+    "name": "Chicken & Rice",
+    "calories": 560.0,
+    "protein": 45.0,
+    "carbs": 56.0,
+    "fat": 8.5,
+}
+TEMPLATE = {
+    "name": "Post-gym plate",
+    "calories": 620.0,
+    "protein": 48.0,
+    "carbs": 55.0,
+    "fat": 18.0,
+    "items": [item(0), item(1)],
+}
+
+
+def test_a_shared_meal_can_express_exactly_what_a_template_can():
+    """The drift alarm for a deliberate duplication.
+
+    SharedMeal is field-identical to MealTemplateCreate and is defined
+    separately anyway, so that a field added to template-saving is not silently
+    also a field a stranger's code can carry. This fails on the day they
+    diverge, which is when someone should be deciding whether they should.
+    """
+    from app.schemas import MealTemplateCreate, SharedMeal
+
+    assert set(SharedMeal.model_fields) == set(MealTemplateCreate.model_fields)
+
+
+def test_a_meal_becomes_a_code_that_decodes_to_the_same_numbers(client):
+    meal = client.post("/api/meals", json=MEAL).json()
+    code = client.get(f"/api/share/meal/{meal['id']}").json()["code"]
+
+    decoded = client.post("/api/share/decode", json={"code": code})
+    assert decoded.status_code == 200
+    assert decoded.json() == {
+        "name": MEAL["name"],
+        "calories": MEAL["calories"],
+        "protein": MEAL["protein"],
+        "carbs": MEAL["carbs"],
+        "fat": MEAL["fat"],
+        "items": [],
+    }
+
+
+def test_a_meal_code_carries_no_items_so_the_client_falls_back_to_totals(client):
+    """A Meal has no ingredient rows to carry -- they are discarded on save."""
+    meal = client.post("/api/meals", json=MEAL).json()
+    code = client.get(f"/api/share/meal/{meal['id']}").json()["code"]
+    assert decode_share_code(code)["items"] == []
+
+
+def test_a_template_code_carries_its_ingredient_rows(client):
+    """The reason a template is the better thing to share: the recipient can
+    adjust one ingredient instead of scaling the whole meal."""
+    created = client.post("/api/meal-templates", json=TEMPLATE).json()
+    code = client.get(f"/api/share/template/{created['id']}").json()["code"]
+
+    decoded = client.post("/api/share/decode", json={"code": code}).json()
+    assert [i["name"] for i in decoded["items"]] == [
+        TEMPLATE["items"][0]["name"],
+        TEMPLATE["items"][1]["name"],
+    ]
+    assert decoded["items"][0]["weight_grams"] == 150.0
+
+
+def test_the_code_carries_no_date_no_id_and_no_owner(client):
+    """THE leak test. Read against the raw payload, not the response model.
+
+    Checking the response would prove nothing -- SharedMeal would drop an extra
+    field on the way out and the code would still be carrying it. The key set
+    of the decoded payload is the only place this is visible.
+    """
+    meal = client.post("/api/meals", json=MEAL).json()
+    code = client.get(f"/api/share/meal/{meal['id']}").json()["code"]
+
+    payload = decode_share_code(code)
+    assert set(payload) == {"name", "calories", "protein", "carbs", "fat", "items"}
+
+
+def test_an_untracked_macro_travels_as_an_absent_key_not_a_null(client):
+    meal = client.post("/api/meals", json={**MEAL, "carbs": None, "fat": None}).json()
+    code = client.get(f"/api/share/meal/{meal['id']}").json()["code"]
+
+    assert set(decode_share_code(code)) == {"name", "calories", "protein", "items"}
+    # ...and the recipient still sees them, as the nulls the client expects.
+    decoded = client.post("/api/share/decode", json={"code": code}).json()
+    assert decoded["carbs"] is None and decoded["fat"] is None
+
+
+def test_a_code_cannot_express_more_than_a_template_can(client):
+    """Pins the equivalence the whole validation posture rests on.
+
+    A code carrying 31 ingredients is refused, and the same body posted to
+    /api/meal-templates is refused too -- by the same constant. If these ever
+    disagree, a code has become a way around a bound this app enforces.
+    """
+    from app.schemas import MAX_TEMPLATE_ITEMS
+
+    too_many = {**TEMPLATE, "items": [item(i) for i in range(MAX_TEMPLATE_ITEMS + 1)]}
+    assert (
+        client.post("/api/share/decode", json={"code": hand_built(too_many)}).status_code
+        == 400
+    )
+    assert client.post("/api/meal-templates", json=too_many).status_code == 422
+
+
+def test_a_code_carrying_infinity_is_refused_and_does_not_500(client):
+    """The highest-value hardening case.
+
+    `Infinity` is what json.dumps writes for float('inf') and json.loads accepts
+    it happily, so without allow_inf_nan=False on SharedMeal this reaches a
+    Float column -- and a single such row 500s the whole account export.
+    """
+    raw = json.dumps({**TEMPLATE, "items": [], "calories": float("inf")})
+    code = wrap_bytes(zlib.compress(raw.encode(), 9))
+    assert "Infinity" in raw
+
+    response = client.post("/api/share/decode", json={"code": code})
+    assert response.status_code == 400
+    assert isinstance(response.json()["detail"], str)
+
+
+def test_a_negative_macro_in_a_code_is_refused(client):
+    bad = {**TEMPLATE, "items": [], "protein": -5.0}
+    assert (
+        client.post("/api/share/decode", json={"code": hand_built(bad)}).status_code
+        == 400
+    )
+
+
+def test_an_oversized_code_is_refused_by_the_request_model(client):
+    """422 from request validation, distinct from the 400s a bad code gets."""
+    response = client.post(
+        "/api/share/decode", json={"code": "MC1." + "a" * (MAX_CODE_CHARS + 1)}
+    )
+    assert response.status_code == 422
+
+
+def test_a_garbled_code_comes_back_as_a_sentence(client):
+    """The client renders `detail` when it is a string; a pydantic field path
+    would be both useless to the reader and about someone else's payload."""
+    response = client.post("/api/share/decode", json={"code": "MC1.not-a-real-code"})
+    assert response.status_code == 400
+    assert response.json()["detail"].endswith(".")
+
+
+def test_sharing_something_that_does_not_exist_is_a_404(client):
+    assert client.get("/api/share/meal/999999").status_code == 404
+    assert client.get("/api/share/template/999999").status_code == 404
+
+
+def test_decoding_writes_nothing(client):
+    """200, not 201. Decode is a read of a string."""
+    meal = client.post("/api/meals", json=MEAL).json()
+    code = client.get(f"/api/share/meal/{meal['id']}").json()["code"]
+
+    assert client.post("/api/share/decode", json={"code": code}).status_code == 200
+    assert len(client.get("/api/meals").json()) == 1
+    assert client.get("/api/meal-templates").json() == []
+
+
+def test_every_share_route_requires_a_token(anon_client):
+    assert anon_client.get("/api/share/meal/1").status_code == 401
+    assert anon_client.get("/api/share/template/1").status_code == 401
+    assert anon_client.post("/api/share/decode", json={"code": "x"}).status_code == 401
