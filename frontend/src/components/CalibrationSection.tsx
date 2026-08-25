@@ -90,8 +90,8 @@ export default function CalibrationSection() {
         )}
       </div>
       <p className="mb-4 text-xs text-slate-400">
-        Measured against what you saved, not against a scale — so this is how far you moved the
-        AI's number, not how wrong it was.
+        Measured against the numbers you saved, which are your best information rather than a
+        lab result — so this is how far you moved the AI's estimate, not how wrong it was.
       </p>
 
       {loading ? (
@@ -165,7 +165,10 @@ export default function CalibrationSection() {
 
           <p className="mt-4 text-xs text-slate-500">
             Counted only from meals you saved straight after an analysis, so the real figure may
-            be a little higher. Editing a meal later is not reflected here.
+            be a little higher. Editing a meal later is not reflected here. And how much you tell
+            the app changes what this measures — weighed portions and a voice note narrow its
+            range considerably, so these figures describe the app on the way <em>you</em> log,
+            not on a bare photo.
           </p>
         </>
       )}
