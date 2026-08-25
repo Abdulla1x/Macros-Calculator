@@ -88,6 +88,34 @@ def test_update_meal(client):
     assert [m["id"] for m in client.get("/api/meals").json()] == [meal_id]
 
 
+def test_updated_at_is_null_until_the_meal_is_edited(client):
+    created = client.post("/api/meals", json=_sample()).json()
+    # A meal nobody has corrected has no edit time. Defaulting this to the
+    # creation time would report every meal in the table as revised.
+    assert created["updated_at"] is None
+
+    edited = client.put(f"/api/meals/{created['id']}", json=_sample(calories=610)).json()
+    assert edited["updated_at"] is not None
+
+    # And it survives the round trip -- the stamp is stored, not just returned.
+    listed = client.get("/api/meals", params={"date": "2026-07-01"}).json()
+    assert listed[0]["updated_at"] == edited["updated_at"]
+
+
+def test_editing_does_not_rewrite_when_the_meal_was_logged(client):
+    created = client.post("/api/meals", json=_sample()).json()
+    exported_before = client.get("/api/data/export/all").json()["meals"][0]
+
+    client.put(f"/api/meals/{created['id']}", json=_sample(calories=610))
+    exported_after = client.get("/api/data/export/all").json()["meals"][0]
+
+    # A correction changes when the row last changed, never when the food was
+    # first logged -- created_at is the usage signal and must not drift.
+    assert exported_after["created_at"] == exported_before["created_at"]
+    assert exported_before["updated_at"] is None
+    assert exported_after["updated_at"] is not None
+
+
 def test_update_meal_validates_and_404s(client):
     meal_id = client.post("/api/meals", json=_sample()).json()["id"]
     assert client.put(f"/api/meals/{meal_id}", json=_sample(calories=-5)).status_code == 422

@@ -6,15 +6,17 @@ Every other router here is scoped to the authenticated user. This one
 deliberately is not, which is exactly why it is the only router behind
 `require_admin`. What it may expose is **counts, dates and account
 identifiers**: email, signup date, last-active, and how many meals, weigh-ins,
-foods, saved meal templates, water logs, step-count days, supplements and
-doses ticked each account has.
+foods, saved meal templates, water logs, step-count days, supplements, doses
+ticked and banked calorie days each account has.
 
 Admins do **not** see meal names, weight values, food entries, meal-template
-names, **supplement names or doses**, how much anyone drank or walked, or
-voice-note transcripts. The supplement names matter most of that list: a
-supplement list can name a prescription, which makes it the most disclosive
-data this app stores, and a count of rows says everything an operator needs
-while saying nothing about anyone's health. That is what keeps README.md's "every API endpoint is scoped to the
+names, **supplement names or doses**, how much anyone drank or walked,
+**which days a calorie plan covers**, or voice-note transcripts. Two of those
+matter more than the rest. A supplement list can name a prescription, which
+makes it the most disclosive data this app stores. A plan's `event_date` is
+disclosive in a different way -- it does not describe health at all, it
+describes a life: it says this person has something on the 5th. Counts say
+everything an operator needs while saying neither. That is what keeps README.md's "every API endpoint is scoped to the
 authenticated user" and the Settings privacy copy true without a rewrite.
 `tests/test_admin.py` asserts the absence positively, so a later "just one
 useful field" commit fails a test rather than quietly failing the promise.
@@ -36,6 +38,7 @@ from ..auth.deps import require_admin
 from ..db import get_db
 from ..models import (
     AIAnalysis,
+    CaloriePlanDay,
     Food,
     Meal,
     MealTemplate,
@@ -92,7 +95,17 @@ ACTIVE_WINDOW_DAYS = 7
 # edited by PUT, so a rename today would register as activity on the day it
 # was first added. Its check-offs are the signal instead, and they are the
 # WaterLog shape exactly -- a fresh row every time a box is ticked.
-_TIMESTAMPED = (WeightEntry, Food, AIAnalysis, WaterLog, StepEntry, SupplementLog)
+#
+# CaloriePlanDay joins the tuple and passes the rule cleanly, which is worth
+# saying because the other per-date tables here needed an argument. There is no
+# update path at all: the unique index on (user_id, date) means a plan cannot
+# be edited in place, only cancelled and made again, so every row's created_at
+# is the moment a plan was actually made. Making one is also about as deliberate
+# an act as this app has -- nobody plans a Saturday by accident.
+_TIMESTAMPED = (
+    WeightEntry, Food, AIAnalysis, WaterLog, StepEntry, SupplementLog,
+    CaloriePlanDay,
+)
 
 
 def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datetime:
@@ -190,6 +203,7 @@ def list_users(
     steps = _count_by_user(db, StepEntry, ids)
     supplements = _count_by_user(db, Supplement, ids)
     supplement_logs = _count_by_user(db, SupplementLog, ids)
+    calorie_plan_days = _count_by_user(db, CaloriePlanDay, ids)
     last_active = _last_active_by_user(db, ids)
 
     return [
@@ -207,6 +221,7 @@ def list_users(
             steps=steps.get(u.id, 0),
             supplements=supplements.get(u.id, 0),
             supplement_logs=supplement_logs.get(u.id, 0),
+            calorie_plan_days=calorie_plan_days.get(u.id, 0),
         )
         for u in users
     ]

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..auth.deps import get_current_user
 from ..db import get_db
 from ..models import Meal as MealRow
-from ..models import User
+from ..models import User, utcnow
 from ..schemas import Meal, MealCreate
 
 router = APIRouter(prefix="/api/meals", tags=["meals"])
@@ -69,6 +69,12 @@ def update_meal(
     row.protein = meal.protein
     row.carbs = meal.carbs
     row.fat = meal.fat
+    # Stamped unconditionally rather than only when a field actually differs:
+    # a PUT that resubmits identical values is still the user having gone back
+    # and confirmed the row, and "was this touched" is the question the column
+    # is here to answer. `created_at` is never rewritten -- a correction does
+    # not change when the meal was first logged.
+    row.updated_at = utcnow()
     db.commit()
     return row
 

@@ -59,6 +59,9 @@ def main() -> None:
             ("GET", "/api/settings"),
             ("GET", "/api/analytics/daily"),
             ("GET", "/api/data/export"),
+            ("GET", "/api/plan"),
+            ("GET", "/api/plan/day"),
+            ("GET", "/api/plan/surplus"),
             ("POST", "/api/ai/analyze"),
         ]:
             response = client.request(method, path)
@@ -222,6 +225,31 @@ def main() -> None:
             "ticking the same dose twice stays one dose",
         )
 
+        # -- Calorie plans: the same event day, claimed by both ---------------
+        # The unique index spans (user_id, date), not date, so two accounts
+        # banking the same Saturday must both succeed. Getting that wrong would
+        # tell B their day is taken because a stranger claimed it -- wrong, and
+        # disclosive about someone else's calendar.
+        plan_event = (
+            datetime.now(timezone.utc).date() + timedelta(days=3)
+        ).isoformat()
+        plan_fund = (
+            datetime.now(timezone.utc).date() + timedelta(days=4)
+        ).isoformat()
+        plan_body = {"kind": "planned", "event_date": plan_event,
+                     "dates": [plan_fund], "calorie_delta": 400}
+        response = client.post("/api/plan", json=plan_body, headers=headers_a)
+        check(response.status_code == 201, "A banks a day")
+        response = client.post(
+            "/api/plan", json={**plan_body, "calorie_delta": 600}, headers=headers_b
+        )
+        check(response.status_code == 201, "B banks the same date independently")
+        response = client.post("/api/plan", json=plan_body, headers=headers_a)
+        check(
+            response.status_code == 409,
+            "A banking an already-claimed day of their own -> 409",
+        )
+
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
@@ -361,6 +389,22 @@ def main() -> None:
         ).json()
         check(a_doses["taken"] == 1, "A's dose survived B's identical supplement")
 
+        a_plan_day = client.get(
+            "/api/plan/day", params={"date": plan_event}, headers=headers_a
+        ).json()
+        b_plan_day = client.get(
+            "/api/plan/day", params={"date": plan_event}, headers=headers_b
+        ).json()
+        # Every dashboard ring is drawn from this endpoint, so a scoping miss
+        # here shows up as your own calorie target being wrong rather than as
+        # someone else's data on screen.
+        check(a_plan_day["calorie_delta"] == 400, "A's banked day is A's own amount")
+        check(b_plan_day["calorie_delta"] == 600, "B's banked day is B's own amount")
+        check(
+            a_plan_day["calorie_goal"] != b_plan_day["calorie_goal"],
+            "the same date resolves to a different target per account",
+        )
+
         b_analytics = client.get("/api/analytics/daily", headers=headers_b).json()
         check(b_analytics["totals"]["calories"] == 300, "B's analytics count only B")
 
@@ -427,6 +471,25 @@ def main() -> None:
             "/api/supplements/day", params={"date": dose_day}, headers=headers_a
         ).json()
         check(a_doses["taken"] == 1, "A's dose survived B's three attempts")
+        response = client.delete(f"/api/plan/{plan_event}", headers=headers_b)
+        check(response.status_code == 204, "B cancels B's own plan -> 204")
+        a_plan_day = client.get(
+            "/api/plan/day", params={"date": plan_event}, headers=headers_a
+        ).json()
+        check(
+            a_plan_day["calorie_delta"] == 400,
+            "A's plan survived B cancelling the same event date",
+        )
+        # Re-created for the same reason B's step day is re-logged above: a plan
+        # is addressed by date rather than id, so B cancelling its own is the
+        # only way to probe the scoping, and the DB check below expects a row
+        # for each account.
+        client.post(
+            "/api/plan",
+            json={"kind": "planned", "event_date": plan_event,
+                  "dates": [plan_fund], "calorie_delta": 600},
+            headers=headers_b,
+        )
         response = client.patch(
             "/api/ai/analyses/999999", json={"meal_id": b_meal_id}, headers=headers_b
         )
@@ -464,8 +527,8 @@ def main() -> None:
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from app.models import (
-                Food, Meal, MealTemplate, Setting, StepEntry, Supplement,
-                SupplementLog, WaterLog, WeightEntry,
+                CaloriePlanDay, Food, Meal, MealTemplate, Setting, StepEntry,
+                Supplement, SupplementLog, WaterLog, WeightEntry,
             )
 
             engine = create_engine(os.environ["DATABASE_URL"])
@@ -531,6 +594,16 @@ def main() -> None:
                     == sorted([user_a["id"], user_b["id"]]),
                     "DB: one supplement row per user despite the shared name",
                 )
+                plan_rows = session.scalars(
+                    select(CaloriePlanDay).where(
+                        CaloriePlanDay.user_id.in_([user_a["id"], user_b["id"]])
+                    )
+                ).all()
+                check(
+                    sorted(r.user_id for r in plan_rows)
+                    == sorted([user_a["id"]] * 2 + [user_b["id"]] * 2),
+                    "DB: two plan rows per user on the shared event date",
+                )
                 dose_rows = session.scalars(
                     select(SupplementLog).where(
                         SupplementLog.user_id.in_([user_a["id"], user_b["id"]])
@@ -563,6 +636,8 @@ def main() -> None:
         client.delete(f"/api/water/{b_water_id}", headers=headers_b)
         client.delete("/api/steps", params={"date": step_day}, headers=headers_a)
         client.delete("/api/steps", params={"date": step_day}, headers=headers_b)
+        client.delete(f"/api/plan/{plan_event}", headers=headers_a)
+        client.delete(f"/api/plan/{plan_event}", headers=headers_b)
         # The dose rows go with the supplements by CASCADE, which is worth
         # leaning on here rather than deleting them separately: if the cascade
         # were missing, the next run's DB check would find an orphan.

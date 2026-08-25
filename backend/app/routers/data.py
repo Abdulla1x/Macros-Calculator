@@ -16,6 +16,7 @@ from ..auth.deps import get_current_user
 from ..db import get_db
 from ..models import (
     AIAnalysis,
+    CaloriePlanDay,
     Food,
     Meal,
     MealTemplate,
@@ -101,6 +102,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
         .where(SupplementLog.user_id == user.id)
         .order_by(SupplementLog.date, SupplementLog.id)
     ).all()
+    plan_days = db.scalars(
+        select(CaloriePlanDay)
+        .where(CaloriePlanDay.user_id == user.id)
+        .order_by(CaloriePlanDay.event_date, CaloriePlanDay.date)
+    ).all()
     setting = db.get(Setting, user.id)
     analyses = db.scalars(
         select(AIAnalysis)
@@ -149,12 +155,15 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             "steps_goal": setting.steps_goal,
         },
         "meals": [
-            # `date` is when it was eaten, `created_at` when it was logged.
-            # The latter is null for rows written before migration 0006 and is
-            # exported as null rather than guessed at -- this endpoint promises
-            # everything the account owns, including the gaps.
+            # `date` is when it was eaten, `created_at` when it was logged,
+            # `updated_at` when it was last corrected. The last two are null
+            # for rows written before migrations 0006 and 0012, and updated_at
+            # is null on any meal never edited since. Both are exported as null
+            # rather than guessed at -- this endpoint promises everything the
+            # account owns, including the gaps.
             {"date": m.date.isoformat(),
              "created_at": m.created_at.isoformat() if m.created_at else None,
+             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
              "name": m.name, "calories": m.calories,
              "protein": m.protein, "carbs": m.carbs, "fat": m.fat}
             for m in meals
@@ -205,6 +214,19 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
              "date": log.date.isoformat(), "time": log.time_of_day,
              "created_at": log.created_at.isoformat() if log.created_at else None}
             for log in supplement_logs
+        ],
+        "calorie_plans": [
+            # Flat rows, one per adjusted day, exactly as stored -- grouping
+            # them by event_date would be this endpoint deciding how the data
+            # should look rather than handing over what the account owns.
+            # `kind` is what says whether the event day has a row of its own:
+            # 'planned' groups contain theirs, 'compensating' ones do not,
+            # because that day's balance is the meals already logged on it.
+            {"date": row.date.isoformat(),
+             "event_date": row.event_date.isoformat(),
+             "kind": row.kind, "calorie_delta": row.calorie_delta,
+             "created_at": row.created_at.isoformat()}
+            for row in plan_days
         ],
         "meal_templates": [
             # Same empty-string guard as ai_analyses below: items_json is

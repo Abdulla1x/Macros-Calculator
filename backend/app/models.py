@@ -92,6 +92,14 @@ class Meal(Base):
     # fabricating an observation. NULL means "unknown"; readers fall back to
     # `date` and get eat-date precision for history, real precision after.
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=utcnow)
+    # `updated_at` is when the row was last REWRITTEN, and is null until it is.
+    # Null therefore means "no recorded edit" -- either the meal has never been
+    # corrected, or it was corrected before this column existed. It is not
+    # defaulted to `created_at` on insert: a row that was never edited has no
+    # edit time, and stamping one would make every meal look revised. Readers
+    # wanting "when did this row last change" take updated_at or created_at,
+    # in that order.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     name: Mapped[str] = mapped_column(String(200))
     calories: Mapped[float] = mapped_column(Float)
     protein: Mapped[float] = mapped_column(Float)
@@ -359,6 +367,70 @@ class SupplementLog(Base):
             "date",
             "time_of_day",
             unique=True,
+        ),
+    )
+
+
+class CaloriePlanDay(Base):
+    """One day whose calorie target has been moved, and the plan it belongs to.
+
+    Calorie goals live as four scalar columns on the single `settings` row, and
+    `targets.apply_auto_targets` rewrites all four on every settings save and
+    every weigh-in. So a banked day cannot be stored there: Tuesday's weigh-in
+    would silently erase it. These rows sit alongside and are applied on top at
+    read time, which also means cancelling a plan restores the underlying goal
+    exactly, with nothing to recompute.
+
+    One row per *adjusted* day. The day a plan is about is `event_date`, and
+    whether that day has a row of its own is precisely what `kind` distinguishes:
+
+      * 'planned' -- a big day arranged in advance. It is itself adjusted, so it
+        has a row here, and the group's deltas sum to zero.
+      * 'compensating' -- a day that already ran over or under, spread across
+        the days ahead. It has NO row: the other side of that ledger is the
+        meals already logged on it. A past-dated row written to balance the
+        books would look, to every date-keyed reader in this app, like a target
+        adjustment on a day that is already finished.
+
+    `kind` is stored rather than derived from that presence test. It is
+    derivable today, but the two kinds satisfy different invariants and neither
+    is re-checkable once written, so leaving it implicit would mean the rule
+    lived only in whichever reader last looked -- the way `admin.py`'s
+    `_TIMESTAMPED` membership rule was wrong from Phase 2 until someone checked.
+
+    See `app/banking.py` for the arithmetic and the write-time validation. All
+    of it happens there; this table only records the result.
+    """
+
+    __tablename__ = "calorie_plan_days"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # The day this row moves the target of. Always today or later when written
+    # -- a day whose meals are already logged cannot have the target it was
+    # measured against changed after the fact.
+    date: Mapped[date_type] = mapped_column(Date)
+    # The day the plan is *about*, and the group key: cancelling a plan deletes
+    # every row sharing one. Not a separate table and not a uuid, because
+    # grouping is the only thing either would buy and this is already unique
+    # per plan -- the index below stops two plans overlapping.
+    event_date: Mapped[date_type] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(12))
+    # Signed: negative shaves the day, positive raises it.
+    calorie_delta: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    # One adjustment per day, ever. Two plans may not both move the same day:
+    # stacked deltas would make "cancel this plan" ambiguous about which of
+    # them to remove, so a plan touching an owned day is refused and names its
+    # owner instead of silently merging.
+    __table_args__ = (
+        Index(
+            "uq_calorie_plan_days_user_date", "user_id", "date", unique=True
+        ),
+        CheckConstraint(
+            "kind IN ('planned', 'compensating')",
+            name="ck_calorie_plan_days_kind",
         ),
     )
 

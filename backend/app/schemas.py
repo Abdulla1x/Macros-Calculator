@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from .banking import MAX_DAY_DELTA_KCAL, MAX_PLAN_DAYS
+
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -91,6 +93,12 @@ class Meal(MealCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # Response-only, and deliberately not on MealCreate: the client states what
+    # was eaten, the server states when the row last changed. Declared without
+    # a default so that a row missing the attribute raises here instead of
+    # silently reporting an unedited meal -- the from_attributes trap. Null is
+    # the honest value for a meal with no recorded edit, not a missing one.
+    updated_at: datetime | None
 
 
 # Bounds the size of MealTemplate.items_json. Named for the same reason
@@ -517,6 +525,132 @@ class SupplementLogCreate(BaseModel):
         return value
 
 
+# How far ahead a plan may reach. MAX_PLAN_DAYS caps how many days a plan
+# covers; this caps how far away they are, which is a different thing -- 14 days
+# scattered across the next decade would satisfy the first bound and be
+# meaningless. A year is well past any real plan and still catches a mistyped
+# year, which is the failure this is actually for.
+MAX_PLAN_HORIZON_DAYS = 365
+
+
+class CaloriePlanCreate(BaseModel):
+    """Ask for calories to be moved between days.
+
+    `dates` are the days that ABSORB the change, and never include the event
+    day. For a planned day that means the days funding it; for a compensating
+    one, the days taking on the difference. The event day is separate because
+    the two kinds treat it differently -- a planned day is itself adjusted and
+    gets a row, a compensated one is already logged and does not.
+
+    There is no amount for a compensating plan, deliberately. How far the day
+    ran over is measured from the meals on it against the target that day
+    actually had, server-side, at the moment the plan is written. Accepting a
+    figure from the client would let a stale number -- read before the last
+    meal was logged, or before the goal changed -- become the plan.
+
+    The split across `dates` is server-side for the same reason: the parts have
+    to provably re-add to the whole, and that is not a promise a client can
+    make on this app's behalf.
+    """
+
+    kind: Literal["planned", "compensating"]
+    event_date: date_type
+    dates: list[date_type] = Field(min_length=1, max_length=MAX_PLAN_DAYS)
+    # Signed, and only meaningful for a planned day: positive for a bigger day
+    # funded by the others, negative for a smaller one whose savings they take
+    # on. Ignored for `compensating`, where the amount is measured rather than
+    # asked for.
+    calorie_delta: float | None = Field(
+        default=None, ge=-MAX_DAY_DELTA_KCAL, le=MAX_DAY_DELTA_KCAL,
+        allow_inf_nan=False,
+    )
+
+    @field_validator("dates", "event_date")
+    @classmethod
+    def within_the_horizon(cls, value):
+        # The mirror image of every other date validator in this file. Those
+        # refuse the future because a weigh-in or a meal can only describe
+        # something that has happened; this is the first feature whose dates are
+        # deliberately ahead of today, so what it refuses is a date so far out
+        # that it is certainly a typo.
+        limit = date_type.today() + timedelta(days=MAX_PLAN_HORIZON_DAYS)
+        days = value if isinstance(value, list) else [value]
+        for day in days:
+            if day > limit:
+                raise ValueError(
+                    f"a plan cannot reach more than {MAX_PLAN_HORIZON_DAYS} "
+                    f"days ahead"
+                )
+        return value
+
+
+class PlanDay(BaseModel):
+    """One day's effective targets — the four numbers its rings are drawn against.
+
+    Deliberately not `Settings`, whose four goals are `gt=0`. That model is a
+    response model as well as a request one, which is the entire reason
+    `targets.MIN_WRITTEN_GOAL` exists: a zero that was legal to write turns
+    every later read into a 500. These are `ge=0` because a shaved day's carb
+    target genuinely can floor at zero, and this model is built by hand in the
+    router rather than from an ORM row, so nothing about it is stored.
+
+    `calorie_delta` is None on an ordinary day. It is not zero: "no plan touches
+    this day" and "a plan touches it and moves it by nothing" are different
+    facts, and only one of them has something to cancel.
+    """
+
+    date: date_type
+    calorie_goal: float = Field(ge=0, allow_inf_nan=False)
+    protein_goal: float = Field(ge=0, allow_inf_nan=False)
+    carbs_goal: float = Field(ge=0, allow_inf_nan=False)
+    fat_goal: float = Field(ge=0, allow_inf_nan=False)
+    calorie_delta: float | None = None
+    kind: Literal["planned", "compensating"] | None = None
+    event_date: date_type | None = None
+
+
+class CaloriePlan(BaseModel):
+    """A whole plan: the day it is about, and every day adjusted for it."""
+
+    event_date: date_type
+    kind: Literal["planned", "compensating"]
+    created_at: datetime | None = None
+    days: list[PlanDay] = []
+    # What the plan moves in total. Zero for a planned group by definition --
+    # shown anyway, because a number the user can check beats a promise that it
+    # balances.
+    total_delta: float = 0
+    # Whether anything is still left to cancel. False once every adjusted day is
+    # in the past, which is not the same as the plan not existing.
+    can_cancel: bool = False
+
+
+class DaySurplus(BaseModel):
+    """How far a finished day ran from its target, and what it was measured against.
+
+    `consumed_calories` and `reference_calories` travel separately rather than
+    pre-subtracted, because the reference is the weak half and the screen has to
+    be able to say so. No historical target is stored anywhere in this app --
+    `settings.calorie_goal` is one mutable column that `apply_auto_targets`
+    rewrites on every weigh-in -- so the reference here is what that day's
+    target is *now*, plus any adjustment already on it. If the goal has moved
+    since, this number moves with it.
+
+    `meal_count` is the guard against the worst reading of all: zero meals
+    logged is not a day of eating nothing, and a surplus computed from it would
+    invite a large and entirely fictional compensation.
+    """
+
+    date: date_type
+    consumed_calories: float
+    reference_calories: float
+    surplus_calories: float
+    meal_count: int
+    # The adjustment already on that day, if any -- so "you went 300 over"
+    # means over the target the day actually had, not over the stock goal.
+    calorie_delta: float | None = None
+
+
 ACTIVITY_LEVELS = Literal["sedentary", "light", "moderate", "active", "very_active"]
 
 
@@ -871,3 +1005,9 @@ class AdminUserRow(BaseModel):
     # use. Counts only -- never a name, see the privacy note on the router.
     supplements: int = 0
     supplement_logs: int = 0
+    # Rows, not plans: one banked Saturday is four or five of these. The count
+    # answers "does anyone use this", which is what it is here for, and a
+    # per-plan figure would need a grouping query for a number nobody acts on.
+    # Never an event_date -- see the privacy note on the router. A date is the
+    # disclosive part: it says this person has something on the 5th.
+    calorie_plan_days: int = 0

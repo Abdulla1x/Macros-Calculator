@@ -47,3 +47,17 @@ export function addDays(iso: string, delta: number): string {
   const [year, month, day] = isoParts(iso)
   return localIsoDate(new Date(year, month - 1, day + delta))
 }
+
+// The `count` consecutive days starting at `start`, as YYYY-MM-DD strings.
+//
+// Built on addDays rather than on a Date incremented in a loop, so month and
+// year rollover and DST are handled in exactly one place. `count` of zero
+// yields an empty list, which is the honest answer rather than a special case
+// worth refusing.
+//
+// Only the calorie planner needs this today: it is the one screen that offers
+// a run of *future* days to choose between. Everywhere else in the app a date
+// is either today or one the user picked.
+export function dayRange(start: string, count: number): string[] {
+  return Array.from({ length: Math.max(count, 0) }, (_, i) => addDays(start, i))
+}

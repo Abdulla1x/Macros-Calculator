@@ -24,7 +24,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ### 🔐 Accounts & privacy
 - **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login, signup and password reset
-- **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
+- **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, calorie plans, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Layered AI quotas**: 20 analyses + 40 voice notes per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All three are env-tunable
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - **Password reset by email**: single-use link, hashed at rest and valid for an hour; using it revokes every existing session. `POST /api/auth/forgot-password` answers identically whether or not the address has an account
@@ -34,6 +34,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Water tracker** with configurable quick-add buttons and a goal derived from your trend weight — shown with the arithmetic, not just the answer
 - **Steps tracker**, typed in by hand or imported from a `date,steps` CSV — no phone or watch sync is possible in a web app, and the UI says so rather than implying one. Set a goal or don't; with none set the card shows the count alone
 - **Supplement tracker** — a list with a dose and the times of day you take it, ticked off from the dashboard. Reminders are in-app only, deliberately: push on Android needs Google Play Services and scheduled local notifications need a browser API nobody shipped, so the card says a dose is overdue while you have it open and never pretends it will reach your phone. Pausing keeps the history; deleting does not
+- **Calorie planning** — move calories between days without moving the week. Plan a bigger day and fund it from the days around it, or spread a day that already ran over across the days ahead (and the mirror when bulking and under). Three things are deliberate: it is **not a debt** — measured expenditure already absorbs one large day as a slightly slower week, so this only decides where it lands; **nothing prompts you** — one standing link under the calorie ring, present whether the day went well or badly, because an app that asks after every overshoot is a different kind of app; and **you pick the days**, with the server only refusing a spread that would take one below a safe calorie floor, naming the day rather than quietly shaving less than you asked. Protein never moves — carbohydrate and fat absorb the difference
 - Today's meal list with inline edit and delete
 - 7-day calorie trend sparkline
 
@@ -97,12 +98,13 @@ Macros-Calculator
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, CORS, lifespan
 │   │   ├── db.py                # SQLAlchemy engine + session dependency
-│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, steps, supplements, supplement_logs, ai_analyses, password_resets)
+│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, steps, supplements, supplement_logs, calorie_plan_days, ai_analyses, password_resets)
 │   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
 │   │   ├── calculations.py      # Macro scaling, weight trend, BMR/TDEE/target math
 │   │   ├── targets.py           # Body profile → daily targets (the Phase 5 swap point)
+│   │   ├── banking.py           # Moving calories between days: the split, the floors, the two sum rules
 │   │   ├── schemas.py           # Pydantic models
-│   │   ├── routers/             # meals, meal_templates, foods, weights, water, steps, supplements, analytics, settings, data (CSV), ai, admin
+│   │   ├── routers/             # meals, meal_templates, foods, weights, water, steps, supplements, plan, analytics, settings, data (CSV), ai, admin
 │   │   └── services/
 │   │       ├── off_client.py    # Open Food Facts client
 │   │       ├── meal_ai.py       # AI meal analysis (only AI-provider-aware module)
@@ -297,6 +299,10 @@ on the caller's data, except these public ones: `/api/health`,
 | GET/POST | `/api/steps` | One day's steps (count, goal, walking estimate) / save the day's count (upsert) |
 | DELETE | `/api/steps` | Clear a day's count back to never logged |
 | POST | `/api/data/import/steps` | Import a step history from a two-column `date,steps` CSV; days already logged are kept |
+| GET | `/api/plan/day` | One day's **effective** targets — the four numbers its rings are drawn against, after any plan |
+| GET/POST | `/api/plan` | Upcoming plans / create one (validated as a set; refusals name every offending day) |
+| DELETE | `/api/plan/{event_date}` | Cancel a plan, removing only the days it has not spent yet |
+| GET | `/api/plan/surplus` | How far a finished day ran from its target, with what it was measured against |
 | GET | `/api/supplements/day` | One day's doses: every scheduled slot and whether it was ticked |
 | POST/DELETE | `/api/supplements/log` | Tick / un-tick one dose; both idempotent, both return the updated day |
 | GET/POST | `/api/supplements` | The supplement list (paused ones included) / add one |
