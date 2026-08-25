@@ -308,6 +308,31 @@ export interface MealTemplate {
 
 export type MealTemplateCreate = Omit<MealTemplate, 'id' | 'created'>
 
+/** A meal encoded as a string, ready to hand to someone. */
+export interface ShareCode {
+  code: string
+}
+
+/**
+ * A meal that arrived in a code.
+ *
+ * Structurally a MealTemplateCreate, deliberately: that is what lets
+ * rowsFromTemplate apply it unchanged, including its fallback to a single
+ * totals row when `items` is empty — which is exactly the case for a code made
+ * from a logged meal, since meals do not keep their ingredient rows.
+ *
+ * Carries no id and no date. The date in a code would be when the *sender* ate
+ * it, and the form defaults to the recipient's own day instead.
+ */
+export interface SharedMeal {
+  name: string
+  calories: number
+  protein: number
+  carbs: number | null
+  fat: number | null
+  items: TemplateItem[]
+}
+
 export interface Food {
   id: number
   name: string

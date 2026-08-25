@@ -22,6 +22,8 @@ import type {
   OFFProduct,
   PlanDay,
   Settings,
+  ShareCode,
+  SharedMeal,
   StepDay,
   StepEntry,
   TokenResponse,
@@ -203,6 +205,19 @@ export const api = {
     }),
   deleteMealTemplate: (id: number) =>
     request<void>(`/api/meal-templates/${id}`, { method: 'DELETE' }),
+
+  // --- Meal codes ---------------------------------------------------------
+  // A code IS the meal, not a link to it: see backend/app/share.py. Nothing is
+  // stored server-side, so there is no code to delete and nothing to revoke.
+  shareMeal: (id: number) => request<ShareCode>(`/api/share/meal/${id}`),
+  shareMealTemplate: (id: number) => request<ShareCode>(`/api/share/template/${id}`),
+  // POST for a pure read: a code runs to hundreds of characters, which strains
+  // query-string limits, and a URL would be written to the edge access log.
+  decodeMealCode: (code: string) =>
+    request<SharedMeal>('/api/share/decode', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
 
   // The whole library, unbounded and sorted by name -- what the Settings
   // editor lists. searchFoods below is the autocomplete's query and caps at 10,
