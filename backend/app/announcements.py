@@ -29,6 +29,39 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-26-easier-on-phones",
+        date="2026-08-26",
+        title="A better shape on a phone, and easier to read everywhere",
+        body=(
+            "Navigation has moved to a bar along the bottom on phones, the way "
+            "most apps you already use put it. It stays put while you scroll, so "
+            "you can get out of a long Settings page without scrolling back to "
+            "the top first. On a wide screen the sidebar is unchanged, except "
+            "that it now stays put too.\n\n"
+            "**Every button and box now shows where the keyboard is.** If you "
+            "move around with Tab rather than a finger, there is a green outline "
+            "on whatever you are about to press. There was nothing before. "
+            "There is also a \"skip to content\" link as the first thing you "
+            "reach, so you are not tabbing past five menu items on every "
+            "page.\n\n"
+            "**The small grey explanatory text is lighter.** It was failing the "
+            "standard contrast minimum on around a hundred places in the app -- "
+            "and since that grey text is where this app explains what a number "
+            "means and how much to trust it, it was the wrong text to have been "
+            "hard to read.\n\n"
+            "Tapping a box no longer zooms the page in on a phone. That was "
+            "happening on every text field, not just some.\n\n"
+            "**Logging a meal has Today and Yesterday buttons** next to the date, "
+            "with arrows for stepping a day at a time -- fewer taps than opening "
+            "the calendar, which is where nearly every meal was going anyway.\n\n"
+            "Finally, this pop-up no longer dumps every release note ever "
+            "written at you the first time you sign in. New accounts get a hello "
+            "and nothing else, and from now on you will see the newest few. "
+            "Everything ever written is under **What\u2019s new**, linked from "
+            "Settings under Account."
+        ),
+    ),
+    Announcement(
         id="2026-08-26-meal-codes",
         date="2026-08-26",
         title="Hand someone a meal, without handing them your account",
