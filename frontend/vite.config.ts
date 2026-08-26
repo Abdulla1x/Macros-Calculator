@@ -20,8 +20,15 @@ export default defineConfig({
         name: 'Macros Calculator',
         short_name: 'Macros',
         description: 'Track meals, macros, and goals',
+        // theme_color paints the PWA status bar and matches the opaque sticky
+        // header (bg-surface) exactly, so the two meet with no seam. It is also
+        // duplicated in index.html — if the surface ramp is ever retuned, both
+        // must move together.
         theme_color: '#0f172a',
-        background_color: '#0f172a',
+        // The splash screen, which should be the page ground rather than the
+        // header. body is slate-950; this said slate-900 and flashed the wrong
+        // colour on every cold launch.
+        background_color: '#020617',
         display: 'standalone',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },

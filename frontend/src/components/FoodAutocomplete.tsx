@@ -115,7 +115,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
         className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500"
       />
       {open && (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
+        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
           {localResults.length > 0 && (
             <ul className="max-h-56 overflow-y-auto">
               {localResults.map((food) => (

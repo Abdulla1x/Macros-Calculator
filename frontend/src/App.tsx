@@ -38,10 +38,12 @@ export default function App() {
           <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
-          {/* Deliberately absent from Layout's nav: only the operator uses it,
-              and the nav already degrades to emoji-only below `sm`. Reached by
-              typing the URL; guarded here for display and by require_admin on
-              the server for real. */}
+          {/* Deliberately absent from Layout's nav: only the operator uses it.
+              This used to also cite the nav degrading to emoji-only below `sm`;
+              that is no longer true — the tab bar labels every item at every
+              width — so the operator-only reason is the whole reason now.
+              Reached by typing the URL; guarded here for display and by
+              require_admin on the server for real. */}
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<Admin />} />
           </Route>
