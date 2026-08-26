@@ -47,7 +47,7 @@ export default function Layout() {
           <span className="text-2xl">🍽️</span>
           <div>
             <h1 className="text-base font-bold tracking-tight">Macros Calculator</h1>
-            <p className="text-xs text-slate-500">Nutrition tracker</p>
+            <p className="text-xs text-ink-faint">Nutrition tracker</p>
           </div>
         </div>
         <nav className="flex gap-1 px-3 pb-3 md:flex-col md:pb-0">
@@ -70,7 +70,7 @@ export default function Layout() {
           ))}
         </nav>
         <div className="flex items-center justify-between gap-2 border-t border-slate-800 px-5 py-3 md:mt-auto">
-          <span className="truncate text-xs text-slate-500" title={user?.email}>
+          <span className="truncate text-xs text-ink-faint" title={user?.email}>
             {user?.email}
           </span>
           <button

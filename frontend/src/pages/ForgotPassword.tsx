@@ -50,7 +50,7 @@ export default function ForgotPassword() {
                 don't own a domain yet, so the message genuinely looks like it
                 came from a stranger — saying so up front is the difference
                 between "check spam" and "report phishing". */}
-            <p className="text-slate-500">
+            <p className="text-ink-faint">
               It arrives from <span className="text-slate-300">Macros Calculator</span>{' '}
               but at an unfamiliar <code className="text-slate-300">brevosend.com</code>{' '}
               address, so check your spam folder if it isn't there in a few

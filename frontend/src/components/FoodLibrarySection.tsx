@@ -205,7 +205,7 @@ export default function FoodLibrarySection({
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter food library"
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500 focus:outline-none"
           />
           <span className="text-xs text-slate-400">
             {items.length} food{items.length === 1 ? '' : 's'}

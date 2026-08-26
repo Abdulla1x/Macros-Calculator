@@ -112,7 +112,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => value.trim().length >= 2 && setOpen(true)}
         placeholder="Type a food name…"
-        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500 focus:outline-none"
       />
       {open && (
         <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
@@ -167,7 +167,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                     <span>
                       <span className="font-medium">{product.name}</span>
                       {product.brand && (
-                        <span className="ml-2 text-xs text-slate-500">{product.brand}</span>
+                        <span className="ml-2 text-xs text-ink-faint">{product.brand}</span>
                       )}
                       <span className="ml-2 text-xs text-slate-400">{macroSummary(product)}</span>
                     </span>

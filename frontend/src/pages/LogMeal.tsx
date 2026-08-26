@@ -432,7 +432,7 @@ export default function LogMeal() {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-slate-500 focus:border-emerald-500 focus:outline-none'
+    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500 focus:outline-none'
 
   return (
     <div className="space-y-6">
@@ -485,7 +485,7 @@ export default function LogMeal() {
               {rows.length > 1 && (
                 <button
                   onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
-                  className="text-xs text-slate-500 hover:text-rose-400"
+                  className="text-xs text-ink-faint hover:text-rose-400"
                 >
                   Remove
                 </button>
@@ -623,13 +623,13 @@ export default function LogMeal() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-800/60 px-4 py-3">
           <p className="text-sm">
             <span className="font-semibold text-amber-400">{Math.round(totals.calories)} kcal</span>
-            <span className="mx-2 text-slate-600">·</span>
+            <span className="mx-2 text-ink-faint">·</span>
             <span className="font-semibold text-emerald-400">
               {Math.round(totals.protein * 10) / 10} g protein
             </span>
             {settings?.track_carbs && totals.carbs !== null && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-sky-400">
                   {Math.round(totals.carbs * 10) / 10} g carbs
                 </span>
@@ -637,13 +637,13 @@ export default function LogMeal() {
             )}
             {settings?.track_fat && totals.fat !== null && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-rose-400">
                   {Math.round(totals.fat * 10) / 10} g fat
                 </span>
               </>
             )}
-            <span className="ml-2 text-xs text-slate-500">
+            <span className="ml-2 text-xs text-ink-faint">
               ({validRows.length} of {rows.length} ingredient{rows.length === 1 ? '' : 's'} counted)
             </span>
           </p>

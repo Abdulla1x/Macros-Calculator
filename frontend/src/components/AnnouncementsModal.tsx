@@ -85,7 +85,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
           <button
             onClick={close}
             aria-label="Close"
-            className="text-slate-500 hover:text-slate-300"
+            className="text-ink-faint hover:text-slate-300"
           >
             ✕
           </button>
@@ -98,7 +98,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
                 <h3 className="text-sm font-semibold text-emerald-300">{item.title}</h3>
                 <time
                   dateTime={item.date}
-                  className="shrink-0 text-[11px] text-slate-500"
+                  className="shrink-0 text-[11px] text-ink-faint"
                 >
                   {parseIsoDate(item.date).toLocaleDateString(undefined, {
                     day: 'numeric',
@@ -119,7 +119,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
           Got it
         </button>
 
-        <p className="mt-3 text-center text-xs text-slate-500">
+        <p className="mt-3 text-center text-xs text-ink-faint">
           Found a bug or want something?{' '}
           <a
             href={`mailto:${CONTACT_EMAIL}`}

@@ -86,7 +86,7 @@ export default function StepsCard({ date }: Props) {
         <h3 className="font-semibold">
           <span className="mr-2">👟</span>Steps
         </h3>
-        <p className="mt-3 text-xs text-slate-500">{error ?? 'Loading…'}</p>
+        <p className="mt-3 text-xs text-ink-faint">{error ?? 'Loading…'}</p>
       </div>
     )
   }
@@ -131,7 +131,7 @@ export default function StepsCard({ date }: Props) {
             <button
               onClick={clear}
               disabled={busy}
-              className="ml-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40"
+              className="ml-auto text-xs text-ink-faint hover:text-slate-300 disabled:opacity-40"
             >
               Clear this day
             </button>

@@ -113,7 +113,7 @@ export default function SupplementsCard({ date }: Props) {
         <h3 className="font-semibold">
           <span className="mr-2">💊</span>Supplements
         </h3>
-        <p className="mt-3 text-xs text-slate-500">{error}</p>
+        <p className="mt-3 text-xs text-ink-faint">{error}</p>
       </div>
     )
   }
@@ -159,17 +159,17 @@ export default function SupplementsCard({ date }: Props) {
                     onChange={() => toggle(slot)}
                     className="h-4 w-4 shrink-0 accent-amber-400"
                   />
-                  <span className="shrink-0 tabular-nums text-xs text-slate-500">
+                  <span className="shrink-0 tabular-nums text-xs text-ink-faint">
                     {slot.time}
                   </span>
                   <span
                     className={`truncate ${
-                      slot.taken ? 'text-slate-500 line-through' : 'text-slate-200'
+                      slot.taken ? 'text-ink-faint line-through' : 'text-slate-200'
                     }`}
                   >
                     {slot.name}
                     {slot.dose && (
-                      <span className="ml-1.5 text-xs text-slate-500">{slot.dose}</span>
+                      <span className="ml-1.5 text-xs text-ink-faint">{slot.dose}</span>
                     )}
                   </span>
                   {isOverdue && (
@@ -183,7 +183,7 @@ export default function SupplementsCard({ date }: Props) {
                       taken into one with a miss in it. */}
                   {slot.off_schedule && !isOverdue && (
                     <span
-                      className="ml-auto shrink-0 text-xs text-slate-600"
+                      className="ml-auto shrink-0 text-xs text-ink-faint"
                       title="Not on your current schedule — shown because you ticked it on this day"
                     >
                       was scheduled

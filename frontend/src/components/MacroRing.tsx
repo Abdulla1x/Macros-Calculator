@@ -40,11 +40,11 @@ export default function MacroRing({ label, value, goal, unit, color, caption }: 
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xl font-bold">{Math.round(value)}</span>
-          <span className="text-xs text-slate-500">/ {Math.round(goal)} {unit}</span>
+          <span className="text-xs text-ink-faint">/ {Math.round(goal)} {unit}</span>
         </div>
       </div>
       <span className="mt-2 text-sm font-medium text-slate-300">{label}</span>
-      <span className="text-xs text-slate-500">{Math.round(ratio * 100)}% of goal</span>
+      <span className="text-xs text-ink-faint">{Math.round(ratio * 100)}% of goal</span>
       {caption && (
         <span className="mt-1 text-center text-[11px] leading-tight text-slate-400">
           {caption}

@@ -60,7 +60,7 @@ export default function ShareCodePanel({
         <button
           onClick={onClose}
           aria-label="Close the meal code panel"
-          className="text-xs text-slate-500 hover:text-slate-200"
+          className="text-xs text-ink-faint hover:text-slate-200"
         >
           ✕
         </button>
@@ -83,7 +83,7 @@ export default function ShareCodePanel({
       <div className="mt-3 flex items-center gap-3">
         <button
           onClick={copy}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold"
+          className="rounded-lg bg-brand text-brand-ink px-4 py-2 text-sm font-semibold"
         >
           Copy code
         </button>

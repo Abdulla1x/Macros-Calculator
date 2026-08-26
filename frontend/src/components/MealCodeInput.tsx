@@ -88,7 +88,7 @@ export default function MealCodeInput({
           type="button"
           onClick={load}
           disabled={loading}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          className="rounded-lg bg-brand text-brand-ink px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
           {loading ? 'Loading…' : 'Load meal'}
         </button>

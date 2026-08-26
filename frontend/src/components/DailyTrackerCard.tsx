@@ -87,7 +87,7 @@ export default function DailyTrackerCard({
               style={{ width: `${width}%`, background: color }}
             />
           </div>
-          <p className="mt-1 text-right text-xs text-slate-500">
+          <p className="mt-1 text-right text-xs text-ink-faint">
             {Math.round(ratio * 100)}% of goal
           </p>
         </>
@@ -101,7 +101,7 @@ export default function DailyTrackerCard({
         </p>
       )}
 
-      {caption && <p className="mt-3 text-xs text-slate-500">{caption}</p>}
+      {caption && <p className="mt-3 text-xs text-ink-faint">{caption}</p>}
     </div>
   )
 }

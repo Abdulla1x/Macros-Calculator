@@ -91,7 +91,7 @@ export default function WaterCard({ date }: Props) {
         <h3 className="font-semibold">
           <span className="mr-2">💧</span>Water
         </h3>
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-ink-faint">
           {error ?? 'Loading…'}
         </p>
       </div>
@@ -152,7 +152,7 @@ export default function WaterCard({ date }: Props) {
             <button
               onClick={undo}
               disabled={busy}
-              className="ml-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40"
+              className="ml-auto text-xs text-ink-faint hover:text-slate-300 disabled:opacity-40"
             >
               Undo last (−{Math.round(lastEntry.ml)})
             </button>

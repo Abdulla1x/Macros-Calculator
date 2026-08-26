@@ -116,7 +116,7 @@ export default function Admin() {
       )}
 
       {loading && !stats && (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink-faint">Loading…</p>
       )}
 
       {stats && (
@@ -228,10 +228,10 @@ export default function Admin() {
 
           <section className={cardClass}>
             <h3 className="mb-3 text-sm font-semibold">
-              Accounts <span className="text-slate-500">({users.length})</span>
+              Accounts <span className="text-ink-faint">({users.length})</span>
             </h3>
             {users.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-500">
+              <p className="py-6 text-center text-sm text-ink-faint">
                 No accounts yet.
               </p>
             ) : (
@@ -300,7 +300,7 @@ export default function Admin() {
             )}
           </section>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-faint">
             AI calls today: {stats.ai_calls_today} of{' '}
             {stats.ai_global_daily_limit} ({aiShare}% of the global cap).
             {Object.entries(stats.ai_calls_30d_by_kind).length > 0 && (

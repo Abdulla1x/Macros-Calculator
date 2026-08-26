@@ -221,7 +221,7 @@ export default function Settings() {
               className={fieldClass}
               style={{ colorScheme: 'dark' }}
             />
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Stored as the date, so your age stays right without you editing it.
             </span>
           </label>
@@ -275,7 +275,7 @@ export default function Settings() {
                 </button>
               )}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-ink-faint">
               The formula we use to estimate what you burn (Mifflin-St Jeor) only
               takes male or female. That is a limit of the formula, not of you —
               the field is optional, and everything else here still works without
@@ -297,7 +297,7 @@ export default function Settings() {
               onBlur={guard('goal_rate_kg_per_week')}
               className={fieldClass}
             />
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Negative to lose, positive to gain, 0 to maintain. Leave it blank
               and we won't guess — "not set" and "maintain" aren't the same
               answer. Anything past 1 kg/week gets capped, and we'll say so.
@@ -318,7 +318,7 @@ export default function Settings() {
           />
           <span>
             Work out my goals from my body profile
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Turning this on <strong>replaces</strong> the four goals below with
               calculated ones, and keeps updating them every time you log a
               weigh-in. Anything you typed here yourself is not kept — hit Save
@@ -348,7 +348,7 @@ export default function Settings() {
           ))}
         </div>
         {settings.targets_auto && (
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-ink-faint">
             Calculated from your body profile. These update on save and whenever
             you log a weigh-in.
           </p>
@@ -464,10 +464,10 @@ function StepsSection({
             aria-label="Daily step goal"
             className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
           />
-          <span className="text-xs text-slate-500">steps</span>
+          <span className="text-xs text-ink-faint">steps</span>
         </span>
       </label>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-ink-faint">
         Leave this empty and the card just shows your count. There is no default
         here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a
         number worked out from anything about you.
@@ -480,7 +480,7 @@ function StepsSection({
           this?" */}
       <div className="mt-5 border-t border-slate-800 pt-4">
         <h4 className="mb-1 text-sm font-semibold">Import a step history</h4>
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-ink-faint">
           A CSV with a <code className="text-slate-400">date</code> column and a{' '}
           <code className="text-slate-400">steps</code> column, one row per day.
           Extra columns are ignored, so Samsung Health's{' '}
@@ -683,7 +683,7 @@ function SupplementsSection({
       </p>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink-faint">Loading…</p>
       ) : (
         <ul className="mb-3 space-y-2">
           {items.map((item) => (
@@ -703,13 +703,13 @@ function SupplementsSection({
                 />
               ) : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span className={item.active ? 'text-slate-200' : 'text-slate-500'}>
+                  <span className={item.active ? 'text-slate-200' : 'text-ink-faint'}>
                     {item.name}
                     {item.dose && (
-                      <span className="ml-1.5 text-xs text-slate-500">{item.dose}</span>
+                      <span className="ml-1.5 text-xs text-ink-faint">{item.dose}</span>
                     )}
                   </span>
-                  <span className="text-xs tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-ink-faint">
                     {item.times.join(' · ')}
                   </span>
                   {!item.active && (
@@ -753,7 +753,7 @@ function SupplementsSection({
                         onClick={() => setConfirmDelete(item.id)}
                         disabled={busy}
                         aria-label={`Delete ${item.name}`}
-                        className="text-slate-500 hover:text-rose-400 disabled:opacity-40"
+                        className="text-ink-faint hover:text-rose-400 disabled:opacity-40"
                       >
                         Delete
                       </button>
@@ -799,7 +799,7 @@ function SupplementsSection({
       )}
 
       {items.length >= MAX_SUPPLEMENTS && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-faint">
           That is the {MAX_SUPPLEMENTS}-supplement limit — a tick list longer
           than that stops being one you can actually read every day.
         </p>
@@ -869,7 +869,7 @@ function SupplementForm({
             <button
               onClick={() => removeTime(index)}
               aria-label={`Remove time ${index + 1}`}
-              className="rounded-r-lg border border-l-0 border-slate-700 px-2 text-xs text-slate-500 hover:text-rose-400"
+              className="rounded-r-lg border border-l-0 border-slate-700 px-2 text-xs text-ink-faint hover:text-rose-400"
             >
               ✕
             </button>
@@ -974,7 +974,7 @@ function WaterSection({
           />
           <span>
             From my weight
-            <span className="mt-0.5 block text-xs text-slate-500">
+            <span className="mt-0.5 block text-xs text-ink-faint">
               {WATER_ML_PER_KG} ml for every kg of your trend weight. A common
               rule of thumb, not a measurement — and it needs a weigh-in, so
               until then the card shows a general default and says so.
@@ -1012,7 +1012,7 @@ function WaterSection({
                   aria-label="Daily water goal in ml"
                   className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
                 />
-                <span className="text-xs text-slate-500">ml</span>
+                <span className="text-xs text-ink-faint">ml</span>
               </span>
             )}
           </span>
@@ -1024,7 +1024,7 @@ function WaterSection({
         <div className="flex flex-wrap items-center gap-2">
           {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
             <span key={index} className="flex items-center gap-1">
-              <span className="text-xs text-slate-600">+</span>
+              <span className="text-xs text-ink-faint">+</span>
               <input
                 type="number"
                 min={1}
@@ -1037,7 +1037,7 @@ function WaterSection({
               />
             </span>
           ))}
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ink-faint">
             ml each. Clear one to remove that button.
           </span>
         </div>
@@ -1320,7 +1320,7 @@ function HeightField({
           />
         </label>
       </div>
-      <span className="mt-1 block text-xs text-slate-500">
+      <span className="mt-1 block text-xs text-ink-faint">
         Stored in centimetres; shown in feet and inches because your weight unit
         is pounds.
       </span>
@@ -1477,7 +1477,7 @@ function BodyTargetsCard({
           <div key={row.label}>
             <dt className="text-xs text-slate-400">{row.label}</dt>
             <dd className="text-lg font-semibold">{row.value}</dd>
-            <p className="mt-0.5 text-xs text-slate-500">{row.caption}</p>
+            <p className="mt-0.5 text-xs text-ink-faint">{row.caption}</p>
           </div>
         ))}
       </dl>

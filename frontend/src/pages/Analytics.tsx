@@ -256,7 +256,7 @@ export default function Analytics() {
           {loadError}
         </p>
       ) : (
-        <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-ink-faint">
           No meals in this date range yet.
         </p>
       )}
@@ -296,7 +296,7 @@ export default function Analytics() {
         )}
         {importError && <p className="mt-3 text-sm text-rose-400">{importError}</p>}
         {exportError && <p className="mt-3 text-sm text-rose-400">{exportError}</p>}
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-faint">
           CSV columns: date, name, calories, protein (carbs and fat optional).
         </p>
       </section>

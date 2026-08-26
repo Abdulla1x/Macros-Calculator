@@ -33,7 +33,7 @@
    *   ink-muted   6.96:1 on surface -- labels, secondary values
    *   ink-faint   5.12:1 on surface -- captions, the honesty copy
    *
-   * ink-faint replaces text-slate-500, which measured 3.75:1 on surface and
+   * ink-faint replaces the old slate-500 caption colour, which measured 3.75:1 and
    * failed AA at 94 caption sites.
    *
    * The value is chosen against the WORST background a caption actually sits on,
@@ -54,7 +54,7 @@
   --color-ink-faint: #7c8aa3;    /* measured, between slate-500 and slate-400 */
 
   /* Brand, and what goes ON brand. Pairing these is the point: the two
-   * bg-emerald-600 buttons in the app set no text colour at all, inherited
+   * emerald-600 buttons in the app set no text colour at all, inherited
    * slate-100 from body, and landed at 3.44:1. brand-ink is 7.95:1. */
   --color-brand: #10b981;        /* emerald-500 */
   --color-brand-ink: #020617;    /* slate-950 */
