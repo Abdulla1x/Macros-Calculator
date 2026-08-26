@@ -191,7 +191,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-slate-500 focus:border-emerald-500 focus:outline-none'
+    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500'
 
   if (!expanded) {
     return (
@@ -207,10 +207,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold">AI meal analysis</h3>
+        <h2 className="font-semibold">AI meal analysis</h2>
         <button
           onClick={() => setExpanded(false)}
-          className="text-xs text-slate-500 hover:text-slate-300"
+          className="text-xs text-ink-faint hover:text-slate-300"
         >
           Hide
         </button>
@@ -238,7 +238,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           <label className="block">
             <span className="mb-1 block text-xs text-slate-400">
               Meal photos{' '}
-              <span className="text-slate-500">
+              <span className="text-ink-faint">
                 ({files.length}/{MAX_IMAGES} — more angles sharpen the estimate)
               </span>
             </span>
@@ -328,12 +328,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             Refine with my note
           </button>
         )}
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink-faint">
           Estimates are approximate — review before saving.
         </p>
       </div>
 
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-ink-faint">
         Your photo, voice note, and description are sent to Google Gemini for analysis.
       </p>
 
@@ -348,7 +348,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       {analysis && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-800/40 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="font-semibold">{analysis.meal_name}</h4>
+            <h3 className="font-semibold">{analysis.meal_name}</h3>
             <span
               className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${confidenceBadge[analysis.confidence]}`}
             >
@@ -360,19 +360,19 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             <span className="font-semibold text-amber-400">
               ~{round(analysis.calories.estimate)} kcal
             </span>{' '}
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-ink-faint">
               ({round(analysis.calories.low)}–{round(analysis.calories.high)})
             </span>
-            <span className="mx-2 text-slate-600">·</span>
+            <span className="mx-2 text-ink-faint">·</span>
             <span className="font-semibold text-emerald-400">
               ~{round(analysis.protein.estimate)} g protein
             </span>{' '}
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-ink-faint">
               ({round(analysis.protein.low)}–{round(analysis.protein.high)})
             </span>
             {settings?.track_carbs && analysis.carbs && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-sky-400">
                   ~{round(analysis.carbs.estimate)} g carbs
                 </span>
@@ -380,7 +380,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             )}
             {settings?.track_fat && analysis.fat && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-rose-400">
                   ~{round(analysis.fat.estimate)} g fat
                 </span>
@@ -398,7 +398,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
 
           {analysis.assumptions.length > 0 && (
             <div className="mt-3">
-              <p className="mb-1 text-xs text-slate-500">
+              <p className="mb-1 text-xs text-ink-faint">
                 Assumed (tap one to correct it):
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -423,7 +423,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
               >
                 <span>
                   {item.name}{' '}
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-ink-faint">
                     ({round(item.portion_grams)} g)
                   </span>
                 </span>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
@@ -138,12 +138,12 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Settings</h2>
+        <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-sm text-slate-400">Choose what to track and set your daily goals.</p>
       </header>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Tracked macros</h3>
+        <h2 className="mb-3 font-semibold">Tracked macros</h2>
         <p className="mb-4 text-sm text-slate-400">
           Calories and protein are always tracked. Enable carbs and fat if you want the full
           breakdown — they appear on the dashboard, meal log and analytics.
@@ -172,7 +172,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Units</h3>
+        <h2 className="mb-3 font-semibold">Units</h2>
         <p className="mb-4 text-sm text-slate-400">
           How weights are shown on the Weight page. Entries are stored the same way
           either way, so switching converts your history rather than rewriting it.
@@ -203,7 +203,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">Body profile</h3>
+        <h2 className="mb-1 font-semibold">Body profile</h2>
         <p className="mb-4 text-sm text-slate-400">
           Optional, and the app works fine without it. Fill it in and we can work
           out your BMI, roughly what you burn in a day, and daily targets that
@@ -219,9 +219,8 @@ export default function Settings() {
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
               className={fieldClass}
-              style={{ colorScheme: 'dark' }}
             />
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Stored as the date, so your age stays right without you editing it.
             </span>
           </label>
@@ -236,7 +235,6 @@ export default function Settings() {
                 })
               }
               className={fieldClass}
-              style={{ colorScheme: 'dark' }}
             >
               <option value="">Not set</option>
               {activityOptions.map(({ value, label }) => (
@@ -275,7 +273,7 @@ export default function Settings() {
                 </button>
               )}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-ink-faint">
               The formula we use to estimate what you burn (Mifflin-St Jeor) only
               takes male or female. That is a limit of the formula, not of you —
               the field is optional, and everything else here still works without
@@ -297,7 +295,7 @@ export default function Settings() {
               onBlur={guard('goal_rate_kg_per_week')}
               className={fieldClass}
             />
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Negative to lose, positive to gain, 0 to maintain. Leave it blank
               and we won't guess — "not set" and "maintain" aren't the same
               answer. Anything past 1 kg/week gets capped, and we'll say so.
@@ -307,7 +305,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-4 font-semibold">Daily goals</h3>
+        <h2 className="mb-4 font-semibold">Daily goals</h2>
 
         <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
           <input
@@ -318,7 +316,7 @@ export default function Settings() {
           />
           <span>
             Work out my goals from my body profile
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="mt-1 block text-xs text-ink-faint">
               Turning this on <strong>replaces</strong> the four goals below with
               calculated ones, and keeps updating them every time you log a
               weigh-in. Anything you typed here yourself is not kept — hit Save
@@ -340,7 +338,7 @@ export default function Settings() {
                 readOnly={settings.targets_auto}
                 onChange={(event) => update({ [field.key]: Number(event.target.value) })}
                 onBlur={guard(field.key)}
-                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500 focus:outline-none ${
+                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base focus:border-emerald-500 sm:text-sm ${
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
               />
@@ -348,7 +346,7 @@ export default function Settings() {
           ))}
         </div>
         {settings.targets_auto && (
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-ink-faint">
             Calculated from your body profile. These update on save and whenever
             you log a weigh-in.
           </p>
@@ -392,7 +390,7 @@ export default function Settings() {
 }
 
 const fieldClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -432,7 +430,7 @@ function StepsSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">👟 Steps</h3>
+      <h2 className="mb-1 font-semibold">👟 Steps</h2>
       <p className="mb-4 text-sm text-slate-400">
         Step counts are typed in by hand. Reading them from your phone or watch
         needs Health Connect or Apple Health, and neither is open to a web app
@@ -462,12 +460,12 @@ function StepsSection({
               update({ steps_goal: null })
             }}
             aria-label="Daily step goal"
-            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-violet-500"
           />
-          <span className="text-xs text-slate-500">steps</span>
+          <span className="text-xs text-ink-faint">steps</span>
         </span>
       </label>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-ink-faint">
         Leave this empty and the card just shows your count. There is no default
         here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a
         number worked out from anything about you.
@@ -479,8 +477,8 @@ function StepsSection({
           manual, which is exactly where someone thinks "can I not just upload
           this?" */}
       <div className="mt-5 border-t border-slate-800 pt-4">
-        <h4 className="mb-1 text-sm font-semibold">Import a step history</h4>
-        <p className="mb-3 text-xs text-slate-500">
+        <h3 className="mb-1 text-sm font-semibold">Import a step history</h3>
+        <p className="mb-3 text-xs text-ink-faint">
           A CSV with a <code className="text-slate-400">date</code> column and a{' '}
           <code className="text-slate-400">steps</code> column, one row per day.
           Extra columns are ignored, so Samsung Health's{' '}
@@ -667,7 +665,7 @@ function SupplementsSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">💊 Supplements</h3>
+      <h2 className="mb-1 font-semibold">💊 Supplements</h2>
       <p className="mb-4 text-sm text-slate-400">
         What you take, and when. Each time you add becomes a box to tick on your
         dashboard. The card will tell you when a dose is overdue while the app
@@ -683,7 +681,7 @@ function SupplementsSection({
       </p>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink-faint">Loading…</p>
       ) : (
         <ul className="mb-3 space-y-2">
           {items.map((item) => (
@@ -703,13 +701,13 @@ function SupplementsSection({
                 />
               ) : (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span className={item.active ? 'text-slate-200' : 'text-slate-500'}>
+                  <span className={item.active ? 'text-slate-200' : 'text-ink-faint'}>
                     {item.name}
                     {item.dose && (
-                      <span className="ml-1.5 text-xs text-slate-500">{item.dose}</span>
+                      <span className="ml-1.5 text-xs text-ink-faint">{item.dose}</span>
                     )}
                   </span>
-                  <span className="text-xs tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-ink-faint">
                     {item.times.join(' · ')}
                   </span>
                   {!item.active && (
@@ -753,7 +751,7 @@ function SupplementsSection({
                         onClick={() => setConfirmDelete(item.id)}
                         disabled={busy}
                         aria-label={`Delete ${item.name}`}
-                        className="text-slate-500 hover:text-rose-400 disabled:opacity-40"
+                        className="text-ink-faint hover:text-rose-400 disabled:opacity-40"
                       >
                         Delete
                       </button>
@@ -799,7 +797,7 @@ function SupplementsSection({
       )}
 
       {items.length >= MAX_SUPPLEMENTS && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-faint">
           That is the {MAX_SUPPLEMENTS}-supplement limit — a tick list longer
           than that stops being one you can actually read every day.
         </p>
@@ -829,7 +827,7 @@ function SupplementForm({
   busy: boolean
 }) {
   const field =
-    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none'
+    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base text-slate-200 sm:text-sm focus:border-emerald-500'
 
   return (
     <div className="space-y-2">
@@ -863,13 +861,12 @@ function SupplementForm({
               value={time}
               onChange={(event) => setTime(index, event.target.value)}
               aria-label={`Time ${index + 1}`}
-              style={{ colorScheme: 'dark' }}
               className={`${field} rounded-r-none`}
             />
             <button
               onClick={() => removeTime(index)}
               aria-label={`Remove time ${index + 1}`}
-              className="rounded-r-lg border border-l-0 border-slate-700 px-2 text-xs text-slate-500 hover:text-rose-400"
+              className="rounded-r-lg border border-l-0 border-slate-700 px-2 text-xs text-ink-faint hover:text-rose-400"
             >
               ✕
             </button>
@@ -957,7 +954,7 @@ function WaterSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">💧 Water</h3>
+      <h2 className="mb-1 font-semibold">💧 Water</h2>
       <p className="mb-4 text-sm text-slate-400">
         The card on your dashboard. Nothing here is required — leave it alone and
         the goal follows your weight.
@@ -974,7 +971,7 @@ function WaterSection({
           />
           <span>
             From my weight
-            <span className="mt-0.5 block text-xs text-slate-500">
+            <span className="mt-0.5 block text-xs text-ink-faint">
               {WATER_ML_PER_KG} ml for every kg of your trend weight. A common
               rule of thumb, not a measurement — and it needs a weigh-in, so
               until then the card shows a general default and says so.
@@ -1010,9 +1007,9 @@ function WaterSection({
                     update({ water_goal_ml: 2500 })
                   }}
                   aria-label="Daily water goal in ml"
-                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-sky-500"
                 />
-                <span className="text-xs text-slate-500">ml</span>
+                <span className="text-xs text-ink-faint">ml</span>
               </span>
             )}
           </span>
@@ -1024,7 +1021,7 @@ function WaterSection({
         <div className="flex flex-wrap items-center gap-2">
           {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
             <span key={index} className="flex items-center gap-1">
-              <span className="text-xs text-slate-600">+</span>
+              <span className="text-xs text-ink-faint">+</span>
               <input
                 type="number"
                 min={1}
@@ -1033,11 +1030,11 @@ function WaterSection({
                 onChange={(event) => setQuickAdd(index, event.target.value)}
                 onBlur={guardQuickAdd(index)}
                 aria-label={`Quick-add button ${index + 1}, in ml`}
-                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none"
+                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-base sm:text-sm focus:border-sky-500"
               />
             </span>
           ))}
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ink-faint">
             ml each. Clear one to remove that button.
           </span>
         </div>
@@ -1111,8 +1108,17 @@ function AccountSection() {
   return (
     <>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">Account</h3>
-        <p className="mb-4 text-sm text-slate-400">Signed in as {user?.email}</p>
+        <h2 className="mb-1 font-semibold">Account</h2>
+        <p className="mb-1 text-sm text-slate-400">Signed in as {user?.email}</p>
+        {/* The only durable way back to the release notes. The pop-up links there
+            too, but it is dismissible and then gone -- an entry point that exists
+            only inside a thing you just closed is not an entry point. */}
+        <p className="mb-4 text-sm text-ink-faint">
+          <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+            What’s new
+          </Link>{' '}
+          — every release note, newest first.
+        </p>
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
           <label className="block text-sm">
@@ -1185,7 +1191,7 @@ function AccountSection() {
       </section>
 
       <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold text-rose-300">Danger zone</h3>
+        <h2 className="mb-1 font-semibold text-rose-300">Danger zone</h2>
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
           weight entries, water logs, step counts, supplements and their check-offs,
@@ -1320,7 +1326,7 @@ function HeightField({
           />
         </label>
       </div>
-      <span className="mt-1 block text-xs text-slate-500">
+      <span className="mt-1 block text-xs text-ink-faint">
         Stored in centimetres; shown in feet and inches because your weight unit
         is pounds.
       </span>
@@ -1377,7 +1383,7 @@ function BodyTargetsCard({
   if (!targets) {
     return (
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">What your profile works out to</h3>
+        <h2 className="mb-1 font-semibold">What your profile works out to</h2>
         <p className="text-sm text-slate-400">Loading…</p>
       </section>
     )
@@ -1442,7 +1448,7 @@ function BodyTargetsCard({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">What your profile works out to</h3>
+      <h2 className="mb-1 font-semibold">What your profile works out to</h2>
       <p className="mb-4 text-sm text-slate-400">
         {measured
           ? 'Your daily burn is now measured from your own logs — what you ate, ' +
@@ -1477,7 +1483,7 @@ function BodyTargetsCard({
           <div key={row.label}>
             <dt className="text-xs text-slate-400">{row.label}</dt>
             <dd className="text-lg font-semibold">{row.value}</dd>
-            <p className="mt-0.5 text-xs text-slate-500">{row.caption}</p>
+            <p className="mt-0.5 text-xs text-ink-faint">{row.caption}</p>
           </div>
         ))}
       </dl>

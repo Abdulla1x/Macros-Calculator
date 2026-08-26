@@ -21,7 +21,7 @@ export default function RequireAdmin() {
 
   if (!user?.is_admin) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-ink-faint">
         Not found.
       </div>
     )

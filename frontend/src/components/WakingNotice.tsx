@@ -12,7 +12,7 @@ import type { ReactNode } from 'react'
  * keep filling in the form); everything before it is shared. */
 export default function WakingNotice({
   children,
-  className = 'mt-4 text-center text-xs text-slate-600',
+  className = 'mt-4 text-center text-xs text-ink-faint',
 }: {
   children?: ReactNode
   className?: string

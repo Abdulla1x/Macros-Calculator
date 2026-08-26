@@ -27,7 +27,7 @@ const CHART_DAYS = 90
 
 const cardClass = 'rounded-xl border border-slate-800 bg-slate-900 p-5'
 const fieldClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
 export default function Weight() {
   const { settings, reload: reloadSettings } = useSettings()
@@ -112,7 +112,7 @@ export default function Weight() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Weight</h2>
+        <h1 className="text-2xl font-bold">Weight</h1>
         <p className="text-sm text-slate-400">
           Log a weigh-in and watch the trend, not the daily noise.
         </p>
@@ -123,7 +123,7 @@ export default function Weight() {
       )}
 
       <section className={cardClass}>
-        <h3 className="mb-3 font-semibold">Log a weigh-in</h3>
+        <h2 className="mb-3 font-semibold">Log a weigh-in</h2>
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Date</span>
@@ -164,7 +164,7 @@ export default function Weight() {
         </form>
         {/* One weigh-in per day, so re-saving a date is a correction. Said out
             loud here, or the missing second row reads as a lost entry. */}
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-ink-faint">
           {existingForDate
             ? `Replaces the ${formatWeight(existingForDate.weight_kg, unit)} ${label} already logged for this day.`
             : `One weigh-in per day — saving the same date again replaces it. Change ${label} in Settings.`}
@@ -173,9 +173,9 @@ export default function Weight() {
 
       <section className={cardClass}>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h3 className="font-semibold">Last {CHART_DAYS} days</h3>
+          <h2 className="font-semibold">Last {CHART_DAYS} days</h2>
           {trend && trend.point_count > 0 && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-faint">
               {trend.point_count} weigh-in{trend.point_count === 1 ? '' : 's'} logged
             </p>
           )}
@@ -240,16 +240,16 @@ export default function Weight() {
             <TrendReadout trend={trend} unit={unit} />
           </>
         ) : (
-          <p className="py-6 text-center text-sm text-slate-500">
+          <p className="py-6 text-center text-sm text-ink-faint">
             No weigh-ins yet — log one above and the chart starts here.
           </p>
         )}
       </section>
 
       <section className={cardClass}>
-        <h3 className="mb-3 font-semibold">History</h3>
+        <h2 className="mb-3 font-semibold">History</h2>
         {entries.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">Nothing logged yet.</p>
+          <p className="py-6 text-center text-sm text-ink-faint">Nothing logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-800">
             {[...entries].reverse().map((entry) => (
@@ -284,14 +284,14 @@ export default function Weight() {
                         setStatus('idle')
                         window.scrollTo({ top: 0, behavior: 'smooth' })
                       }}
-                      className="text-xs text-slate-500 hover:text-emerald-400"
+                      className="text-xs text-ink-faint hover:text-emerald-400"
                       title="Edit this weigh-in"
                     >
                       ✎
                     </button>
                     <button
                       onClick={() => setConfirmDelete(entry.id)}
-                      className="text-xs text-slate-500 hover:text-rose-400"
+                      className="text-xs text-ink-faint hover:text-rose-400"
                       title="Delete this weigh-in"
                     >
                       ✕
@@ -335,7 +335,7 @@ function TrendReadout({
             ? '—'
             : `${formatWeight(trend.latest_trend_kg, unit)} ${label}`}
         </dd>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-ink-faint">
           Smoothed over {trend.point_count} weigh-in
           {trend.point_count === 1 ? '' : 's'}, weighted towards recent ones.
         </p>
@@ -347,7 +347,7 @@ function TrendReadout({
             ? '—'
             : `${formatRate(trend.weekly_rate_kg, unit)} ${label}/week`}
         </dd>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-ink-faint">
           {trend.weekly_rate_kg === null
             ? 'Needs at least 7 weigh-ins in the last 28 days.'
             : 'Fitted to the trend line over the last 28 days.'}

@@ -1,7 +1,116 @@
 @import "tailwindcss";
 
+/* Semantic tokens over the palette the app already uses.
+ *
+ * Values are hex literals rather than var(--color-slate-*) indirection, and the
+ * Tailwind name each one mirrors is in the comment. Two reasons: --color-ink-faint
+ * is a measured custom value that is not on the slate scale at all, and a ramp
+ * that mixes framework indirection with one hex outlier hides which is which.
+ * This block is meant to be the single auditable record of the palette.
+ *
+ * Contrast ratios below are WCAG 2.1 relative-luminance figures against the
+ * surface named. AA for normal text is 4.5:1; non-text (borders, rings) is 3:1.
+ *
+ * NEVER fix a contrast problem by redefining --color-slate-500 or any other
+ * framework palette name. It happens to be safe today only because bg-slate-500,
+ * border-slate-500 and ring-slate-500 have zero occurrences -- which is exactly
+ * the trap. Redefining it silently poisons every future use of that name.
+ */
+@theme {
+  /* Surfaces, by depth. app is the page ground, surface is a card, raised is
+   * something you type in or tap sitting on top of a card. */
+  --color-app: #020617;          /* slate-950 */
+  --color-surface: #0f172a;      /* slate-900 */
+  --color-raised: #1e293b;       /* slate-800 */
+
+  /* Lines. line is a hairline between sections; line-strong is an input border,
+   * which has to carry more weight because it defines a hit target. */
+  --color-line: #1e293b;         /* slate-800 */
+  --color-line-strong: #334155;  /* slate-700 */
+
+  /* Ink, three steps.
+   *   ink        16.30:1 on surface -- body copy
+   *   ink-muted   6.96:1 on surface -- labels, secondary values
+   *   ink-faint   5.12:1 on surface -- captions, the honesty copy
+   *
+   * ink-faint replaces the old slate-500 caption colour, which measured 3.75:1 and
+   * failed AA at 94 caption sites.
+   *
+   * The value is chosen against the WORST background a caption actually sits on,
+   * not against surface. Nested cards (bg-slate-800/40 and /60 over surface)
+   * blend to #151e31 and #182234, where a token tuned to surface alone lands at
+   * 4.28 and 4.10 -- under AA, at four real sites. This value clears all of them
+   * (4.77 and 4.57) so "captions use ink-faint" is a rule with no exceptions.
+   *
+   * It is NOT slate-400 either: that would pass everywhere but sits 1.20x from
+   * ink-muted, flattening the caption/label hierarchy across the app. This keeps
+   * 1.36x, against the 1.86x slate-400/slate-500 had.
+   *
+   * The one exception is --color-raised, where ink-faint is 4.19:1. Placeholder
+   * text lives on that background and uses ink-muted (5.71:1) instead. One token
+   * genuinely cannot serve both. */
+  --color-ink: #f1f5f9;          /* slate-100 */
+  --color-ink-muted: #94a3b8;    /* slate-400 */
+  --color-ink-faint: #7c8aa3;    /* measured, between slate-500 and slate-400 */
+
+  /* Brand, and what goes ON brand. Pairing these is the point: the two
+   * emerald-600 buttons in the app set no text colour at all, inherited
+   * slate-100 from body, and landed at 3.44:1. brand-ink is 7.95:1. */
+  --color-brand: #10b981;        /* emerald-500 */
+  --color-brand-ink: #020617;    /* slate-950 */
+
+  /* The hues the app already assigns per macro and per tracker. Naming them here
+   * covers the utility-class uses only -- the ring, chart and card colours are
+   * hex literals passed as recharts props in Dashboard.tsx, Analytics.tsx,
+   * WaterCard.tsx, StepsCard.tsx and SupplementsCard.tsx, and var() in an SVG
+   * presentation attribute is browser-dependent. Consolidating those is
+   * lib/chartTheme.ts's job, not this file's. */
+  --color-calories: #f59e0b;     /* amber-500 */
+  --color-protein: #34d399;      /* emerald-400 */
+  --color-carbs: #38bdf8;        /* sky-400 */
+  --color-fat: #fb7185;          /* rose-400 */
+  --color-water: #38bdf8;        /* sky-400 -- same hue as carbs, see chartTheme note */
+  --color-steps: #a78bfa;        /* violet-400 */
+  --color-supplements: #fbbf24;  /* amber-400 */
+
+  /* Radius, as a rule rather than a habit: containers get rounded-card, anything
+   * you tap or type in gets rounded-control. The tree currently has rounded-lg
+   * at 91 sites and rounded-xl at 52 with no stated rule; those call sites are
+   * absorbed by the Card/Button/TextInput primitives rather than renamed here,
+   * so only new chrome uses these today. */
+  --radius-card: 0.75rem;        /* was rounded-xl */
+  --radius-control: 0.5rem;      /* was rounded-lg */
+}
+
+/* Tells the browser to render built-in UI -- date pickers, select menus, time
+ * inputs, scrollbars -- against a dark ground. Replaces five inline
+ * style={{ colorScheme: 'dark' }} props that covered only three of the seven
+ * date inputs, one select and one time input. */
+:root {
+  color-scheme: dark;
+}
+
+@layer base {
+  /* There was no designed focus indicator anywhere: zero focus-visible: and zero
+   * focus:ring in the tree. 87 buttons fell back to the UA default ring, and 20
+   * inputs deleted it outright with focus:outline-none and replaced it with a 1px
+   * border-colour swap that misses the 3:1 non-text minimum.
+   *
+   * :focus-visible, not :focus, so a mouse click on a button does not leave a
+   * ring behind. outline-offset puts the ring outside the control, so a brand
+   * ring on a brand-coloured button still reads (7.04:1 against surface).
+   *
+   * NOTE this rule is beatable: a focus:outline-none utility outranks @layer base
+   * regardless of specificity, and keys off :focus rather than :focus-visible.
+   * Every such site was deleted; re-adding one silently removes its ring. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
 body {
-  background-color: var(--color-slate-950);
-  color: var(--color-slate-100);
+  background-color: var(--color-app);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }

@@ -26,7 +26,7 @@ function MacroCard({ label, macro }: { label: string; macro: MacroCalibration })
               estimate from a small sample, and printing it bare would be the
               same false precision this section exists to expose. */}
           {macro.coverage_low_pct !== null && (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-ink-faint">
               plausibly {round(macro.coverage_low_pct)}–{round(macro.coverage_high_pct as number)}%,
               from {macro.corrected} correction{macro.corrected === 1 ? '' : 's'}
             </p>
@@ -43,8 +43,8 @@ function MacroCard({ label, macro }: { label: string; macro: MacroCalibration })
         </>
       ) : (
         <>
-          <p className="mt-1 text-xl font-bold text-slate-500">—</p>
-          <p className="mt-1 text-xs text-slate-500">{macro.unavailable_reason}</p>
+          <p className="mt-1 text-xl font-bold text-ink-faint">—</p>
+          <p className="mt-1 text-xs text-ink-faint">{macro.unavailable_reason}</p>
         </>
       )}
     </div>
@@ -82,7 +82,7 @@ export default function CalibrationSection() {
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h3 className="font-semibold">How close were the AI's estimates?</h3>
+        <h2 className="font-semibold">How close were the AI's estimates?</h2>
         {data && data.linked > 0 && (
           <p className="text-xs text-slate-400">
             {data.linked} meal{data.linked === 1 ? '' : 's'} saved from an estimate
@@ -95,7 +95,7 @@ export default function CalibrationSection() {
       </p>
 
       {loading ? (
-        <p className="py-6 text-center text-sm text-slate-500">Checking…</p>
+        <p className="py-6 text-center text-sm text-ink-faint">Checking…</p>
       ) : error ? (
         <div className="rounded-lg border border-rose-900/60 p-4 text-center">
           <p className="text-sm text-rose-300">{error}</p>
@@ -107,7 +107,7 @@ export default function CalibrationSection() {
           </button>
         </div>
       ) : !data || data.linked === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">
+        <p className="py-6 text-center text-sm text-ink-faint">
           Nothing to compare yet. Analyse a meal, tap “Use these ingredients”, and save it — the
           app will start keeping score of itself here.
         </p>
@@ -154,7 +154,7 @@ export default function CalibrationSection() {
                     <span className="font-semibold">
                       {round(bucket.coverage_pct as number)}%
                     </span>{' '}
-                    <span className="text-slate-500">
+                    <span className="text-ink-faint">
                       ({bucket.covered}/{bucket.corrected})
                     </span>
                   </p>
@@ -163,7 +163,7 @@ export default function CalibrationSection() {
             </div>
           )}
 
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-ink-faint">
             Counted only from meals you saved straight after an analysis, so the real figure may
             be a little higher. Editing a meal later is not reflected here. And how much you tell
             the app changes what this measures — weighed portions and a voice note narrow its

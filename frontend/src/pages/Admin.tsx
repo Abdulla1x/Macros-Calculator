@@ -99,7 +99,7 @@ export default function Admin() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Admin</h2>
+        <h1 className="text-2xl font-bold">Admin</h1>
         <p className="text-sm text-slate-400">
           Usage metrics only — no meal, food or weight content is shown here or
           sent by the API.
@@ -116,7 +116,7 @@ export default function Admin() {
       )}
 
       {loading && !stats && (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink-faint">Loading…</p>
       )}
 
       {stats && (
@@ -131,7 +131,7 @@ export default function Admin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold">Accounts per day</h3>
+            <h2 className="text-sm font-semibold">Accounts per day</h2>
             <p className="mb-3 text-xs text-slate-400">
               Last {stats.window_days} days · {plural(stats.signups_30d, 'signup')}{' '}
               · {plural(stats.active_30d, 'account')} active at least once
@@ -193,7 +193,7 @@ export default function Admin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold">Meals logged per day</h3>
+            <h2 className="text-sm font-semibold">Meals logged per day</h2>
             <p className="mb-3 text-xs text-slate-400">
               Counted on the day the meal was entered, not the day it was eaten.
             </p>
@@ -227,11 +227,11 @@ export default function Admin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="mb-3 text-sm font-semibold">
-              Accounts <span className="text-slate-500">({users.length})</span>
-            </h3>
+            <h2 className="mb-3 text-sm font-semibold">
+              Accounts <span className="text-ink-faint">({users.length})</span>
+            </h2>
             {users.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-500">
+              <p className="py-6 text-center text-sm text-ink-faint">
                 No accounts yet.
               </p>
             ) : (
@@ -300,7 +300,7 @@ export default function Admin() {
             )}
           </section>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-faint">
             AI calls today: {stats.ai_calls_today} of{' '}
             {stats.ai_global_daily_limit} ({aiShare}% of the global cap).
             {Object.entries(stats.ai_calls_30d_by_kind).length > 0 && (

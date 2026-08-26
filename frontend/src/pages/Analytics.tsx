@@ -131,12 +131,12 @@ export default function Analytics() {
   }
 
   const inputClass =
-    'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+    'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Analytics</h2>
+        <h1 className="text-2xl font-bold">Analytics</h1>
         <p className="text-sm text-slate-400">Trends and averages over any date range.</p>
       </header>
 
@@ -191,9 +191,9 @@ export default function Analytics() {
 
           {visibleCharts.map((chart) => (
             <section key={chart.key} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <h3 className="mb-3 font-semibold" style={{ color: chart.color }}>
+              <h2 className="mb-3 font-semibold" style={{ color: chart.color }}>
                 {chart.label} over time
-              </h3>
+              </h2>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={summary.days} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
                   <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
@@ -256,7 +256,7 @@ export default function Analytics() {
           {loadError}
         </p>
       ) : (
-        <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
+        <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-ink-faint">
           No meals in this date range yet.
         </p>
       )}
@@ -264,7 +264,7 @@ export default function Analytics() {
       <CalibrationSection />
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Backup & restore</h3>
+        <h2 className="mb-3 font-semibold">Backup & restore</h2>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleExport}
@@ -296,7 +296,7 @@ export default function Analytics() {
         )}
         {importError && <p className="mt-3 text-sm text-rose-400">{importError}</p>}
         {exportError && <p className="mt-3 text-sm text-rose-400">{exportError}</p>}
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-faint">
           CSV columns: date, name, calories, protein (carbs and fat optional).
         </p>
       </section>

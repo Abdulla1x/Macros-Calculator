@@ -88,10 +88,10 @@ export default function WaterCard({ date }: Props) {
   if (!day) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="font-semibold">
+        <h2 className="font-semibold">
           <span className="mr-2">💧</span>Water
-        </h3>
-        <p className="mt-3 text-xs text-slate-500">
+        </h2>
+        <p className="mt-3 text-xs text-ink-faint">
           {error ?? 'Loading…'}
         </p>
       </div>
@@ -138,7 +138,7 @@ export default function WaterCard({ date }: Props) {
               }}
               placeholder="ml"
               aria-label="Custom amount in ml"
-              className="w-20 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
+              className="w-20 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200"
             />
             <button
               onClick={addCustom}
@@ -152,7 +152,7 @@ export default function WaterCard({ date }: Props) {
             <button
               onClick={undo}
               disabled={busy}
-              className="ml-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40"
+              className="ml-auto text-xs text-ink-faint hover:text-slate-300 disabled:opacity-40"
             >
               Undo last (−{Math.round(lastEntry.ml)})
             </button>

@@ -12,7 +12,7 @@ export default function WarmupNotice() {
 
   if (state === 'ready') {
     return (
-      <p className="mt-4 text-center text-xs text-slate-600">
+      <p className="mt-4 text-center text-xs text-ink-faint">
         {/* Deliberately not "logging in": four logged-out pages share this
             component now, and only one of them is a login. A wording prop would
             reopen exactly the drift this component exists to prevent. */}
@@ -28,7 +28,7 @@ export default function WarmupNotice() {
     // an actual outage is the failure this state was added to stop. The form
     // is still usable — a user who wants to try anyway should be able to.
     return (
-      <p className="mt-4 text-center text-xs text-slate-600">
+      <p className="mt-4 text-center text-xs text-ink-faint">
         <span className="text-amber-500">●</span> The server isn&apos;t
         responding. This looks like a temporary outage rather than the usual
         cold start, so it is not something to fix on your end — try again in a

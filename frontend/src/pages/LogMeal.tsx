@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import MealCodeInput from '../components/MealCodeInput'
-import { localIsoDate } from '../lib/dates'
+import { addDays, localIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
 import { useSettings } from '../settings/SettingsContext'
 import type {
@@ -161,6 +161,15 @@ export default function LogMeal() {
   const [rows, setRows] = useState<Row[]>([emptyRow()])
   const [mealName, setMealName] = useState('')
   const [mealDate, setMealDate] = useState(localIsoDate())
+
+  // '' is unreachable through the input (the change handler drops it), but the
+  // fallback keeps addDays away from a malformed date if it ever becomes so.
+  const shiftMealDate = (delta: number) =>
+    setMealDate((current) => addDays(current || localIsoDate(), delta))
+  const dateChips = [
+    { label: 'Today', date: localIsoDate() },
+    { label: 'Yesterday', date: addDays(localIsoDate(), -1) },
+  ]
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
@@ -432,12 +441,12 @@ export default function LogMeal() {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-slate-500 focus:border-emerald-500 focus:outline-none'
+    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500'
 
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h2>
+        <h1 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h1>
         <p className="text-sm text-slate-400">
           {editMeal
             ? 'Adjust the details below — saving updates the existing entry.'
@@ -474,18 +483,18 @@ export default function LogMeal() {
         {rows.map((row, index) => (
           <div key={row.key} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-300">
+              <h2 className="text-sm font-semibold text-slate-300">
                 {rows.length === 1 ? 'Ingredient' : `Ingredient ${index + 1}`}
                 {row.fromLibrary && (
                   <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
                     from library
                   </span>
                 )}
-              </h3>
+              </h2>
               {rows.length > 1 && (
                 <button
                   onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
-                  className="text-xs text-slate-500 hover:text-rose-400"
+                  className="text-xs text-ink-faint hover:text-rose-400"
                 >
                   Remove
                 </button>
@@ -596,7 +605,7 @@ export default function LogMeal() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Meal details</h3>
+        <h2 className="mb-3 font-semibold">Meal details</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-slate-400">Meal name</span>
@@ -608,28 +617,80 @@ export default function LogMeal() {
               className={inputClass}
             />
           </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs text-slate-400">Date</span>
-            <input
-              type="date"
-              value={mealDate}
-              max={localIsoDate()}
-              onChange={(e) => setMealDate(e.target.value)}
-              className={inputClass}
-            />
-          </label>
+          {/* Nearly every meal is logged today or yesterday, so a chip is fewer
+              taps than any picker, and the steppers cover the rest of the week.
+              Mirrors the Dashboard header's controls rather than inventing a
+              second idiom for the same job.
+
+              The label cannot wrap the control here -- the steppers sit beside
+              the input, and interactive content inside a <label> has murky
+              click-forwarding behaviour. htmlFor/id instead, which is the first
+              explicit association in this codebase; everything else wraps. */}
+          <div>
+            <label htmlFor="meal-date" className="mb-1 block text-xs text-slate-400">
+              Date
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => shiftMealDate(-1)}
+                aria-label="Previous day"
+                className="shrink-0 rounded-control border border-line bg-surface px-2.5 py-2 text-slate-300 hover:bg-raised"
+              >
+                ◀
+              </button>
+              <input
+                id="meal-date"
+                type="date"
+                value={mealDate}
+                max={localIsoDate()}
+                // Ignore a cleared field rather than storing ''. addDays throws on
+                // a malformed date by design, so an empty value would turn the
+                // very next stepper tap into an exception. Dashboard's picker
+                // already guards the same way.
+                onChange={(e) => e.target.value && setMealDate(e.target.value)}
+                className={`${inputClass} flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => shiftMealDate(1)}
+                disabled={mealDate >= localIsoDate()}
+                aria-label="Next day"
+                className="shrink-0 rounded-control border border-line bg-surface px-2.5 py-2 text-slate-300 hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ▶
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {dateChips.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => setMealDate(chip.date)}
+                  aria-pressed={mealDate === chip.date}
+                  className={`rounded-full px-2.5 py-0.5 text-xs ${
+                    mealDate === chip.date
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'bg-raised text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-800/60 px-4 py-3">
           <p className="text-sm">
             <span className="font-semibold text-amber-400">{Math.round(totals.calories)} kcal</span>
-            <span className="mx-2 text-slate-600">·</span>
+            <span className="mx-2 text-ink-faint">·</span>
             <span className="font-semibold text-emerald-400">
               {Math.round(totals.protein * 10) / 10} g protein
             </span>
             {settings?.track_carbs && totals.carbs !== null && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-sky-400">
                   {Math.round(totals.carbs * 10) / 10} g carbs
                 </span>
@@ -637,13 +698,13 @@ export default function LogMeal() {
             )}
             {settings?.track_fat && totals.fat !== null && (
               <>
-                <span className="mx-2 text-slate-600">·</span>
+                <span className="mx-2 text-ink-faint">·</span>
                 <span className="font-semibold text-rose-400">
                   {Math.round(totals.fat * 10) / 10} g fat
                 </span>
               </>
             )}
-            <span className="ml-2 text-xs text-slate-500">
+            <span className="ml-2 text-xs text-ink-faint">
               ({validRows.length} of {rows.length} ingredient{rows.length === 1 ? '' : 's'} counted)
             </span>
           </p>

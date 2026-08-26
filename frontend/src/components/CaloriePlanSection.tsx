@@ -217,7 +217,7 @@ export default function CaloriePlanSection({
   return (
     <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div>
-        <h3 className="text-lg font-semibold">Calorie planning</h3>
+        <h2 className="text-lg font-semibold">Calorie planning</h2>
         <p className="mt-1 text-sm text-slate-400">
           Move calories between days without changing the week. Plan a bigger
           day and fund it from the days around it, or spread a day that already
@@ -228,7 +228,7 @@ export default function CaloriePlanSection({
             expenditure is fitted from average intake against your weight
             trend, so one large day already shows up as a slightly slower week
             whether or not you do anything about it. */}
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-ink-faint">
           Nothing here is a debt. One big day already shows up as a slightly
           slower week on its own — this only lets you decide where it lands.
           Protein never moves; carbohydrate and fat absorb the difference.
@@ -237,9 +237,9 @@ export default function CaloriePlanSection({
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-ink-faint">Loading…</p>
       ) : plans.length === 0 ? (
-        <p className="text-sm text-slate-500">Nothing planned.</p>
+        <p className="text-sm text-ink-faint">Nothing planned.</p>
       ) : (
         <ul className="space-y-3">
           {plans.map((plan) => (
@@ -275,13 +275,13 @@ export default function CaloriePlanSection({
                     key={day.date}
                     className="flex justify-between gap-3 text-xs text-slate-400"
                   >
-                    <span className={day.date < today ? 'text-slate-600' : ''}>
+                    <span className={day.date < today ? 'text-ink-faint' : ''}>
                       {short(day.date)}
                       {day.date < today && ' · already passed'}
                     </span>
                     <span>
                       {Math.round(day.calorie_goal).toLocaleString()} kcal
-                      <span className="ml-1 text-slate-500">
+                      <span className="ml-1 text-ink-faint">
                         ({signed(day.calorie_delta ?? 0)})
                       </span>
                     </span>
@@ -333,7 +333,6 @@ export default function CaloriePlanSection({
                   setEventDate(e.target.value)
                   setSelected([])
                 }}
-                style={{ colorScheme: 'dark' }}
                 className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-slate-200"
               />
             </label>
@@ -349,7 +348,7 @@ export default function CaloriePlanSection({
                   onChange={(e) => setAmount(e.target.value)}
                   className="mt-1 w-32 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-slate-200"
                 />
-                <span className="mt-1 block text-xs text-slate-500">
+                <span className="mt-1 block text-xs text-ink-faint">
                   Negative for a deliberately smaller day.
                 </span>
               </label>
@@ -363,7 +362,7 @@ export default function CaloriePlanSection({
                   Couldn&apos;t work out how that day went. Try again.
                 </p>
               ) : surplus === null ? (
-                <p className="text-slate-500">Checking that day…</p>
+                <p className="text-ink-faint">Checking that day…</p>
               ) : surplus.meal_count === 0 ? (
                 <p className="text-slate-400">
                   Nothing is logged on {short(eventDate)}. A day with no meals
@@ -386,7 +385,7 @@ export default function CaloriePlanSection({
                       footnote: this app stores one calorie goal, not a
                       history of them, so a past day can only be measured
                       against the target it has now. */}
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-ink-faint">
                     Measured against that day&apos;s target as it stands now. If
                     you have changed your goal since, this number has moved with
                     it.
@@ -401,7 +400,7 @@ export default function CaloriePlanSection({
               {mode === 'planned'
                 ? 'Days to fund it from'
                 : 'Days to spread it across'}
-              <span className="ml-1 text-xs text-slate-500">
+              <span className="ml-1 text-xs text-ink-faint">
                 ({selected.length} of up to {MAX_PLAN_DAYS})
               </span>
             </p>
@@ -426,7 +425,7 @@ export default function CaloriePlanSection({
                 )
               })}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-ink-faint">
               Split evenly across the days you pick. The exact per-day targets
               come back from the server, which is also what refuses a spread
               that would take any day below your calorie floor.

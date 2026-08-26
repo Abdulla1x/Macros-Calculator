@@ -17,7 +17,7 @@ export default function NotFound() {
   return (
     <div className="space-y-4">
       <header>
-        <h2 className="text-2xl font-bold">Page not found</h2>
+        <h1 className="text-2xl font-bold">Page not found</h1>
         <p className="text-sm text-slate-400">
           Nothing lives at <code className="text-slate-300">{pathname}</code>.
         </p>

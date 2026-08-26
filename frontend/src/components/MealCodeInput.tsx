@@ -69,7 +69,7 @@ export default function MealCodeInput({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h3 className="mb-1 text-sm font-semibold text-slate-300">Paste a meal code</h3>
+      <h2 className="mb-1 text-sm font-semibold text-slate-300">Paste a meal code</h2>
       <p className="mb-3 text-sm text-slate-400">
         Codes are long — paste the whole thing. Nothing is sent to whoever gave it to
         you, and they are not told you used it.
@@ -80,7 +80,7 @@ export default function MealCodeInput({
         rows={3}
         spellCheck={false}
         placeholder="MC1..."
-        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs break-all text-slate-200"
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-base break-all text-slate-200 sm:text-xs"
       />
       {error && <p className="mt-2 text-sm text-amber-300">{error}</p>}
       <div className="mt-3 flex gap-2">
@@ -88,7 +88,7 @@ export default function MealCodeInput({
           type="button"
           onClick={load}
           disabled={loading}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          className="rounded-lg bg-brand text-brand-ink px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
           {loading ? 'Loading…' : 'Load meal'}
         </button>

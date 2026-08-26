@@ -211,11 +211,11 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold">
+              <h1 className="text-2xl font-bold">
                 {isToday
                   ? 'Today'
                   : parseIsoDate(viewedDate).toLocaleDateString(undefined, { weekday: 'long' })}
-              </h2>
+              </h1>
               {!isToday && (
                 <button
                   onClick={() => setViewedDate(localIsoDate())}
@@ -230,8 +230,7 @@ export default function Dashboard() {
               value={viewedDate}
               max={realToday}
               onChange={(e) => e.target.value && setViewedDate(e.target.value)}
-              style={{ colorScheme: 'dark' }}
-              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-sm text-slate-400"
+              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-base sm:text-sm text-slate-400"
               aria-label="Pick a date"
             />
           </div>
@@ -295,7 +294,7 @@ export default function Dashboard() {
           <Link
             to="/settings"
             state={{ planDate: viewedDate }}
-            className="text-xs text-slate-500 hover:text-slate-300"
+            className="text-xs text-ink-faint hover:text-slate-300"
           >
             Plan a bigger day, or spread one you already had →
           </Link>
@@ -334,7 +333,7 @@ export default function Dashboard() {
           the top on mobile, where re-logging yesterday's breakfast belongs. */}
       {templates.length > 0 && (
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="mb-3 font-semibold">Quick log</h3>
+          <h2 className="mb-3 font-semibold">Quick log</h2>
           <ul className="flex flex-wrap gap-2">
             {templates.map((template) => (
               <li key={template.id} className="flex items-stretch">
@@ -346,7 +345,7 @@ export default function Dashboard() {
                   className="rounded-l-lg border border-r-0 border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-emerald-500 hover:text-emerald-300"
                 >
                   {template.name}
-                  <span className="ml-2 text-xs text-slate-500">
+                  <span className="ml-2 text-xs text-ink-faint">
                     {Math.round(template.calories)} kcal ·{' '}
                     {Math.round(template.protein)} g
                   </span>
@@ -357,7 +356,7 @@ export default function Dashboard() {
                   }
                   aria-label={`Copy the ${template.name} template as a code`}
                   title="Copy this template as a code"
-                  className="border border-r-0 border-slate-700 px-2 text-xs text-slate-500 hover:text-emerald-400"
+                  className="border border-r-0 border-slate-700 px-2 text-xs text-ink-faint hover:text-emerald-400"
                 >
                   {/* An emoji rather than U+29C9 (the "copy" glyph): it is missing
                       from common text fonts and renders as a tofu box next to
@@ -385,7 +384,7 @@ export default function Dashboard() {
                   <button
                     onClick={() => setConfirmDeleteTemplate(template.id)}
                     aria-label={`Delete the ${template.name} template`}
-                    className="rounded-r-lg border border-slate-700 px-2 text-xs text-slate-500 hover:text-rose-400"
+                    className="rounded-r-lg border border-slate-700 px-2 text-xs text-ink-faint hover:text-rose-400"
                   >
                     ✕
                   </button>
@@ -413,14 +412,14 @@ export default function Dashboard() {
 
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3">
-          <h3 className="mb-3 font-semibold">
+          <h2 className="mb-3 font-semibold">
             {isToday
               ? "Today's meals"
               : `Meals · ${parseIsoDate(viewedDate).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
                 })}`}
-          </h3>
+          </h2>
           {error && (
             <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
               {error}{' '}
@@ -431,7 +430,7 @@ export default function Dashboard() {
           )}
           {meals.length === 0 ? (
             !error && (
-              <p className="py-6 text-center text-sm text-slate-500">
+              <p className="py-6 text-center text-sm text-ink-faint">
                 Nothing logged yet — <Link to="/log" state={{ logDate: viewedDate }} className="text-emerald-400 hover:underline">log your first meal</Link>.
               </p>
             )
@@ -462,7 +461,7 @@ export default function Dashboard() {
                         onClick={() =>
                           showCode(meal.name, () => api.shareMeal(meal.id))
                         }
-                        className="text-xs text-slate-500 hover:text-emerald-400"
+                        className="text-xs text-ink-faint hover:text-emerald-400"
                         title="Copy this meal as a code"
                       >
                         📋
@@ -470,14 +469,14 @@ export default function Dashboard() {
                       <Link
                         to="/log"
                         state={{ editMeal: meal }}
-                        className="text-xs text-slate-500 hover:text-emerald-400"
+                        className="text-xs text-ink-faint hover:text-emerald-400"
                         title="Edit meal"
                       >
                         ✎
                       </Link>
                       <button
                         onClick={() => setConfirmDelete(meal.id)}
-                        className="text-xs text-slate-500 hover:text-rose-400"
+                        className="text-xs text-ink-faint hover:text-rose-400"
                         title="Delete meal"
                       >
                         ✕
@@ -495,7 +494,7 @@ export default function Dashboard() {
               on this page in full — the rings and the meal list above — so
               leaving it out of the trend costs nothing and keeps the chart and
               the average below it telling the same story. */}
-          <h3 className="mb-3 font-semibold">Previous 7 days</h3>
+          <h2 className="mb-3 font-semibold">Previous 7 days</h2>
           {week && week.days.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={week.days} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
@@ -526,7 +525,7 @@ export default function Dashboard() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-500">
+            <p className="py-6 text-center text-sm text-ink-faint">
               Nothing logged in the seven days before today.
             </p>
           )}
@@ -538,7 +537,7 @@ export default function Dashboard() {
                   what stops a forgotten day reading as a fasting day, but it
                   does mean the figure is built from fewer days than the card's
                   title suggests — so say how many. */}
-              <span className="text-slate-500">
+              <span className="text-ink-faint">
                 {' '}
                 over {week.logged_days} logged day
                 {week.logged_days === 1 ? '' : 's'}, excluding today
