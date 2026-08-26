@@ -1,12 +1,13 @@
 # 🍽️ Macros Calculator
 
+[![CI](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
 ![Postgres](https://img.shields.io/badge/Database-PostgreSQL-4169e1?logo=postgresql&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-lightgrey)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 **🔗 Live app: [macros-calculator-mu.vercel.app](https://macros-calculator-mu.vercel.app)** — sign up and start logging. (Free-tier hosting: the first request after idle can take ~30–60 s.)
 
@@ -27,7 +28,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, calorie plans, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Layered AI quotas**: 20 analyses + 40 voice notes per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All three are env-tunable
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
-- **Password reset by email**: single-use link, hashed at rest and valid for an hour; using it revokes every existing session. `POST /api/auth/forgot-password` answers identically whether or not the address has an account
+- **Password reset by email — built, deployed, and switched off.** The endpoints, the single-use link (hashed at rest, valid an hour, revoking every session when used) and 38 tests are all here and running in production. They answer **503 to every address**, because no email provider is configured — three free providers were tried and all three refused a domainless free account, which is the profile their fraud screening targets. Until one is wired up **a forgotten password means a lost account**, and the signup page says so rather than letting you find out later. Nothing about the feature needs a deploy to switch on; it activates on credentials alone
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
@@ -87,7 +88,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
                                 │  PostgreSQL │ users · meals    │ (meal analysis) │
                                 │ (Neon)/SQLite│ foods · settings└─────────────────┘
                                 └─────────────┘ ai_analyses     ┌─────────────────┐
-                                        password_resets  httpx  │ Brevo           │
+                                        password_resets  httpx  │ Brevo (off)     │
                                                  └─────────────►│ (password reset)│
                                                                 └─────────────────┘
 ```
@@ -96,30 +97,51 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 Macros-Calculator
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app, CORS, lifespan
+│   │   ├── main.py              # FastAPI app, CORS, lifespan (fails fast on a missing JWT_SECRET)
 │   │   ├── db.py                # SQLAlchemy engine + session dependency
-│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, steps, supplements, supplement_logs, calorie_plan_days, ai_analyses, password_resets)
+│   │   ├── env.py               # env_int / env_float — one idiom for ~23 environment variables
+│   │   ├── models.py            # ORM models: users, password_resets, meals, meal_templates, foods,
+│   │   │                        #   weights, water_logs, steps, supplements, supplement_logs,
+│   │   │                        #   calorie_plan_days, settings, ai_analyses
+│   │   ├── schemas.py           # Pydantic request/response models
 │   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
-│   │   ├── calculations.py      # Macro scaling, weight trend, BMR/TDEE/target math
-│   │   ├── targets.py           # Body profile → daily targets (the Phase 5 swap point)
-│   │   ├── banking.py           # Moving calories between days: the split, the floors, the two sum rules
-│   │   ├── schemas.py           # Pydantic models
-│   │   ├── routers/             # meals, meal_templates, foods, weights, water, steps, supplements, plan, analytics, settings, data (CSV), ai, admin
+│   │   ├── rate_limit.py        # per-IP limits on the public auth routes
+│   │   ├── upsert.py            # the check-then-insert race, handled once instead of at five sites
+│   │   ├── calculations.py      # macro scaling, weight trend, BMR/TDEE/target math
+│   │   ├── targets.py           # body profile → daily targets, and measured TDEE
+│   │   ├── banking.py           # moving calories between days: the split, the floors, the sum rules
+│   │   ├── calibration.py       # how far you move the AI's numbers — coverage, bias, sample sizes
+│   │   ├── share.py             # the meal-code codec (a self-contained payload; no table)
+│   │   ├── announcements.py     # committed release notes + an env-var status banner
+│   │   ├── routers/             # auth, meals, meal_templates, share, foods, weights, analytics,
+│   │   │                        #   settings, data (CSV/JSON), ai, water, steps, plan,
+│   │   │                        #   supplements, announcements, admin
 │   │   └── services/
 │   │       ├── off_client.py    # Open Food Facts client
-│   │       ├── meal_ai.py       # AI meal analysis (only AI-provider-aware module)
-│   │       └── email.py         # Password-reset email (only Brevo-aware module)
-│   ├── alembic/                 # Database migrations (Postgres)
+│   │       ├── meal_ai.py       # AI meal analysis (the only AI-provider-aware module)
+│   │       └── email.py         # password-reset email (the only Brevo-aware module; switched off)
+│   ├── alembic/                 # database migrations (Postgres)
+│   ├── scripts/                 # smoke_multiuser.py — the live two-account isolation check
 │   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── api/client.ts        # Typed API client
-│       ├── components/          # Layout, MacroRing, FoodAutocomplete, MealAnalyzer
-│       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes)
-│       └── pages/               # Dashboard, LogMeal, Analytics, Settings
-├── legacy/                      # Original Streamlit app (v1)
-└── render.yaml                  # Render deployment blueprint
+│       ├── api/client.ts        # typed API client
+│       ├── auth/                # AuthContext + token storage (guarded against blocked localStorage)
+│       ├── settings/            # SettingsContext — one settings fetch for the whole app
+│       ├── components/          # Layout, MacroRing, DailyTrackerCard, MealAnalyzer,
+│       │                        #   FoodAutocomplete, and the Settings/Analytics sections
+│       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes), useWarmup, ...
+│       ├── lib/                 # dates, limits (mirrors the server's bounds), units, dismissals
+│       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Settings, Admin,
+│                                #   and the four auth pages
+├── docs/                        # AI provider runbook + the Gemini EEA-region incident write-up
+├── scripts/                     # check.sh (all five gates), dev.sh, review-changes.sh
+├── .github/workflows/           # ci.yml (the same five gates), backup.yml (daily export)
+├── legacy/                      # original Streamlit app (v1)
+├── LICENSE                      # MIT
+└── render.yaml                  # Render blueprint — documentation of intent, NOT synced with
+                                 #   the dashboard, which is the source of truth for every value
 ```
 
 ---
@@ -198,12 +220,52 @@ npm run dev
 
 App: http://localhost:5173 (the dev server proxies `/api` to the backend).
 
-### Tests
+### Tests and gates
+
+`scripts/check.sh` runs every pre-commit gate in one pass — the same five CI runs:
+
+```bash
+./scripts/check.sh              # all five
+./scripts/check.sh --backend    # pytest + ruff only
+./scripts/check.sh --frontend   # tsc + oxlint + build only
+```
+
+| Gate | Command |
+|---|---|
+| backend tests | `venv/bin/python -m pytest -q` — 663 tests |
+| backend lint | `ruff check app tests scripts` |
+| frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
+| frontend lint | `npm run lint` (oxlint) |
+| frontend build | `npm run build` |
+
+It deliberately does not stop at the first failure. `a && b && c` hides whether the
+frontend is also broken once the backend fails, turning one fix-and-rerun cycle into
+three; every gate runs, then a summary says which failed.
+
+**Cross-tenant isolation is tested twice, deliberately.** `tests/test_isolation.py`
+asserts it in-process (47 tests). `backend/scripts/smoke_multiuser.py` asserts it
+against a *running* server — over a hundred live checks that sign up two accounts and
+fire every verb at the other account's concrete row ids, which is the only version
+that also covers routing, auth middleware and the deployed database:
 
 ```bash
 cd backend
-python -m pytest
+BASE_URL=http://localhost:8000 DATABASE_URL=... venv/bin/python scripts/smoke_multiuser.py
 ```
+
+⚠️ **Set `DATABASE_URL` or the row-ownership half silently skips** and you get a
+smaller, quieter pass. It also runs against the deployed URL — note that it leaves
+its two throwaway accounts behind, so it is the wrong tool for probing production.
+
+Browser-level checks are manual; backend tests do not catch interaction bugs.
+
+**Why ~6% of the suite covers a switched-off feature.** `tests/test_password_reset.py`
+is 38 tests over `services/email.py`, which answers 503 to everything today. They are
+kept rather than deleted because the feature is *code-complete and unconfigured*, not
+abandoned — it activates on credentials alone, with no code change and no deploy.
+Deleting the tests would mean writing them again to turn it on. Roughly 13 of them are
+Brevo-specific (they pin the `api-key` header and the 201 status) and would need
+rewriting for a different provider; the other ~25 test the endpoints and would not.
 
 ---
 
@@ -235,7 +297,14 @@ server boots, so the schema is created/updated on deploy. In the Render dashboar
   timestamps only, never meal, food or weight content
 - `BREVO_API_KEY` + `EMAIL_SENDER_ADDRESS` — enable password reset (it returns 503
   for every address until both are set). The sender must be verified in the Brevo
-  dashboard first: add the address, then enter the 6-digit code it emails you
+  dashboard first: add the address, then enter the 6-digit code it emails you.
+  ⚠️ **This deployment has never got past that step**, and neither did two
+  alternatives — Brevo's phone verification never delivers a code, and Mailjet
+  auto-blocks the account on its first API call. Both are the same underlying
+  cause: a new free account with no domain and a gmail.com sender is the profile
+  free-ESP fraud screening exists to stop. A provider with **an HTTP API (never
+  SMTP — Render blocks outbound 25/465/587 on free web services) and a real
+  domain** is what unblocks it
 - `EMAIL_SENDER_NAME` / `APP_BASE_URL` / `PASSWORD_RESET_TTL_MINUTES` /
   `PASSWORD_RESET_GLOBAL_DAILY_LIMIT` — optional; all default in code. `APP_BASE_URL`
   builds the emailed link and is **never** taken from the request's Host header
@@ -280,8 +349,8 @@ on the caller's data, except these public ones: `/api/health`,
 | POST | `/api/auth/login` | Log in → JWT + user |
 | GET | `/api/auth/me` | Current user (token check) |
 | POST | `/api/auth/change-password` | Rotate password; revokes older tokens, returns a fresh one |
-| POST | `/api/auth/forgot-password` | Email a reset link. Always 200, whether or not the address exists |
-| POST | `/api/auth/reset-password` | Consume a link and set a new password; revokes every session |
+| POST | `/api/auth/forgot-password` | Email a reset link. Always 200, whether or not the address exists — but **503 today**, see above |
+| POST | `/api/auth/reset-password` | Consume a link and set a new password; revokes every session. Reachable, but no link can be issued while the above 503s |
 | DELETE | `/api/auth/account` | Permanently delete the account and all its data |
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
 | DELETE | `/api/meals/{id}` | Delete a meal |
