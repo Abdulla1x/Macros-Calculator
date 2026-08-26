@@ -18,9 +18,15 @@ from .schemas import Announcement
 
 STATUS_BANNER_ENV = "STATUS_BANNER"
 
-# Newest first — the frontend shows them in this order and treats the first id
-# as the one to mark as seen. Ids are stable strings, never renumbered: they're
-# the localStorage keys that remember a user already dismissed a note.
+# Newest first — the frontend relies on this order: the pop-up shows only the
+# newest few unseen notes and /whats-new lists them all in this sequence. Ids are
+# stable strings, never renumbered: they're the localStorage keys that remember a
+# user already dismissed a note.
+#
+# The previous version of this comment said the frontend "treats the first id as
+# the one to mark as seen". That has not been true for a long time — closing the
+# pop-up marks every unseen id, which is deliberate and is what stops a capped
+# pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
         id="2026-08-26-meal-codes",

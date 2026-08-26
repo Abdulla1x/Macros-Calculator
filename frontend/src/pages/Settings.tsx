@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
@@ -1112,7 +1112,16 @@ function AccountSection() {
     <>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h2 className="mb-1 font-semibold">Account</h2>
-        <p className="mb-4 text-sm text-slate-400">Signed in as {user?.email}</p>
+        <p className="mb-1 text-sm text-slate-400">Signed in as {user?.email}</p>
+        {/* The only durable way back to the release notes. The pop-up links there
+            too, but it is dismissible and then gone -- an entry point that exists
+            only inside a thing you just closed is not an entry point. */}
+        <p className="mb-4 text-sm text-ink-faint">
+          <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+            What’s new
+          </Link>{' '}
+          — every release note, newest first.
+        </p>
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
           <label className="block text-sm">

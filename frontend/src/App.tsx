@@ -13,6 +13,7 @@ import ResetPassword from './pages/ResetPassword'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
 import Weight from './pages/Weight'
+import WhatsNew from './pages/WhatsNew'
 import { SettingsProvider } from './settings/SettingsContext'
 
 export default function App() {
@@ -38,6 +39,11 @@ export default function App() {
           <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
+          {/* Not in nav, same posture as /admin: it is somewhere you go when a
+              note points you there, not a fifth thing to choose between every
+              day. Reached from the What's new pop-up and from Settings ->
+              Account. */}
+          <Route path="/whats-new" element={<WhatsNew />} />
           {/* Deliberately absent from Layout's nav: only the operator uses it.
               This used to also cite the nav degrading to emoji-only below `sm`;
               that is no longer true — the tab bar labels every item at every
