@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
 import MacroRing from '../components/MacroRing'
+import ShareCodePanel from '../components/ShareCodePanel'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
@@ -47,6 +48,12 @@ export default function Dashboard() {
   const [templates, setTemplates] = useState<MealTemplate[]>([])
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<number | null>(null)
+  // Lifted here rather than held per-row so only one panel is ever open,
+  // the same reason confirmDelete above is a single id and not a set.
+  const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(
+    null,
+  )
+  const [shareError, setShareError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [planDay, setPlanDay] = useState<PlanDay | null>(null)
   const [planFailed, setPlanFailed] = useState(false)
@@ -148,6 +155,19 @@ export default function Dashboard() {
       setConfirmDeleteTemplate(null)
     }
     load()
+  }
+
+  // Minted on demand rather than alongside every meal in the list: a code is
+  // derived from a row, so there is nothing to cache and nothing to keep in
+  // sync when the row changes.
+  const showCode = async (label: string, mint: () => Promise<{ code: string }>) => {
+    setShareError(null)
+    try {
+      setShareCode({ label, code: (await mint()).code })
+    } catch (err) {
+      setShareCode(null)
+      setShareError(err instanceof Error ? err.message : 'Could not make a code.')
+    }
   }
 
   const consumed = {
@@ -331,6 +351,21 @@ export default function Dashboard() {
                     {Math.round(template.protein)} g
                   </span>
                 </Link>
+                <button
+                  onClick={() =>
+                    showCode(template.name, () => api.shareMealTemplate(template.id))
+                  }
+                  aria-label={`Copy the ${template.name} template as a code`}
+                  title="Copy this template as a code"
+                  className="border border-r-0 border-slate-700 px-2 text-xs text-slate-500 hover:text-emerald-400"
+                >
+                  {/* An emoji rather than U+29C9 (the "copy" glyph): it is missing
+                      from common text fonts and renders as a tofu box next to
+                      the pencil and cross that do resolve. This app already
+                      leans on emoji elsewhere (Water, Steps, Supplements), so
+                      this is both the house convention and safer coverage. */}
+                  📋
+                </button>
                 {confirmDeleteTemplate === template.id ? (
                   <>
                     <button
@@ -359,6 +394,21 @@ export default function Dashboard() {
             ))}
           </ul>
         </section>
+      )}
+
+      {/* Between the two things that open it — the template pills above and the
+          meal list below — so it is a short scroll from either. */}
+      {shareError && (
+        <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+          {shareError}
+        </p>
+      )}
+      {shareCode && (
+        <ShareCodePanel
+          label={shareCode.label}
+          code={shareCode.code}
+          onClose={() => setShareCode(null)}
+        />
       )}
 
       <section className="grid gap-6 lg:grid-cols-5">
@@ -408,6 +458,15 @@ export default function Dashboard() {
                     </span>
                   ) : (
                     <span className="flex items-center gap-3">
+                      <button
+                        onClick={() =>
+                          showCode(meal.name, () => api.shareMeal(meal.id))
+                        }
+                        className="text-xs text-slate-500 hover:text-emerald-400"
+                        title="Copy this meal as a code"
+                      >
+                        📋
+                      </button>
                       <Link
                         to="/log"
                         state={{ editMeal: meal }}

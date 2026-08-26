@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .banking import MAX_DAY_DELTA_KCAL, MAX_PLAN_DAYS
+from .share import MAX_CODE_CHARS
 
 
 class SignupRequest(BaseModel):
@@ -153,6 +154,58 @@ class MealTemplate(MealTemplateCreate):
     # the same name. Overwriting a food is a correction; overwriting a template
     # destroys an ingredient list, so the client says which happened.
     created: bool = False
+
+
+class ShareCode(BaseModel):
+    """A meal encoded as a string, ready to hand to someone.
+
+    Wrapped in an object rather than returned as a bare string so the response
+    has somewhere to grow -- a length, an expiry -- without breaking every
+    client that already reads `.code`.
+    """
+
+    code: str
+
+
+class ShareDecodeRequest(BaseModel):
+    # A coarse pre-filter on the raw string. The codec re-checks the length
+    # after stripping whitespace, and since stripped <= raw the same constant is
+    # correct in both places. This one exists so an absurd body is refused by
+    # the request model, before any handler code runs.
+    code: str = Field(min_length=1, max_length=MAX_CODE_CHARS)
+
+
+class SharedMeal(BaseModel):
+    """A meal that arrived in a code, on its way into the recipient's form.
+
+    Field-identical to MealTemplateCreate today, and deliberately NOT an alias
+    for it. This model validates bytes a stranger chose; that one describes what
+    this account may save. The day someone adds a field to template-saving must
+    not be the day a code can carry it, so the duplication is the point. A test
+    pins the two field sets equal, so the day they should diverge is a decision
+    rather than an accident.
+
+    Reusing TemplateItem and MAX_TEMPLATE_ITEMS is what guarantees a code cannot
+    express anything a normal save could not -- including allow_inf_nan=False,
+    which is the single most valuable check here: json.loads accepts the bare
+    token `Infinity`, so without it a hand-built code could put inf into a Float
+    column.
+
+    Carries no date, no id and no owner. Not an oversight: a date is when the
+    *sender* ate it, and MealCreate has no future-date validator to stop a code
+    pushing the recipient's meal into next year. Ids mean nothing outside the
+    database they came from, and there is nothing about the sender worth
+    carrying.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    calories: float = Field(ge=0, allow_inf_nan=False)
+    protein: float = Field(ge=0, allow_inf_nan=False)
+    carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    items: list[TemplateItem] = Field(
+        default_factory=list, max_length=MAX_TEMPLATE_ITEMS
+    )
 
 
 class FoodCreate(BaseModel):

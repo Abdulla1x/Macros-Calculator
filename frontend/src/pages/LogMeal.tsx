@@ -3,10 +3,17 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
+import MealCodeInput from '../components/MealCodeInput'
 import { localIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
 import { useSettings } from '../settings/SettingsContext'
-import type { FoodCreate, Meal, MealAnalysisResponse, MealTemplate } from '../types'
+import type {
+  FoodCreate,
+  Meal,
+  MealAnalysisResponse,
+  MealTemplate,
+  SharedMeal,
+} from '../types'
 
 interface Row {
   key: number
@@ -85,14 +92,24 @@ const rowFromTotals = (
   saveToLibrary: false,
 })
 
+// Just the fields rowsFromTemplate actually reads, rather than a whole
+// MealTemplate -- the same narrowing rowFromTotals above already uses. It is
+// what lets a meal arriving in a share code, which has no id and was never a
+// row in this account, be applied by the identical function.
+type Applicable = Pick<
+  MealTemplate,
+  'name' | 'calories' | 'protein' | 'carbs' | 'fat' | 'items'
+>
+
 // A template keeps its ingredient rows, so applying one restores each at the
 // weight it was saved at — which is the entire reason templates store items
 // rather than just totals: the rice stays adjustable on its own.
 //
-// A template saved while editing an existing meal has no items, only totals.
-// Returning zero rows there would open the form empty and then refuse to save,
-// complaining about ingredients the user never entered.
-const rowsFromTemplate = (template: MealTemplate): Row[] =>
+// A template saved while editing an existing meal has no items, only totals,
+// and so does every code made from a logged meal. Returning zero rows there
+// would open the form empty and then refuse to save, complaining about
+// ingredients the user never entered.
+const rowsFromTemplate = (template: Applicable): Row[] =>
   template.items.length === 0
     ? [rowFromTotals(template)]
     : template.items.map((item) => ({
@@ -132,6 +149,13 @@ export default function LogMeal() {
   // Set when a Quick log template was tapped on the dashboard.
   const template =
     (location.state as { template?: MealTemplate } | null)?.template ?? null
+  // Set when a meal code was pasted below. The decoded meal and the code that
+  // produced it travel together: the meal fills the form, and the code is the
+  // only stable identity it has -- see the context string in the effect below.
+  const shared =
+    (location.state as { sharedMeal?: SharedMeal } | null)?.sharedMeal ?? null
+  const sharedCode =
+    (location.state as { sharedCode?: string } | null)?.sharedCode ?? null
 
   const { settings } = useSettings()
   const [rows, setRows] = useState<Row[]>([emptyRow()])
@@ -145,7 +169,15 @@ export default function LogMeal() {
   // parent has no business reaching into ten pieces of it -- so a key is both
   // the smallest and the most complete way to reset it.
   const [analyzerNonce, setAnalyzerNonce] = useState(0)
-  const lastContext = useRef(`${editMeal?.id ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`)
+  // Whether what is currently in the form came out of a meal code, which is not
+  // the same question as whether location.state holds one. The state survives a
+  // save -- nothing clears a history entry -- so keying the notice off `shared`
+  // directly left it standing over an empty form, and then over the next meal
+  // the user typed by hand.
+  const [fromCode, setFromCode] = useState(false)
+  const lastContext = useRef(
+    `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`,
+  )
 
   // Covers both mount and in-place navigation (edit → "Log a meal" and back).
   //
@@ -155,11 +187,16 @@ export default function LogMeal() {
   // mode if that ever stops being true, and it reads as "the tap did nothing".
   useEffect(() => {
     if (editMeal) setRows([rowFromTotals(editMeal)])
+    // A pasted code outranks a template: they are never both set, but if that
+    // ever changes, the paste is what the user just did and the template is
+    // stale navigation state.
+    else if (shared) setRows(rowsFromTemplate(shared))
     else if (template) setRows(rowsFromTemplate(template))
     else setRows([emptyRow()])
-    setMealName(editMeal?.name ?? template?.name ?? '')
+    setMealName(editMeal?.name ?? shared?.name ?? template?.name ?? '')
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
+    setFromCode(Boolean(shared))
     setMessage(null)
     // Switching what this page is for -- a new meal, an edit, a template --
     // must take the analyzer with it. Without this, opening a meal to edit
@@ -175,12 +212,16 @@ export default function LogMeal() {
     // typed, and carrying it into an edit is a much smaller harm than deleting
     // it because they tapped a different button. Only a completed save clears
     // it, because only then is it certainly spent.
-    const context = `${editMeal?.id ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`
+    // Keyed on the code, not on the decoded meal: a shared meal has no id, and
+    // two different codes can carry the same name (someone re-sending a
+    // corrected version), so comparing shared.name would silently fail to
+    // notice the switch and leave the previous analysis sitting above the form.
+    const context = `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`
     if (lastContext.current !== context) {
       lastContext.current = context
       setAnalyzerNonce((n) => n + 1)
     }
-  }, [editMeal, template, logDate])
+  }, [editMeal, shared, sharedCode, template, logDate])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -314,6 +355,8 @@ export default function LogMeal() {
       // mount, so a remount that left it behind would hand the next meal the
       // description of the one just saved.
       clearNoteDraft()
+      // The numbers it described are no longer on screen.
+      setFromCode(false)
       setAnalyzerNonce((n) => n + 1)
     } catch (error) {
       setMessage({
@@ -401,6 +444,29 @@ export default function LogMeal() {
             : 'Start typing an ingredient — your food library and Open Food Facts fill in the macros.'}
         </p>
       </header>
+
+      <MealCodeInput
+        onLoaded={(sharedMeal, code) =>
+          // Navigate rather than setRows: the effect above is the single place
+          // that decides what this form holds, and it also resets the analyzer
+          // and clears analysisId. That last one matters -- applyAnalysis sets
+          // analysisId, and saving with a stale one would link an AI estimate
+          // to a meal it never produced, quietly corrupting the calibration
+          // figures on the Analytics page.
+          navigate('/log', {
+            state: { sharedMeal, sharedCode: code, logDate: mealDate },
+            replace: true,
+          })
+        }
+      />
+
+      {fromCode && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+          These numbers came from whoever sent you the code. The app has not checked
+          them and cannot — they may have been weighed, estimated or guessed. Change
+          anything that looks wrong before you save; this is your copy now.
+        </p>
+      )}
 
       <MealAnalyzer key={analyzerNonce} settings={settings} onApply={applyAnalysis} />
 
