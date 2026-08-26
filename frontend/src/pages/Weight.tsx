@@ -27,7 +27,7 @@ const CHART_DAYS = 90
 
 const cardClass = 'rounded-xl border border-slate-800 bg-slate-900 p-5'
 const fieldClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500'
 
 export default function Weight() {
   const { settings, reload: reloadSettings } = useSettings()

@@ -191,7 +191,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500 focus:outline-none'
+    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500'
 
   if (!expanded) {
     return (

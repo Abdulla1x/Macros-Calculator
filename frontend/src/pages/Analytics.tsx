@@ -131,7 +131,7 @@ export default function Analytics() {
   }
 
   const inputClass =
-    'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none'
+    'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500'
 
   return (
     <div className="space-y-6">
