@@ -23,6 +23,48 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # the localStorage keys that remember a user already dismissed a note.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-26-meal-codes",
+        date="2026-08-26",
+        title="Hand someone a meal, without handing them your account",
+        body=(
+            "Every saved meal and every Quick log template now has a copy "
+            "button. It turns that meal into a code -- a long string of "
+            "characters -- which you can send to anyone the way you would send "
+            "a message. They paste it on the Log Meal page and your meal opens "
+            "in their form, ready to edit and save as their own.\n\n"
+            "Sharing a **template** is the better one, because a template keeps "
+            "its ingredient rows: the person you send it to can change the rice "
+            "from 200 g to 250 g without touching anything else. A logged meal "
+            "has no ingredient rows to give -- the app throws them away when you "
+            "save -- so it arrives as one line with the totals.\n\n"
+            "It is worth being clear about what this is not, because it is "
+            "unusual.\n\n"
+            "**It is not a link.** There is nothing to click and nothing to "
+            "load. The whole meal is inside the code itself, which is exactly "
+            "why the code is so long.\n\n"
+            "**It is not a friend request.** There is no friend list, no "
+            "following and no invitations. Nobody is notified, and the app "
+            "never learns that the two of you know each other.\n\n"
+            "**It cannot be taken back.** Once you have sent a code it is out. "
+            "Correcting or deleting your own meal afterwards does nothing to it, "
+            "because the code carries the numbers themselves rather than "
+            "pointing at your row.\n\n"
+            "**Nothing is tracked.** No record is kept of who made a code or who "
+            "used one. There is no table behind this feature at all.\n\n"
+            "**Nothing is verified.** The app did not check the numbers in a "
+            "code and could not have -- whoever made it either typed them or "
+            "accepted an estimate. Treat them the way you would treat a friend "
+            "saying \"that\'s about 600 calories\", and edit them. That warning "
+            "sits on screen when you load one.\n\n"
+            "**They get a copy they own.** It saves into their account as their "
+            "own entry. Nothing of yours is shared, changed, or visible to them, "
+            "and nothing of theirs is visible to you.\n\n"
+            "One thing worth saying plainly: the meal **name** travels with the "
+            "numbers, and it is free text. Do not put anything in it you would "
+            "not want to send."
+        ),
+    ),
+    Announcement(
         id="2026-08-26-estimate-accuracy",
         date="2026-08-26",
         title="The app now keeps score of its own estimates",
