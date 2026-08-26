@@ -28,7 +28,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, calorie plans, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Layered AI quotas**: 20 analyses + 40 voice notes per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All three are env-tunable
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
-- **Password reset by email**: single-use link, hashed at rest and valid for an hour; using it revokes every existing session. `POST /api/auth/forgot-password` answers identically whether or not the address has an account
+- **Password reset by email — built, deployed, and switched off.** The endpoints, the single-use link (hashed at rest, valid an hour, revoking every session when used) and 38 tests are all here and running in production. They answer **503 to every address**, because no email provider is configured — three free providers were tried and all three refused a domainless free account, which is the profile their fraud screening targets. Until one is wired up **a forgotten password means a lost account**, and the signup page says so rather than letting you find out later. Nothing about the feature needs a deploy to switch on; it activates on credentials alone
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
@@ -88,7 +88,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
                                 │  PostgreSQL │ users · meals    │ (meal analysis) │
                                 │ (Neon)/SQLite│ foods · settings└─────────────────┘
                                 └─────────────┘ ai_analyses     ┌─────────────────┐
-                                        password_resets  httpx  │ Brevo           │
+                                        password_resets  httpx  │ Brevo (off)     │
                                                  └─────────────►│ (password reset)│
                                                                 └─────────────────┘
 ```
@@ -236,7 +236,14 @@ server boots, so the schema is created/updated on deploy. In the Render dashboar
   timestamps only, never meal, food or weight content
 - `BREVO_API_KEY` + `EMAIL_SENDER_ADDRESS` — enable password reset (it returns 503
   for every address until both are set). The sender must be verified in the Brevo
-  dashboard first: add the address, then enter the 6-digit code it emails you
+  dashboard first: add the address, then enter the 6-digit code it emails you.
+  ⚠️ **This deployment has never got past that step**, and neither did two
+  alternatives — Brevo's phone verification never delivers a code, and Mailjet
+  auto-blocks the account on its first API call. Both are the same underlying
+  cause: a new free account with no domain and a gmail.com sender is the profile
+  free-ESP fraud screening exists to stop. A provider with **an HTTP API (never
+  SMTP — Render blocks outbound 25/465/587 on free web services) and a real
+  domain** is what unblocks it
 - `EMAIL_SENDER_NAME` / `APP_BASE_URL` / `PASSWORD_RESET_TTL_MINUTES` /
   `PASSWORD_RESET_GLOBAL_DAILY_LIMIT` — optional; all default in code. `APP_BASE_URL`
   builds the emailed link and is **never** taken from the request's Host header
@@ -281,8 +288,8 @@ on the caller's data, except these public ones: `/api/health`,
 | POST | `/api/auth/login` | Log in → JWT + user |
 | GET | `/api/auth/me` | Current user (token check) |
 | POST | `/api/auth/change-password` | Rotate password; revokes older tokens, returns a fresh one |
-| POST | `/api/auth/forgot-password` | Email a reset link. Always 200, whether or not the address exists |
-| POST | `/api/auth/reset-password` | Consume a link and set a new password; revokes every session |
+| POST | `/api/auth/forgot-password` | Email a reset link. Always 200, whether or not the address exists — but **503 today**, see above |
+| POST | `/api/auth/reset-password` | Consume a link and set a new password; revokes every session. Reachable, but no link can be issued while the above 503s |
 | DELETE | `/api/auth/account` | Permanently delete the account and all its data |
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
 | DELETE | `/api/meals/{id}` | Delete a meal |
