@@ -437,7 +437,7 @@ export default function LogMeal() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h2>
+        <h1 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h1>
         <p className="text-sm text-slate-400">
           {editMeal
             ? 'Adjust the details below — saving updates the existing entry.'
@@ -474,14 +474,14 @@ export default function LogMeal() {
         {rows.map((row, index) => (
           <div key={row.key} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-300">
+              <h2 className="text-sm font-semibold text-slate-300">
                 {rows.length === 1 ? 'Ingredient' : `Ingredient ${index + 1}`}
                 {row.fromLibrary && (
                   <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
                     from library
                   </span>
                 )}
-              </h3>
+              </h2>
               {rows.length > 1 && (
                 <button
                   onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
@@ -596,7 +596,7 @@ export default function LogMeal() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Meal details</h3>
+        <h2 className="mb-3 font-semibold">Meal details</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-slate-400">Meal name</span>

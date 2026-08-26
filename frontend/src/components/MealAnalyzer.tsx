@@ -207,7 +207,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold">AI meal analysis</h3>
+        <h2 className="font-semibold">AI meal analysis</h2>
         <button
           onClick={() => setExpanded(false)}
           className="text-xs text-ink-faint hover:text-slate-300"
@@ -348,7 +348,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       {analysis && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-800/40 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="font-semibold">{analysis.meal_name}</h4>
+            <h3 className="font-semibold">{analysis.meal_name}</h3>
             <span
               className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${confidenceBadge[analysis.confidence]}`}
             >

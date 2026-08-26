@@ -69,7 +69,7 @@ export default function MealCodeInput({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h3 className="mb-1 text-sm font-semibold text-slate-300">Paste a meal code</h3>
+      <h2 className="mb-1 text-sm font-semibold text-slate-300">Paste a meal code</h2>
       <p className="mb-3 text-sm text-slate-400">
         Codes are long — paste the whole thing. Nothing is sent to whoever gave it to
         you, and they are not told you used it.

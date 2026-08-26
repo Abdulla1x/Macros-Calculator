@@ -42,6 +42,17 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen md:flex">
+      {/* First thing in the tab order. Without it a keyboard user tabs through
+          five nav items on every single page before reaching content. Uses
+          :focus rather than :focus-visible on purpose -- the link is only ever
+          reachable by keyboard, and :focus is the pattern with the widest
+          support for this one case. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-control focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-brand-ink"
+      >
+        Skip to content
+      </a>
       {/* One element serves both shells. Below md it is a single sticky top bar
           holding brand and account — it used to be three stacked rows, ~170px of
           chrome before any content on a phone. At md+ it is the 240px rail it
@@ -55,7 +66,10 @@ export default function Layout() {
             🍽️
           </span>
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold tracking-tight">Macros Calculator</h1>
+            {/* Not an <h1>: it is the site identity, repeated on every page. Each
+                page now owns the single <h1>, so heading navigation can tell them
+                apart instead of landing on "Macros Calculator" five times. */}
+            <span className="block truncate text-base font-bold tracking-tight">Macros Calculator</span>
             <p className="hidden text-xs text-ink-faint md:block">Nutrition tracker</p>
           </div>
         </div>
@@ -116,7 +130,7 @@ export default function Layout() {
       </aside>
       {/* The bottom padding clears the fixed tab bar and its safe-area inset, so
           the last card on a page is never trapped underneath it. */}
-      <main className="flex-1 px-4 py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pb-8">
+      <main id="main" tabIndex={-1} className="flex-1 px-4 py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pb-8">
         <div className="mx-auto max-w-5xl">
           <StatusBanner banner={announcements?.banner ?? null} />
           {coldStart && (

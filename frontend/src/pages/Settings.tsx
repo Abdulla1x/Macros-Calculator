@@ -138,12 +138,12 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Settings</h2>
+        <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-sm text-slate-400">Choose what to track and set your daily goals.</p>
       </header>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Tracked macros</h3>
+        <h2 className="mb-3 font-semibold">Tracked macros</h2>
         <p className="mb-4 text-sm text-slate-400">
           Calories and protein are always tracked. Enable carbs and fat if you want the full
           breakdown — they appear on the dashboard, meal log and analytics.
@@ -172,7 +172,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Units</h3>
+        <h2 className="mb-3 font-semibold">Units</h2>
         <p className="mb-4 text-sm text-slate-400">
           How weights are shown on the Weight page. Entries are stored the same way
           either way, so switching converts your history rather than rewriting it.
@@ -203,7 +203,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">Body profile</h3>
+        <h2 className="mb-1 font-semibold">Body profile</h2>
         <p className="mb-4 text-sm text-slate-400">
           Optional, and the app works fine without it. Fill it in and we can work
           out your BMI, roughly what you burn in a day, and daily targets that
@@ -307,7 +307,7 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-4 font-semibold">Daily goals</h3>
+        <h2 className="mb-4 font-semibold">Daily goals</h2>
 
         <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
           <input
@@ -432,7 +432,7 @@ function StepsSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">👟 Steps</h3>
+      <h2 className="mb-1 font-semibold">👟 Steps</h2>
       <p className="mb-4 text-sm text-slate-400">
         Step counts are typed in by hand. Reading them from your phone or watch
         needs Health Connect or Apple Health, and neither is open to a web app
@@ -479,7 +479,7 @@ function StepsSection({
           manual, which is exactly where someone thinks "can I not just upload
           this?" */}
       <div className="mt-5 border-t border-slate-800 pt-4">
-        <h4 className="mb-1 text-sm font-semibold">Import a step history</h4>
+        <h3 className="mb-1 text-sm font-semibold">Import a step history</h3>
         <p className="mb-3 text-xs text-ink-faint">
           A CSV with a <code className="text-slate-400">date</code> column and a{' '}
           <code className="text-slate-400">steps</code> column, one row per day.
@@ -667,7 +667,7 @@ function SupplementsSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">💊 Supplements</h3>
+      <h2 className="mb-1 font-semibold">💊 Supplements</h2>
       <p className="mb-4 text-sm text-slate-400">
         What you take, and when. Each time you add becomes a box to tick on your
         dashboard. The card will tell you when a dose is overdue while the app
@@ -957,7 +957,7 @@ function WaterSection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">💧 Water</h3>
+      <h2 className="mb-1 font-semibold">💧 Water</h2>
       <p className="mb-4 text-sm text-slate-400">
         The card on your dashboard. Nothing here is required — leave it alone and
         the goal follows your weight.
@@ -1111,7 +1111,7 @@ function AccountSection() {
   return (
     <>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">Account</h3>
+        <h2 className="mb-1 font-semibold">Account</h2>
         <p className="mb-4 text-sm text-slate-400">Signed in as {user?.email}</p>
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
@@ -1185,7 +1185,7 @@ function AccountSection() {
       </section>
 
       <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold text-rose-300">Danger zone</h3>
+        <h2 className="mb-1 font-semibold text-rose-300">Danger zone</h2>
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
           weight entries, water logs, step counts, supplements and their check-offs,
@@ -1377,7 +1377,7 @@ function BodyTargetsCard({
   if (!targets) {
     return (
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-1 font-semibold">What your profile works out to</h3>
+        <h2 className="mb-1 font-semibold">What your profile works out to</h2>
         <p className="text-sm text-slate-400">Loading…</p>
       </section>
     )
@@ -1442,7 +1442,7 @@ function BodyTargetsCard({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">What your profile works out to</h3>
+      <h2 className="mb-1 font-semibold">What your profile works out to</h2>
       <p className="mb-4 text-sm text-slate-400">
         {measured
           ? 'Your daily burn is now measured from your own logs — what you ate, ' +

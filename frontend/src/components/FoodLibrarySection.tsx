@@ -178,7 +178,7 @@ export default function FoodLibrarySection({
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h3 className="mb-1 font-semibold">🥫 Food library</h3>
+      <h2 className="mb-1 font-semibold">🥫 Food library</h2>
       <p className="mb-4 text-sm text-slate-400">
         The foods autocomplete offers you when you log a meal. Things land here
         on their own:{' '}

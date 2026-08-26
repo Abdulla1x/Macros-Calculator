@@ -110,9 +110,9 @@ export default function SupplementsCard({ date }: Props) {
   if (error && !day) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="font-semibold">
+        <h2 className="font-semibold">
           <span className="mr-2">💊</span>Supplements
-        </h3>
+        </h2>
         <p className="mt-3 text-xs text-ink-faint">{error}</p>
       </div>
     )

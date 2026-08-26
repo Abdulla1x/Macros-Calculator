@@ -217,7 +217,7 @@ export default function CaloriePlanSection({
   return (
     <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div>
-        <h3 className="text-lg font-semibold">Calorie planning</h3>
+        <h2 className="text-lg font-semibold">Calorie planning</h2>
         <p className="mt-1 text-sm text-slate-400">
           Move calories between days without changing the week. Plan a bigger
           day and fund it from the days around it, or spread a day that already

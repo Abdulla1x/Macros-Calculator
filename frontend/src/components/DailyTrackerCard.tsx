@@ -55,10 +55,10 @@ export default function DailyTrackerCard({
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="font-semibold">
+        <h2 className="font-semibold">
           <span className="mr-2">{icon}</span>
           {label}
-        </h3>
+        </h2>
         <span className="text-sm text-slate-400">
           <span className="font-semibold text-slate-200">
             {Math.round(value).toLocaleString()}

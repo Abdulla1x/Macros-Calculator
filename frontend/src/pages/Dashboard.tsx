@@ -211,11 +211,11 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold">
+              <h1 className="text-2xl font-bold">
                 {isToday
                   ? 'Today'
                   : parseIsoDate(viewedDate).toLocaleDateString(undefined, { weekday: 'long' })}
-              </h2>
+              </h1>
               {!isToday && (
                 <button
                   onClick={() => setViewedDate(localIsoDate())}
@@ -334,7 +334,7 @@ export default function Dashboard() {
           the top on mobile, where re-logging yesterday's breakfast belongs. */}
       {templates.length > 0 && (
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="mb-3 font-semibold">Quick log</h3>
+          <h2 className="mb-3 font-semibold">Quick log</h2>
           <ul className="flex flex-wrap gap-2">
             {templates.map((template) => (
               <li key={template.id} className="flex items-stretch">
@@ -413,14 +413,14 @@ export default function Dashboard() {
 
       <section className="grid gap-6 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3">
-          <h3 className="mb-3 font-semibold">
+          <h2 className="mb-3 font-semibold">
             {isToday
               ? "Today's meals"
               : `Meals · ${parseIsoDate(viewedDate).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
                 })}`}
-          </h3>
+          </h2>
           {error && (
             <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
               {error}{' '}
@@ -495,7 +495,7 @@ export default function Dashboard() {
               on this page in full — the rings and the meal list above — so
               leaving it out of the trend costs nothing and keeps the chart and
               the average below it telling the same story. */}
-          <h3 className="mb-3 font-semibold">Previous 7 days</h3>
+          <h2 className="mb-3 font-semibold">Previous 7 days</h2>
           {week && week.days.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={week.days} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>

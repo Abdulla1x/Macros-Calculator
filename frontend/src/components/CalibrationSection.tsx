@@ -82,7 +82,7 @@ export default function CalibrationSection() {
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h3 className="font-semibold">How close were the AI's estimates?</h3>
+        <h2 className="font-semibold">How close were the AI's estimates?</h2>
         {data && data.linked > 0 && (
           <p className="text-xs text-slate-400">
             {data.linked} meal{data.linked === 1 ? '' : 's'} saved from an estimate

@@ -136,7 +136,7 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Analytics</h2>
+        <h1 className="text-2xl font-bold">Analytics</h1>
         <p className="text-sm text-slate-400">Trends and averages over any date range.</p>
       </header>
 
@@ -191,9 +191,9 @@ export default function Analytics() {
 
           {visibleCharts.map((chart) => (
             <section key={chart.key} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <h3 className="mb-3 font-semibold" style={{ color: chart.color }}>
+              <h2 className="mb-3 font-semibold" style={{ color: chart.color }}>
                 {chart.label} over time
-              </h3>
+              </h2>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={summary.days} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
                   <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
@@ -264,7 +264,7 @@ export default function Analytics() {
       <CalibrationSection />
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="mb-3 font-semibold">Backup & restore</h3>
+        <h2 className="mb-3 font-semibold">Backup & restore</h2>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleExport}

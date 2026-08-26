@@ -56,7 +56,7 @@ export default function ShareCodePanel({
       className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-5"
     >
       <div className="mb-1 flex items-start justify-between gap-3">
-        <h3 className="font-semibold">Meal code for “{label}”</h3>
+        <h2 className="font-semibold">Meal code for “{label}”</h2>
         <button
           onClick={onClose}
           aria-label="Close the meal code panel"

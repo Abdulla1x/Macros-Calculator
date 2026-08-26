@@ -112,7 +112,7 @@ export default function Weight() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-bold">Weight</h2>
+        <h1 className="text-2xl font-bold">Weight</h1>
         <p className="text-sm text-slate-400">
           Log a weigh-in and watch the trend, not the daily noise.
         </p>
@@ -123,7 +123,7 @@ export default function Weight() {
       )}
 
       <section className={cardClass}>
-        <h3 className="mb-3 font-semibold">Log a weigh-in</h3>
+        <h2 className="mb-3 font-semibold">Log a weigh-in</h2>
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Date</span>
@@ -173,7 +173,7 @@ export default function Weight() {
 
       <section className={cardClass}>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h3 className="font-semibold">Last {CHART_DAYS} days</h3>
+          <h2 className="font-semibold">Last {CHART_DAYS} days</h2>
           {trend && trend.point_count > 0 && (
             <p className="text-xs text-ink-faint">
               {trend.point_count} weigh-in{trend.point_count === 1 ? '' : 's'} logged
@@ -247,7 +247,7 @@ export default function Weight() {
       </section>
 
       <section className={cardClass}>
-        <h3 className="mb-3 font-semibold">History</h3>
+        <h2 className="mb-3 font-semibold">History</h2>
         {entries.length === 0 ? (
           <p className="py-6 text-center text-sm text-ink-faint">Nothing logged yet.</p>
         ) : (
