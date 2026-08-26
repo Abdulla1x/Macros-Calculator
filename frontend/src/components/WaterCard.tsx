@@ -138,7 +138,7 @@ export default function WaterCard({ date }: Props) {
               }}
               placeholder="ml"
               aria-label="Custom amount in ml"
-              className="w-20 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
+              className="w-20 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200"
             />
             <button
               onClick={addCustom}

@@ -333,7 +333,6 @@ export default function CaloriePlanSection({
                   setEventDate(e.target.value)
                   setSelected([])
                 }}
-                style={{ colorScheme: 'dark' }}
                 className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-slate-200"
               />
             </label>

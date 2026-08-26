@@ -112,7 +112,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => value.trim().length >= 2 && setOpen(true)}
         placeholder="Type a food name…"
-        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500"
+        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500"
       />
       {open && (
         <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">

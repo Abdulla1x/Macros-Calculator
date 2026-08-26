@@ -80,7 +80,7 @@ export default function MealCodeInput({
         rows={3}
         spellCheck={false}
         placeholder="MC1..."
-        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs break-all text-slate-200"
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-base break-all text-slate-200 sm:text-xs"
       />
       {error && <p className="mt-2 text-sm text-amber-300">{error}</p>}
       <div className="mt-3 flex gap-2">

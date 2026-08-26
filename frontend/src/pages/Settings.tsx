@@ -219,7 +219,6 @@ export default function Settings() {
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
               className={fieldClass}
-              style={{ colorScheme: 'dark' }}
             />
             <span className="mt-1 block text-xs text-ink-faint">
               Stored as the date, so your age stays right without you editing it.
@@ -236,7 +235,6 @@ export default function Settings() {
                 })
               }
               className={fieldClass}
-              style={{ colorScheme: 'dark' }}
             >
               <option value="">Not set</option>
               {activityOptions.map(({ value, label }) => (
@@ -340,7 +338,7 @@ export default function Settings() {
                 readOnly={settings.targets_auto}
                 onChange={(event) => update({ [field.key]: Number(event.target.value) })}
                 onBlur={guard(field.key)}
-                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500 ${
+                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base focus:border-emerald-500 sm:text-sm ${
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
               />
@@ -392,7 +390,7 @@ export default function Settings() {
 }
 
 const fieldClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-emerald-500'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -462,7 +460,7 @@ function StepsSection({
               update({ steps_goal: null })
             }}
             aria-label="Daily step goal"
-            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-violet-500"
+            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-violet-500"
           />
           <span className="text-xs text-ink-faint">steps</span>
         </span>
@@ -829,7 +827,7 @@ function SupplementForm({
   busy: boolean
 }) {
   const field =
-    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200 focus:border-emerald-500'
+    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base text-slate-200 sm:text-sm focus:border-emerald-500'
 
   return (
     <div className="space-y-2">
@@ -863,7 +861,6 @@ function SupplementForm({
               value={time}
               onChange={(event) => setTime(index, event.target.value)}
               aria-label={`Time ${index + 1}`}
-              style={{ colorScheme: 'dark' }}
               className={`${field} rounded-r-none`}
             />
             <button
@@ -1010,7 +1007,7 @@ function WaterSection({
                     update({ water_goal_ml: 2500 })
                   }}
                   aria-label="Daily water goal in ml"
-                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-sky-500"
+                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-sky-500"
                 />
                 <span className="text-xs text-ink-faint">ml</span>
               </span>
@@ -1033,7 +1030,7 @@ function WaterSection({
                 onChange={(event) => setQuickAdd(index, event.target.value)}
                 onBlur={guardQuickAdd(index)}
                 aria-label={`Quick-add button ${index + 1}, in ml`}
-                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm focus:border-sky-500"
+                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-base sm:text-sm focus:border-sky-500"
               />
             </span>
           ))}

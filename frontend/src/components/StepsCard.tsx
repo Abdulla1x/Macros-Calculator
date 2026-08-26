@@ -117,7 +117,7 @@ export default function StepsCard({ date }: Props) {
               }}
               placeholder="steps"
               aria-label="Step count for this day"
-              className="w-24 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200"
+              className="w-24 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200"
             />
             <button
               onClick={save}

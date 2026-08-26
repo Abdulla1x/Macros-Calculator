@@ -78,7 +78,7 @@ export default function ShareCodePanel({
         rows={3}
         spellCheck={false}
         onFocus={(event) => event.currentTarget.select()}
-        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs break-all text-slate-300"
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-base break-all text-slate-300 sm:text-xs"
       />
       <div className="mt-3 flex items-center gap-3">
         <button

@@ -230,8 +230,7 @@ export default function Dashboard() {
               value={viewedDate}
               max={realToday}
               onChange={(e) => e.target.value && setViewedDate(e.target.value)}
-              style={{ colorScheme: 'dark' }}
-              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-sm text-slate-400"
+              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-base sm:text-sm text-slate-400"
               aria-label="Pick a date"
             />
           </div>

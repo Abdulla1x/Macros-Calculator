@@ -205,7 +205,7 @@ export default function FoodLibrarySection({
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter food library"
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm placeholder-ink-muted focus:border-emerald-500"
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500"
           />
           <span className="text-xs text-slate-400">
             {items.length} food{items.length === 1 ? '' : 's'}
@@ -359,7 +359,7 @@ function FoodForm({
   busy: boolean
 }) {
   const field =
-    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-200 focus:border-emerald-500'
+    'rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200 focus:border-emerald-500'
 
   const numberField = (
     key: 'servingSize' | 'calories' | 'protein' | 'carbs' | 'fat',
