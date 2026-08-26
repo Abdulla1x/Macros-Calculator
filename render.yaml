@@ -1,6 +1,11 @@
 services:
   - type: web
-    name: macros-calculator-api
+    # Must match the live service, which is the -us one: the original
+    # macros-calculator-api was retired in the region move and now 404s.
+    # NOTE: this file is NOT synced with the Render dashboard, and the
+    # dashboard is the source of truth for every value here. Treat this
+    # blueprint as documentation of intent, not as deployed state.
+    name: macros-calculator-api-us
     runtime: python
     plan: free
     # Must stay outside the EEA/UK/CH: Gemini's free tier is geo-blocked there

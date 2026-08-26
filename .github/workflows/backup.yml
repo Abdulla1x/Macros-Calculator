@@ -33,7 +33,7 @@
 #     job; not fine if this is ever turned into a tight loop.
 #
 # Required repository secrets:
-#   BACKUP_API_BASE   e.g. https://macros-calculator-api.onrender.com
+#   BACKUP_API_BASE   e.g. https://macros-calculator-api-us.onrender.com
 #   BACKUP_EMAIL      the account to back up
 #   BACKUP_PASSWORD   its password
 
