@@ -92,22 +92,23 @@ const rowFromTotals = (
   saveToLibrary: false,
 })
 
-// A template keeps its ingredient rows, so applying one restores each at the
-// weight it was saved at — which is the entire reason templates store items
-// rather than just totals: the rice stays adjustable on its own.
-//
-// A template saved while editing an existing meal has no items, only totals.
-// Returning zero rows there would open the form empty and then refuse to save,
-// complaining about ingredients the user never entered.
-// Widened from MealTemplate to just the fields actually read, the same way
-// rowFromTotals already is. That is what lets a meal arriving in a share code
-// -- which has no id and was never a row here -- be applied by this function
-// unchanged, including its totals-only fallback below.
+// Just the fields rowsFromTemplate actually reads, rather than a whole
+// MealTemplate -- the same narrowing rowFromTotals above already uses. It is
+// what lets a meal arriving in a share code, which has no id and was never a
+// row in this account, be applied by the identical function.
 type Applicable = Pick<
   MealTemplate,
   'name' | 'calories' | 'protein' | 'carbs' | 'fat' | 'items'
 >
 
+// A template keeps its ingredient rows, so applying one restores each at the
+// weight it was saved at — which is the entire reason templates store items
+// rather than just totals: the rice stays adjustable on its own.
+//
+// A template saved while editing an existing meal has no items, only totals,
+// and so does every code made from a logged meal. Returning zero rows there
+// would open the form empty and then refuse to save, complaining about
+// ingredients the user never entered.
 const rowsFromTemplate = (template: Applicable): Row[] =>
   template.items.length === 0
     ? [rowFromTotals(template)]
@@ -168,6 +169,12 @@ export default function LogMeal() {
   // parent has no business reaching into ten pieces of it -- so a key is both
   // the smallest and the most complete way to reset it.
   const [analyzerNonce, setAnalyzerNonce] = useState(0)
+  // Whether what is currently in the form came out of a meal code, which is not
+  // the same question as whether location.state holds one. The state survives a
+  // save -- nothing clears a history entry -- so keying the notice off `shared`
+  // directly left it standing over an empty form, and then over the next meal
+  // the user typed by hand.
+  const [fromCode, setFromCode] = useState(false)
   const lastContext = useRef(
     `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`,
   )
@@ -189,6 +196,7 @@ export default function LogMeal() {
     setMealName(editMeal?.name ?? shared?.name ?? template?.name ?? '')
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
+    setFromCode(Boolean(shared))
     setMessage(null)
     // Switching what this page is for -- a new meal, an edit, a template --
     // must take the analyzer with it. Without this, opening a meal to edit
@@ -347,6 +355,8 @@ export default function LogMeal() {
       // mount, so a remount that left it behind would hand the next meal the
       // description of the one just saved.
       clearNoteDraft()
+      // The numbers it described are no longer on screen.
+      setFromCode(false)
       setAnalyzerNonce((n) => n + 1)
     } catch (error) {
       setMessage({
@@ -450,7 +460,7 @@ export default function LogMeal() {
         }
       />
 
-      {shared && (
+      {fromCode && (
         <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
           These numbers came from whoever sent you the code. The app has not checked
           them and cannot — they may have been weighed, estimated or guessed. Change
