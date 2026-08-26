@@ -97,30 +97,51 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 Macros-Calculator
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app, CORS, lifespan
+│   │   ├── main.py              # FastAPI app, CORS, lifespan (fails fast on a missing JWT_SECRET)
 │   │   ├── db.py                # SQLAlchemy engine + session dependency
-│   │   ├── models.py            # ORM models (users, meals, meal_templates, foods, settings, weights, water_logs, steps, supplements, supplement_logs, calorie_plan_days, ai_analyses, password_resets)
+│   │   ├── env.py               # env_int / env_float — one idiom for ~23 environment variables
+│   │   ├── models.py            # ORM models: users, password_resets, meals, meal_templates, foods,
+│   │   │                        #   weights, water_logs, steps, supplements, supplement_logs,
+│   │   │                        #   calorie_plan_days, settings, ai_analyses
+│   │   ├── schemas.py           # Pydantic request/response models
 │   │   ├── auth/                # signup/login/me, Argon2 + JWT, current-user dependency
-│   │   ├── calculations.py      # Macro scaling, weight trend, BMR/TDEE/target math
-│   │   ├── targets.py           # Body profile → daily targets (the Phase 5 swap point)
-│   │   ├── banking.py           # Moving calories between days: the split, the floors, the two sum rules
-│   │   ├── schemas.py           # Pydantic models
-│   │   ├── routers/             # meals, meal_templates, foods, weights, water, steps, supplements, plan, analytics, settings, data (CSV), ai, admin
+│   │   ├── rate_limit.py        # per-IP limits on the public auth routes
+│   │   ├── upsert.py            # the check-then-insert race, handled once instead of at five sites
+│   │   ├── calculations.py      # macro scaling, weight trend, BMR/TDEE/target math
+│   │   ├── targets.py           # body profile → daily targets, and measured TDEE
+│   │   ├── banking.py           # moving calories between days: the split, the floors, the sum rules
+│   │   ├── calibration.py       # how far you move the AI's numbers — coverage, bias, sample sizes
+│   │   ├── share.py             # the meal-code codec (a self-contained payload; no table)
+│   │   ├── announcements.py     # committed release notes + an env-var status banner
+│   │   ├── routers/             # auth, meals, meal_templates, share, foods, weights, analytics,
+│   │   │                        #   settings, data (CSV/JSON), ai, water, steps, plan,
+│   │   │                        #   supplements, announcements, admin
 │   │   └── services/
 │   │       ├── off_client.py    # Open Food Facts client
-│   │       ├── meal_ai.py       # AI meal analysis (only AI-provider-aware module)
-│   │       └── email.py         # Password-reset email (only Brevo-aware module)
-│   ├── alembic/                 # Database migrations (Postgres)
+│   │       ├── meal_ai.py       # AI meal analysis (the only AI-provider-aware module)
+│   │       └── email.py         # password-reset email (the only Brevo-aware module; switched off)
+│   ├── alembic/                 # database migrations (Postgres)
+│   ├── scripts/                 # smoke_multiuser.py — the live two-account isolation check
 │   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── api/client.ts        # Typed API client
-│       ├── components/          # Layout, MacroRing, FoodAutocomplete, MealAnalyzer
-│       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes)
-│       └── pages/               # Dashboard, LogMeal, Analytics, Settings
-├── legacy/                      # Original Streamlit app (v1)
-└── render.yaml                  # Render deployment blueprint
+│       ├── api/client.ts        # typed API client
+│       ├── auth/                # AuthContext + token storage (guarded against blocked localStorage)
+│       ├── settings/            # SettingsContext — one settings fetch for the whole app
+│       ├── components/          # Layout, MacroRing, DailyTrackerCard, MealAnalyzer,
+│       │                        #   FoodAutocomplete, and the Settings/Analytics sections
+│       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes), useWarmup, ...
+│       ├── lib/                 # dates, limits (mirrors the server's bounds), units, dismissals
+│       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Settings, Admin,
+│                                #   and the four auth pages
+├── docs/                        # AI provider runbook + the Gemini EEA-region incident write-up
+├── scripts/                     # check.sh (all five gates), dev.sh, review-changes.sh
+├── .github/workflows/           # ci.yml (the same five gates), backup.yml (daily export)
+├── legacy/                      # original Streamlit app (v1)
+├── LICENSE                      # MIT
+└── render.yaml                  # Render blueprint — documentation of intent, NOT synced with
+                                 #   the dashboard, which is the source of truth for every value
 ```
 
 ---
@@ -199,12 +220,52 @@ npm run dev
 
 App: http://localhost:5173 (the dev server proxies `/api` to the backend).
 
-### Tests
+### Tests and gates
+
+`scripts/check.sh` runs every pre-commit gate in one pass — the same five CI runs:
+
+```bash
+./scripts/check.sh              # all five
+./scripts/check.sh --backend    # pytest + ruff only
+./scripts/check.sh --frontend   # tsc + oxlint + build only
+```
+
+| Gate | Command |
+|---|---|
+| backend tests | `venv/bin/python -m pytest -q` — 663 tests |
+| backend lint | `ruff check app tests scripts` |
+| frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
+| frontend lint | `npm run lint` (oxlint) |
+| frontend build | `npm run build` |
+
+It deliberately does not stop at the first failure. `a && b && c` hides whether the
+frontend is also broken once the backend fails, turning one fix-and-rerun cycle into
+three; every gate runs, then a summary says which failed.
+
+**Cross-tenant isolation is tested twice, deliberately.** `tests/test_isolation.py`
+asserts it in-process (47 tests). `backend/scripts/smoke_multiuser.py` asserts it
+against a *running* server — over a hundred live checks that sign up two accounts and
+fire every verb at the other account's concrete row ids, which is the only version
+that also covers routing, auth middleware and the deployed database:
 
 ```bash
 cd backend
-python -m pytest
+BASE_URL=http://localhost:8000 DATABASE_URL=... venv/bin/python scripts/smoke_multiuser.py
 ```
+
+⚠️ **Set `DATABASE_URL` or the row-ownership half silently skips** and you get a
+smaller, quieter pass. It also runs against the deployed URL — note that it leaves
+its two throwaway accounts behind, so it is the wrong tool for probing production.
+
+Browser-level checks are manual; backend tests do not catch interaction bugs.
+
+**Why ~6% of the suite covers a switched-off feature.** `tests/test_password_reset.py`
+is 38 tests over `services/email.py`, which answers 503 to everything today. They are
+kept rather than deleted because the feature is *code-complete and unconfigured*, not
+abandoned — it activates on credentials alone, with no code change and no deploy.
+Deleting the tests would mean writing them again to turn it on. Roughly 13 of them are
+Brevo-specific (they pin the `api-key` header and the 201 status) and would need
+rewriting for a different provider; the other ~25 test the endpoints and would not.
 
 ---
 
