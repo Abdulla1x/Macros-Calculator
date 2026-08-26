@@ -64,6 +64,9 @@ def main() -> None:
             ("GET", "/api/plan/surplus"),
             ("POST", "/api/ai/analyze"),
             ("GET", "/api/ai/calibration"),
+            ("GET", "/api/share/meal/1"),
+            ("GET", "/api/share/template/1"),
+            ("POST", "/api/share/decode"),
         ]:
             response = client.request(method, path)
             check(response.status_code == 401, f"anon {method} {path} -> 401")
@@ -443,6 +446,52 @@ def main() -> None:
             f"/api/meal-templates/{a_template_id}", headers=headers_b
         )
         check(response.status_code == 404, "B DELETE A's template id -> 404")
+        # Encoding is the only verb in the share feature that reads a row, so
+        # it is the one that needs a scope check against a real deployment.
+        response = client.get(f"/api/share/meal/{a_meal_ids[0]}", headers=headers_b)
+        check(response.status_code == 404, "B GET a share code for A's meal id -> 404")
+        response = client.get(
+            f"/api/share/template/{a_template_id}", headers=headers_b
+        )
+        check(
+            response.status_code == 404,
+            "B GET a share code for A's template id -> 404",
+        )
+
+        # -- Share codes carry data, not a handle on a row --------------------
+        code = client.get(
+            f"/api/share/meal/{a_meal_ids[0]}", headers=headers_a
+        ).json()["code"]
+        check(code.startswith("MC1."), "A can mint a code for their own meal")
+
+        # Counted rather than assumed: earlier sections have already written to
+        # B, and a later CSV import writes more.
+        b_meals_before = len(client.get("/api/meals", headers=headers_b).json())
+        shared = client.post(
+            "/api/share/decode", json={"code": code}, headers=headers_b
+        )
+        check(shared.status_code == 200, "B can decode a code A sent them")
+        check(
+            shared.json()["name"] == "Smoke Alpha One"
+            and shared.json()["calories"] == 500,
+            "the decoded meal carries A's numbers",
+        )
+        check(
+            set(shared.json()) == {"name", "calories", "protein", "carbs", "fat", "items"},
+            "the decoded meal carries no date, id or owner",
+        )
+        # Decoding is a read of a string: it must not have created anything.
+        check(
+            len(client.get("/api/meals", headers=headers_b).json()) == b_meals_before,
+            "decoding a code wrote no meal into B's account",
+        )
+        check(
+            client.post(
+                "/api/share/decode", json={"code": code[:-10]}, headers=headers_b
+            ).status_code
+            == 400,
+            "a truncated code is refused",
+        )
         response = client.delete(f"/api/water/{a_water_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's water id -> 404")
         response = client.delete(
