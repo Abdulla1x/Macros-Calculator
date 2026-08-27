@@ -438,6 +438,36 @@ def test_ai_analysis_link_is_double_scoped(client, client_b, monkeypatch):
     ).status_code == 204
 
 
+def test_ai_analysis_cannot_quote_another_accounts_library(client, client_b, monkeypatch):
+    """B attaching A's food id gets the same answer as an id that never existed.
+
+    The newest way one account's data could reach another: attached foods are
+    read server-side and written into the prompt as facts, so an unscoped lookup
+    would put A's macros -- and A's food names -- into B's estimate.
+    """
+    configure(monkeypatch)
+    a_food = client.post("/api/foods", json=FOOD_A).json()
+
+    refused = client_b.post(
+        "/api/ai/analyze", data={"text": "lunch", "food_id": [a_food["id"]]}
+    )
+    assert refused.status_code == 422
+    # Word-for-word the response to a nonexistent id: B cannot probe A's library
+    # by watching which ids answer differently.
+    assert (
+        refused.json()["detail"]
+        == client_b.post(
+            "/api/ai/analyze", data={"text": "lunch", "food_id": [999_999]}
+        ).json()["detail"]
+    )
+
+    # A's own attachment still works, and A's row is untouched.
+    assert client.post(
+        "/api/ai/analyze", data={"text": "lunch", "food_id": [a_food["id"]]}
+    ).status_code == 200
+    assert client.get("/api/foods").json() == [a_food]
+
+
 def test_ai_daily_quota_is_per_user(client, client_b, monkeypatch):
     configure(monkeypatch)
     monkeypatch.setenv("AI_DAILY_LIMIT", "2")

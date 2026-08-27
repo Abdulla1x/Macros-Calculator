@@ -908,6 +908,14 @@ class ImportResult(BaseModel):
 # serializes a non-finite float to `null`, so nothing here can write `Infinity`
 # into ai_analyses.analysis_json, and an AI estimate only becomes a stored macro
 # by being sent back through MealCreate, which does reject it. One boundary.
+#
+# The same constraint is why matched_food_name below is a *name* rather than a
+# food id: an id is only meaningful if it is one of the handful the user
+# attached, and that is exactly the bound this schema cannot express. A name
+# also survives the round trip through prior_analysis without meaning anything
+# outside the request it came from. Either way the client must check the value
+# against the attached set before trusting it, so nothing is lost by using the
+# form the model is better at producing.
 class AnalyzedItem(BaseModel):
     """One detected food, with macros for the estimated portion eaten."""
     name: str
@@ -917,6 +925,12 @@ class AnalyzedItem(BaseModel):
     carbs: float | None = None
     fat: float | None = None
     confidence: Literal["high", "medium", "low"]
+    # Which of the user's attached library foods this item is, echoed back by
+    # name. Null for anything the model estimated on its own, which is every
+    # item when nothing was attached -- and every item in every analysis stored
+    # before this field existed, which is why it defaults rather than being
+    # required.
+    matched_food_name: str | None = None
 
 
 class MacroRange(BaseModel):
