@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import type { ReviewCheck, WeeklyReview } from '../types'
 import Card from '../components/ui/Card'
+import { primaryButtonClass } from '../components/ui/Button'
 
 /** What each check is called on screen.
  *
@@ -87,6 +88,24 @@ export default function Review() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
+  const [summary, setSummary] = useState<string | null>(null)
+  const [summarising, setSummarising] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+
+  async function putIntoWords() {
+    setSummarising(true)
+    setSummaryError(null)
+    try {
+      // The same window the numbers above were fetched for, or the words would
+      // describe a different week from the figures they sit under.
+      const result = await api.phraseReview(addDays(localIsoDate(), -1))
+      setSummary(result.summary)
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : 'Could not write a summary.')
+    } finally {
+      setSummarising(false)
+    }
+  }
 
   useEffect(() => {
     let stale = false
@@ -155,13 +174,60 @@ export default function Review() {
             {data.checks.map((check) => (
               <CheckCard key={check.key} check={check} />
             ))}
+            <Card as="section">
+              <h2 className="font-semibold">Put this into words</h2>
+              <p className="mt-2 text-sm text-ink-muted">
+                Ask the AI to read the sections above back as a couple of
+                paragraphs. It is given these figures and nothing else, and it
+                is not allowed to work anything out, add a number, or tell you
+                what to do — every one of those stays here, where it can be
+                checked.
+              </p>
+
+              {summary ? (
+                <Card tone="sunken" className="mt-3">
+                  {/* Paragraph by paragraph rather than one block, so the
+                      model's own breaks survive. Plain text, never markup. */}
+                  {summary.split(/\n{2,}/).map((paragraph, index) => (
+                    <p key={index} className={index === 0 ? 'text-sm' : 'mt-3 text-sm'}>
+                      {paragraph}
+                    </p>
+                  ))}
+                  <p className="mt-3 text-xs text-ink-faint">
+                    Written by the AI from the figures above. The numbers are
+                    the ones on this page; the wording is not.
+                  </p>
+                </Card>
+              ) : (
+                <button
+                  onClick={putIntoWords}
+                  disabled={summarising}
+                  className={`${primaryButtonClass} mt-3 px-4 py-2 disabled:opacity-60`}
+                >
+                  {summarising ? 'Writing…' : 'Put this into words'}
+                </button>
+              )}
+
+              {summaryError && (
+                <p className="mt-3 text-sm text-rose-400">{summaryError}</p>
+              )}
+
+              {!summary && (
+                <p className="mt-2 text-xs text-ink-faint">
+                  Uses one of a small daily allowance, separate from your meal
+                  estimates. It is not saved — reopening this page shows the
+                  figures again, not the wording.
+                </p>
+              )}
+            </Card>
+
             <p className="text-xs text-ink-faint">
-              Every number here is worked out from what you logged, and nothing
-              on this page is written by the AI.{' '}
+              Every number on this page is worked out from what you logged, and
+              none of them comes from the AI.{' '}
               <Link to="/analytics" className="underline hover:text-emerald-300">
                 Analytics
               </Link>{' '}
-              has the day-by-day figures behind it.
+              has the day-by-day figures behind them.
             </p>
           </>
         )

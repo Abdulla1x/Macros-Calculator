@@ -682,3 +682,12 @@ export interface WeeklyReview {
   logged_days: number
   checks: ReviewCheck[]
 }
+
+/** The weekly review, put into words by the model.
+ *
+ * Just a string, deliberately. The figures are already on the page from
+ * GET /api/review; returning them again would create a second copy that could
+ * disagree with the first. */
+export interface ReviewSummary {
+  summary: string
+}
