@@ -29,6 +29,49 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-28-weekly-review",
+        date="2026-08-28",
+        title="A weekly review, adding up what the app already knew",
+        body=(
+            "**There is a new Weekly review page**, linked from the "
+            "\"Previous 7 days\" card on your dashboard and from Analytics. It "
+            "pulls together the things this app has always worked out and "
+            "never showed in one place: how much you logged, how your calories "
+            "and protein compared with your targets, whether your weight is "
+            "moving the way you asked it to, and where your daily burn figure "
+            "came from.\n\n"
+            "**Every sentence on it is arithmetic, not opinion.** Each section "
+            "shows the number, the target it is being compared with, and how "
+            "many days it was worked out from -- and where there is not enough "
+            "to answer, it says what is still missing instead of guessing. "
+            "That is the same refusal the calorie-burn card and the estimate "
+            "accuracy section already make.\n\n"
+            "**Today is deliberately left out.** The week ends yesterday, "
+            "because today is only half logged and averaging in a day that "
+            "still has dinner to come would make every week look better than "
+            "it was.\n\n"
+            "**Not every section is about the same seven days, and each one "
+            "says which.** Weight is the one to know about: your rate of change "
+            "is fitted over the last four weeks of weigh-ins, not the last "
+            "seven days, because a seven-day weight slope is mostly water and "
+            "not much signal. Calling that \"this week\" would have been a "
+            "tidier page and a less honest one.\n\n"
+            "**Sections only appear for things you actually track.** If you "
+            "have never set a step goal, there is no steps section; if you have "
+            "never logged water, there is no water section. Nothing new to "
+            "switch on -- it reads the answers you have already given.\n\n"
+            "**And there is a button that reads it back to you in plain "
+            "English.** That one asks the AI, and it is the only thing on the "
+            "page that does. It is handed the figures and nothing else, and it "
+            "is not allowed to work anything out, introduce a number, or tell "
+            "you what to eat. It comes out of a small daily allowance of its "
+            "own, separate from your meal estimates, and it is not saved -- "
+            "come back tomorrow and you get the figures, not yesterday's "
+            "wording. Ignore the button entirely and the page costs nothing "
+            "and works the same."
+        ),
+    ),
+    Announcement(
         id="2026-08-27-ai-uses-your-saved-foods",
         date="2026-08-27",
         title="The AI can use your saved foods instead of guessing them",
