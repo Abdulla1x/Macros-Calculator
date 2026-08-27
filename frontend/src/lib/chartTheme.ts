@@ -38,8 +38,24 @@ export const gridStroke = '#1e293b'
  *  the other. */
 export const raisedSurface = '#1e293b'
 
-/** Axis tick labels. Passed by reference to every `tick=` prop in the app. */
-export const axisTick = { fill: '#64748b', fontSize: 11 }
+/** Axis tick labels: --color-ink-faint. Passed by reference to every `tick=`
+ *  prop in the app.
+ *
+ *  These were slate-500 (#64748b) until now -- the same value index.css retired
+ *  from caption text for measuring 3.75:1 against surface and failing AA at 94
+ *  sites. The accessibility pass that fixed those missed these, because a tick
+ *  colour is a hex inside a prop and that pass worked by grepping class names.
+ *  Axis labels are text and the 4.5:1 rule applies to them too.
+ *
+ *  ink-faint rather than ink-muted, which the legend below uses: at 5.12:1 on
+ *  surface it clears AA while staying a step dimmer than the legend, so the
+ *  chrome keeps the hierarchy it was drawn with. Charts sit directly on
+ *  surface, so the nested-card blending that constrains this token elsewhere
+ *  does not apply here.
+ *
+ *  RAW_COLOR below is still #64748b deliberately: it colours dots, not text,
+ *  and 3.75:1 clears the 3:1 that non-text contrast asks for. */
+export const axisTick = { fill: '#7c8aa3', fontSize: 11 }
 
 /** The tooltip panel. Inline CSS rather than SVG attributes, so this one is a
  *  style object and not a set of props. */
