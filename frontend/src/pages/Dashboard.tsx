@@ -22,6 +22,7 @@ import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
 
 // What the caption under the calorie ring says, if anything.
 //
@@ -358,12 +359,11 @@ export default function Dashboard() {
           <h2 className="mb-3 font-semibold">Quick log</h2>
 
           {browsingTemplates && (
-            <input
+            <TextInput className="mb-3 w-full"
               value={templateFilter}
               onChange={(event) => setTemplateFilter(event.target.value)}
               placeholder="Filter by name…"
               aria-label="Filter saved meals"
-              className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base placeholder-ink-muted focus:border-emerald-500 sm:text-sm"
             />
           )}
 

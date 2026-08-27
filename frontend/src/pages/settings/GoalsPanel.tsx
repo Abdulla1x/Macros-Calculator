@@ -3,6 +3,7 @@ import BodyTargetsCard from '../../components/settings/BodyTargetsCard'
 import CaloriePlanSection from '../../components/settings/CaloriePlanSection'
 import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
+import TextInput from '../../components/ui/TextInput'
 
 interface GoalField {
   key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
@@ -98,14 +99,14 @@ export default function GoalsPanel() {
               <span className="mb-1 block text-slate-400">
                 {field.label} ({field.unit})
               </span>
-              <input
+              <TextInput
                 type="number"
                 min={1}
                 value={settings[field.key]}
                 readOnly={settings.targets_auto}
                 onChange={(event) => update({ [field.key]: Number(event.target.value) })}
                 onBlur={guard(field.key)}
-                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base focus:border-emerald-500 sm:text-sm ${
+                className={`w-full ${
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
               />

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
-import { fieldClass } from './fieldClass'
 import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -84,37 +84,34 @@ export default function AccountSection() {
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Current password</span>
-            <input
+            <TextInput className="w-full"
               type="password"
               autoComplete="current-password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className={fieldClass}
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">New password</span>
-            <input
+            <TextInput className="w-full"
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className={fieldClass}
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Confirm new password</span>
-            <input
+            <TextInput className="w-full"
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className={fieldClass}
             />
           </label>
           <div className="flex items-center gap-3">
@@ -172,13 +169,12 @@ export default function AccountSection() {
               <span className="mb-1 block text-slate-400">
                 Enter your password to confirm
               </span>
-              <input
+              <TextInput className="w-full"
                 type="password"
                 autoComplete="current-password"
                 required
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
-                className={fieldClass}
               />
             </label>
             <div className="flex items-center gap-3">

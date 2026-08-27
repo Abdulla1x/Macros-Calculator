@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Food, FoodCreate, OFFProduct } from '../types'
+import TextInput, { inputSurfaceClass } from './ui/TextInput'
 
 interface Props {
   value: string
@@ -106,16 +107,20 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
 
   return (
     <div ref={containerRef} className="relative">
-      <input
+      <TextInput className="w-full"
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => value.trim().length >= 2 && setOpen(true)}
         placeholder="Type a food name…"
-        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500"
       />
+      {/* The panel below is deliberately the input's own border and ground rather
+          than a Card: it is the drawer belonging to the field above it, and
+          reading as a separate surface would break that. */}
       {open && (
-        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-xl">
+        <div
+          className={`absolute z-40 mt-1 w-full overflow-hidden ${inputSurfaceClass} shadow-xl`}
+        >
           {localResults.length > 0 && (
             <ul className="max-h-56 overflow-y-auto">
               {localResults.map((food) => (

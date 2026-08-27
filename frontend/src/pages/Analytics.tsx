@@ -23,6 +23,7 @@ import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
 import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
 
 /** One average tile, with its sample size when that is not the obvious one.
  *
@@ -140,8 +141,6 @@ export default function Analytics() {
     }
   }
 
-  const inputClass =
-    'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
   return (
     <div className="space-y-6">
@@ -153,11 +152,11 @@ export default function Analytics() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-slate-400">From</span>
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} />
+          <TextInput type="date" value={start} onChange={(e) => setStart(e.target.value)} />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-slate-400">To</span>
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={inputClass} />
+          <TextInput type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
         </label>
       </div>
 

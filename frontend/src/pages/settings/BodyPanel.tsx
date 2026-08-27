@@ -1,9 +1,9 @@
 import HeightField from '../../components/settings/HeightField'
-import { fieldClass } from '../../components/settings/fieldClass'
 import { num } from '../../lib/parse'
 import type { ActivityLevel, Sex } from '../../types'
 import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
+import TextInput from '../../components/ui/TextInput'
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -42,11 +42,10 @@ export default function BodyPanel() {
 
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Date of birth</span>
-            <input
+            <TextInput className="w-full"
               type="date"
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
-              className={fieldClass}
             />
             <span className="mt-1 block text-xs text-ink-faint">
               Stored as the date, so your age stays right without you editing it.
@@ -55,14 +54,13 @@ export default function BodyPanel() {
 
           <label className="block text-sm sm:col-span-2">
             <span className="mb-1 block text-slate-400">Activity level</span>
-            <select
+            <TextInput as="select" className="w-full"
               value={settings.activity_level ?? ''}
               onChange={(event) =>
                 update({
                   activity_level: (event.target.value || null) as ActivityLevel | null,
                 })
               }
-              className={fieldClass}
             >
               <option value="">Not set</option>
               {activityOptions.map(({ value, label }) => (
@@ -70,7 +68,7 @@ export default function BodyPanel() {
                   {label}
                 </option>
               ))}
-            </select>
+            </TextInput>
           </label>
 
           <div className="text-sm sm:col-span-2">
@@ -113,7 +111,7 @@ export default function BodyPanel() {
             <span className="mb-1 block text-slate-400">
               Goal rate (kg per week)
             </span>
-            <input
+            <TextInput className="w-full"
               type="number"
               step={0.05}
               value={settings.goal_rate_kg_per_week ?? ''}
@@ -121,7 +119,6 @@ export default function BodyPanel() {
                 update({ goal_rate_kg_per_week: num(event.target.value) })
               }
               onBlur={guard('goal_rate_kg_per_week')}
-              className={fieldClass}
             />
             <span className="mt-1 block text-xs text-ink-faint">
               Negative to lose, positive to gain, 0 to maintain. Leave it blank

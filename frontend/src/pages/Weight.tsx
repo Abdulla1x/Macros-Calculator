@@ -28,13 +28,12 @@ import {
 } from '../lib/chartTheme'
 import type { Settings, WeightEntry, WeightTrend } from '../types'
 import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
 const CHART_DAYS = 90
 
-const fieldClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
 export default function Weight() {
   const { settings, reload: reloadSettings } = useSettings()
@@ -134,7 +133,7 @@ export default function Weight() {
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Date</span>
-            <input
+            <TextInput className="w-full"
               type="date"
               value={date}
               max={localIsoDate()}
@@ -142,12 +141,11 @@ export default function Weight() {
                 setDate(event.target.value)
                 setStatus('idle')
               }}
-              className={fieldClass}
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Weight ({label})</span>
-            <input
+            <TextInput className="w-full"
               type="number"
               step="0.1"
               min="0"
@@ -157,7 +155,6 @@ export default function Weight() {
                 setWeight(event.target.value)
                 setStatus('idle')
               }}
-              className={fieldClass}
             />
           </label>
           <button

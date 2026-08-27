@@ -4,6 +4,7 @@ import { readNoteDraft, writeNoteDraft } from '../lib/draft'
 import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
 import Card from './ui/Card'
+import TextInput from './ui/TextInput'
 
 interface Props {
   settings: Settings | null
@@ -191,8 +192,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     noteRef.current?.focus()
   }
 
-  const inputClass =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500'
 
   if (!expanded) {
     return (
@@ -225,13 +224,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-slate-400">Describe it</span>
-          <textarea
+          <TextInput as="textarea" className="w-full"
             ref={noteRef}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={4}
             placeholder={'e.g. "Grilled chicken with ~1 tbsp olive oil, I only ate half the rice"'}
-            className={inputClass}
           />
         </label>
 

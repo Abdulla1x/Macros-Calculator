@@ -4,6 +4,7 @@ import { MAX_STEPS_PER_DAY, validateSettingsField } from '../../lib/limits'
 import { num } from '../../lib/parse'
 import type { ImportResult, Settings as SettingsType } from '../../types'
 import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -54,7 +55,7 @@ export default function StepsSection({
       <label className="block text-sm">
         <span className="mb-1 block text-slate-400">Daily goal</span>
         <span className="flex items-center gap-2">
-          <input
+          <TextInput accent="steps" className="w-28"
             type="number"
             min={1}
             max={MAX_STEPS_PER_DAY}
@@ -73,7 +74,6 @@ export default function StepsSection({
               update({ steps_goal: null })
             }}
             aria-label="Daily step goal"
-            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-violet-500"
           />
           <span className="text-xs text-ink-faint">steps</span>
         </span>

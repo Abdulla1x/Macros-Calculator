@@ -10,6 +10,7 @@ import {
 import { num } from '../../lib/parse'
 import type { Settings as SettingsType } from '../../types'
 import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
 
 /** Water goal and quick-add buttons.
  *
@@ -99,7 +100,7 @@ export default function WaterSection({
             Set my own
             {!derived && (
               <span className="mt-1 flex items-center gap-2">
-                <input
+                <TextInput accent="water" className="w-28"
                   type="number"
                   min={1}
                   max={MAX_WATER_GOAL_ML}
@@ -117,7 +118,6 @@ export default function WaterSection({
                     update({ water_goal_ml: 2500 })
                   }}
                   aria-label="Daily water goal in ml"
-                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-sky-500"
                 />
                 <span className="text-xs text-ink-faint">ml</span>
               </span>
@@ -132,7 +132,7 @@ export default function WaterSection({
           {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
             <span key={index} className="flex items-center gap-1">
               <span className="text-xs text-ink-faint">+</span>
-              <input
+              <TextInput accent="water" pad="sm" className="w-20"
                 type="number"
                 min={1}
                 max={MAX_WATER_QUICK_ADD_ML}
@@ -140,7 +140,6 @@ export default function WaterSection({
                 onChange={(event) => setQuickAdd(index, event.target.value)}
                 onBlur={guardQuickAdd(index)}
                 aria-label={`Quick-add button ${index + 1}, in ml`}
-                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-base sm:text-sm focus:border-sky-500"
               />
             </span>
           ))}

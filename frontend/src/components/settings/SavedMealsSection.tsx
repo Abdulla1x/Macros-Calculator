@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import ShareCodePanel from '../ShareCodePanel'
 import type { MealTemplate } from '../../types'
 import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
 
 /** The saved meals behind Quick log: see them, share one, remove one.
  *
@@ -101,12 +102,11 @@ export default function SavedMealsSection() {
 
       {items.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <input
+          <TextInput className="min-w-0 flex-1"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter saved meals"
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500"
           />
           <span className="text-xs text-slate-400">
             {items.length} meal{items.length === 1 ? '' : 's'}

@@ -6,6 +6,7 @@ import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -55,25 +56,23 @@ export default function Signup() {
           )}
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Email</span>
-            <input
+            <TextInput size="md" className="w-full"
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-slate-400">Password</span>
-            <input
+            <TextInput size="md" className="w-full"
               type="password"
               required
               minLength={8}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
             />
             <span className="mt-1 block text-xs text-ink-faint">
               At least 8 characters.

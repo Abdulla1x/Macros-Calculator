@@ -1,7 +1,7 @@
-import { fieldClass } from './fieldClass'
 import { num } from '../../lib/parse'
 import { cmToFtIn, ftInToCm } from '../../lib/units'
 import type { Settings as SettingsType } from '../../types'
+import TextInput from '../ui/TextInput'
 
 /** Height, in whichever unit the weight preference implies.
  *
@@ -23,12 +23,11 @@ export default function HeightField({
     return (
       <label className="block text-sm">
         <span className="mb-1 block text-slate-400">Height (cm)</span>
-        <input
+        <TextInput className="w-full"
           type="number"
           value={settings.height_cm ?? ''}
           onChange={(event) => update({ height_cm: num(event.target.value) })}
           onBlur={onBlur}
-          className={fieldClass}
         />
       </label>
     )
@@ -51,7 +50,7 @@ export default function HeightField({
       <span className="mb-1 block text-slate-400">Height</span>
       <div className="flex gap-2">
         <label className="flex-1">
-          <input
+          <TextInput className="w-full"
             type="number"
             aria-label="Height, feet"
             placeholder="ft"
@@ -60,11 +59,10 @@ export default function HeightField({
               set(num(event.target.value), settings.height_cm ? inches : null)
             }
             onBlur={onBlur}
-            className={fieldClass}
           />
         </label>
         <label className="flex-1">
-          <input
+          <TextInput className="w-full"
             type="number"
             aria-label="Height, inches"
             placeholder="in"
@@ -73,7 +71,6 @@ export default function HeightField({
               set(settings.height_cm ? feet : null, num(event.target.value))
             }
             onBlur={onBlur}
-            className={fieldClass}
           />
         </label>
       </div>
