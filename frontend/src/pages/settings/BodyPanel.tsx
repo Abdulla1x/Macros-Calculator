@@ -1,4 +1,5 @@
 import HeightField from '../../components/settings/HeightField'
+import WeighInReminderSection from '../../components/settings/WeighInReminderSection'
 import { num } from '../../lib/parse'
 import type { ActivityLevel, Sex } from '../../types'
 import { useSettingsPanel } from './panelContext'
@@ -26,6 +27,10 @@ const activityOptions: { value: ActivityLevel; label: string }[] = [
  * because it decides how the field directly above it is asked for: HeightField
  * renders centimetres or a feet/inches pair depending on the weight unit. Two
  * tabs apart, changing one silently reshapes the other.
+ *
+ * The weigh-in reminder is here for the same kind of reason rather than with
+ * the three daily trackers: it is a setting about the Weight page, and Units
+ * directly above it already is one.
  */
 export default function BodyPanel() {
   const { settings, update, guard } = useSettingsPanel()
@@ -153,6 +158,12 @@ export default function BodyPanel() {
           ))}
         </div>
       </Card>
+
+      <WeighInReminderSection
+        settings={settings}
+        update={update}
+        onBlur={guard('weigh_in_reminder_days')}
+      />
     </div>
   )
 }

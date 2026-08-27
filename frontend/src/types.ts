@@ -88,6 +88,14 @@ export interface Settings {
    *  opposite of water_goal_ml above, and the reason the steps card drops its
    *  progress bar entirely rather than drawing progress towards a default. */
   steps_goal: number | null
+  /** "HH:MM", or null. A third meaning for an empty settings field, after the
+   *  two above: null here means the weigh-in reminder is switched off. The
+   *  time and the opt-in are one field on purpose — see models.py. */
+  weigh_in_reminder_time: string | null
+  /** How many days without a weigh-in before the nudge speaks. Never null:
+   *  it cannot express "off", which is what keeps it from contradicting the
+   *  field above. Kept while the reminder is off. */
+  weigh_in_reminder_days: number
 }
 
 /** One logged drink. */

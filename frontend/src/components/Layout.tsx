@@ -5,6 +5,7 @@ import { useAnnouncements } from '../hooks/useAnnouncements'
 import { useSettings } from '../settings/SettingsContext'
 import AnnouncementsModal from './AnnouncementsModal'
 import StatusBanner from './StatusBanner'
+import WeighInNudge from './WeighInNudge'
 import WakingNotice from './WakingNotice'
 
 // A warm server answers settings in well under a second, so this never fires in
@@ -133,6 +134,11 @@ export default function Layout() {
       <main id="main" tabIndex={-1} className="flex-1 px-4 py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pb-8">
         <div className="mx-auto max-w-5xl">
           <StatusBanner banner={announcements?.banner ?? null} />
+          {/* Below the status banner on purpose: an outage notice outranks a
+              reminder. Above the outlet so it reaches someone who never
+              navigates to /weight, which is the whole point of it. Renders
+              nothing at all unless the reminder has been switched on. */}
+          <WeighInNudge />
           {coldStart && (
             <WakingNotice className="mb-4 rounded-control bg-surface px-3 py-2 text-center text-xs text-ink-muted" />
           )}
