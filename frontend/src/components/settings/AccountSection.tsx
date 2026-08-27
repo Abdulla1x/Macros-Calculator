@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
-import { fieldClass } from './fieldClass'
+import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
+import Button from '../ui/Button'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -67,7 +70,7 @@ export default function AccountSection() {
 
   return (
     <>
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-1 font-semibold">Account</h2>
         <p className="mb-1 text-sm text-slate-400">Signed in as {user?.email}</p>
         {/* The only durable way back to the release notes. The pop-up links there
@@ -81,41 +84,38 @@ export default function AccountSection() {
         </p>
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Current password</span>
-            <input
+          <Field label="Current password">
+            <TextInput
               type="password"
               autoComplete="current-password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className={fieldClass}
+              className="w-full"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">New password</span>
-            <input
+          </Field>
+          <Field label="New password">
+            <TextInput
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className={fieldClass}
+              className="w-full"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Confirm new password</span>
-            <input
+          </Field>
+          <Field label="Confirm new password">
+            <TextInput
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className={fieldClass}
+              className="w-full"
             />
-          </label>
+          </Field>
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -148,9 +148,9 @@ export default function AccountSection() {
           </button>
           {exportError && <p className="mt-2 text-sm text-rose-400">{exportError}</p>}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
+      <Card as="section" tone="danger">
         <h2 className="mb-1 font-semibold text-rose-300">Danger zone</h2>
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
@@ -167,29 +167,26 @@ export default function AccountSection() {
           </button>
         ) : (
           <form onSubmit={submitDelete} className="max-w-sm space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">
-                Enter your password to confirm
-              </span>
-              <input
+            <Field label="Enter your password to confirm">
+              <TextInput
                 type="password"
                 autoComplete="current-password"
                 required
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
-                className={fieldClass}
+                className="w-full"
               />
-            </label>
+            </Field>
             <div className="flex items-center gap-3">
-              <button
+              <Button variant="danger"
                 type="submit"
                 disabled={deleteStatus === 'deleting'}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-60"
+                className="px-4 py-2"
               >
                 {deleteStatus === 'deleting'
                   ? 'Deleting…'
                   : 'Permanently delete my account'}
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={() => {
@@ -207,7 +204,7 @@ export default function AccountSection() {
             )}
           </form>
         )}
-      </section>
+      </Card>
     </>
   )
 }

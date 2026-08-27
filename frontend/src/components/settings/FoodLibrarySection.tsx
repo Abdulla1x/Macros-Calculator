@@ -3,6 +3,10 @@ import { api } from '../../api/client'
 import { MAX_FOOD_NAME, validateFood } from '../../lib/limits'
 import { num } from '../../lib/parse'
 import type { Food, FoodCreate } from '../../types'
+import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
+import Button from '../ui/Button'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
  *
@@ -170,7 +174,7 @@ export default function FoodLibrarySection({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">🥫 Food library</h2>
       <p className="mb-4 text-sm text-slate-400">
         The foods autocomplete offers you when you log a meal. Things land here
@@ -193,12 +197,12 @@ export default function FoodLibrarySection({
 
       {items.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <input
+          <TextInput
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter food library"
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm placeholder-ink-muted focus:border-emerald-500"
+            className="min-w-0 flex-1"
           />
           <span className="text-xs text-slate-400">
             {items.length} food{items.length === 1 ? '' : 's'}
@@ -326,7 +330,7 @@ export default function FoodLibrarySection({
       )}
 
       {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-    </section>
+    </Card>
   )
 }
 
@@ -358,8 +362,7 @@ function FoodForm({
     key: 'servingSize' | 'calories' | 'protein' | 'carbs' | 'fat',
     label: string,
   ) => (
-    <label className="block text-xs">
-      <span className="mb-1 block text-slate-400">{label}</span>
+    <Field size="xs" label={<>{label}</>}>
       <input
         type="number"
         inputMode="decimal"
@@ -369,7 +372,7 @@ function FoodForm({
         aria-label={label}
         className={`${field} w-full`}
       />
-    </label>
+    </Field>
   )
 
   return (
@@ -396,13 +399,13 @@ function FoodForm({
       </p>
 
       <div className="flex items-center gap-2">
-        <button
+        <Button
           onClick={onSave}
           disabled={busy}
-          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+          className="px-3 py-1.5"
         >
           {busy ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
         <button onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-200">
           Cancel
         </button>

@@ -4,6 +4,10 @@ import { api } from '../api/client'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -37,7 +41,7 @@ export default function ForgotPassword() {
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
         {sent ? (
-          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6 text-sm">
+          <Card pad="lg" className="space-y-3 text-sm">
             <h2 className="text-lg font-semibold">Check your inbox</h2>
             <p className="text-slate-400">
               If an account exists for <span className="text-slate-200">{email}</span>,
@@ -61,43 +65,39 @@ export default function ForgotPassword() {
                 Back to log in
               </Link>
             </p>
-          </div>
+          </Card>
         ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-          >
+          <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="text-lg font-semibold">Reset your password</h2>
             <p className="text-sm text-slate-400">
               Enter your email and we'll send you a link to choose a new
               password.
             </p>
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">Email</span>
-              <input
+            <Field label="Email">
+              <TextInput size="md"
                 type="email"
                 required
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
+                className="w-full"
               />
-            </label>
+            </Field>
             {error && <p className="text-sm text-rose-400">{error}</p>}
-            <button
+            <Button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="w-full px-5 py-2"
             >
               {submitting ? 'Sending…' : 'Send reset link'}
-            </button>
+            </Button>
             <p className="text-center text-sm text-slate-400">
               Remembered it?{' '}
               <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
                 Log in
               </Link>
             </p>
-          </form>
+          </Card>
         )}
         <WarmupNotice />
       </div>

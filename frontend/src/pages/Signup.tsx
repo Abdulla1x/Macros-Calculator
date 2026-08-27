@@ -5,6 +5,10 @@ import { isSessionPersistent } from '../auth/token'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -43,10 +47,7 @@ export default function Signup() {
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-        >
+        <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
           <h2 className="text-lg font-semibold">Create your account</h2>
           {!persistentSession && (
             <p className="text-sm text-amber-400">
@@ -55,31 +56,31 @@ export default function Signup() {
               leaving private browsing, keeps you signed in.
             </p>
           )}
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Email</span>
-            <input
+          <Field label="Email">
+            <TextInput size="md"
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
+              className="w-full"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Password</span>
-            <input
+          </Field>
+          {/* No `caption` prop here: this field has TWO notes and Field renders
+              its caption after the children, which would put "At least 8
+              characters." below the password-reset warning rather than above
+              it. Both stay as children, in order. */}
+          <Field label="Password">
+            <TextInput size="md"
               type="password"
               required
               minLength={8}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
+              className="w-full"
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              At least 8 characters.
-            </span>
+            <span className="mt-1 block text-xs text-ink-faint">At least 8 characters.</span>
             {/* Password reset exists in the codebase but is not switched on —
                 sending email needs a provider we don't have yet. Until it is,
                 forgetting this password means losing the account for good, so
@@ -90,22 +91,22 @@ export default function Signup() {
             <span className="mt-1 block text-xs text-amber-300/90">
               There's no password reset yet — keep it somewhere safe.
             </span>
-          </label>
+          </Field>
           {error && <p className="text-sm text-rose-400">{error}</p>}
-          <button
+          <Button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="w-full px-5 py-2"
           >
             {submitting ? 'Creating account…' : 'Sign up'}
-          </button>
+          </Button>
           <p className="text-center text-sm text-slate-400">
             Already have an account?{' '}
             <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
               Log in
             </Link>
           </p>
-        </form>
+        </Card>
         <WarmupNotice />
       </div>
     </div>

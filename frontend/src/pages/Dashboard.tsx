@@ -21,6 +21,9 @@ import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
+import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
+import { primaryButtonClass } from '../components/ui/Button'
 
 // What the caption under the calorie ring says, if anything.
 //
@@ -269,7 +272,7 @@ export default function Dashboard() {
         </div>
         <Link
           to={`/log?date=${viewedDate}`}
-          className="rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+          className={`${primaryButtonClass} px-5 py-2.5`}
         >
           + Log a meal
         </Link>
@@ -353,16 +356,16 @@ export default function Dashboard() {
           primitive migration may never be run to pay off. The whole list is
           already in memory, so the filter costs no round trip. */}
       {templates.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <Card as="section">
           <h2 className="mb-3 font-semibold">Quick log</h2>
 
           {browsingTemplates && (
-            <input
+            <TextInput
               value={templateFilter}
               onChange={(event) => setTemplateFilter(event.target.value)}
               placeholder="Filter by name…"
               aria-label="Filter saved meals"
-              className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base placeholder-ink-muted focus:border-emerald-500 sm:text-sm"
+              className="mb-3 w-full"
             />
           )}
 
@@ -406,7 +409,7 @@ export default function Dashboard() {
                 : `Browse all (${templates.length}) ▾`}
             </button>
           )}
-        </section>
+        </Card>
       )}
 
       {/* The three daily trackers.
@@ -442,9 +445,9 @@ export default function Dashboard() {
           page: template sharing moved to Settings -> Library along with the
           rest of template management. */}
       {shareError && (
-        <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+        <Card as="p" tone="error" pad="sm" className="text-sm">
           {shareError}
-        </p>
+        </Card>
       )}
       {shareCode && (
         <ShareCodePanel
@@ -455,7 +458,7 @@ export default function Dashboard() {
       )}
 
       <section className="grid gap-6 lg:grid-cols-5">
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-3">
+        <Card className="lg:col-span-3">
           <h2 className="mb-3 font-semibold">
             {isToday
               ? "Today's meals"
@@ -531,9 +534,9 @@ export default function Dashboard() {
               ))}
             </ul>
           )}
-        </div>
+        </Card>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 lg:col-span-2">
+        <Card className="lg:col-span-2">
           {/* "Previous", not "Last": the range ends yesterday. Today is already
               on this page in full — the rings and the meal list above — so
               leaving it out of the trend costs nothing and keeps the chart and
@@ -588,7 +591,7 @@ export default function Dashboard() {
               </span>
             </p>
           )}
-        </div>
+        </Card>
       </section>
     </div>
   )

@@ -3,6 +3,9 @@ import { api } from '../../api/client'
 import { MAX_STEPS_PER_DAY, validateSettingsField } from '../../lib/limits'
 import { num } from '../../lib/parse'
 import type { ImportResult, Settings as SettingsType } from '../../types'
+import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -41,7 +44,7 @@ export default function StepsSection({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">👟 Steps</h2>
       <p className="mb-4 text-sm text-slate-400">
         Step counts are typed in by hand. Reading them from your phone or watch
@@ -50,10 +53,9 @@ export default function StepsSection({
         to leave you waiting for numbers that will never arrive.
       </p>
 
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-400">Daily goal</span>
+      <Field label="Daily goal">
         <span className="flex items-center gap-2">
-          <input
+          <TextInput accent="steps"
             type="number"
             min={1}
             max={MAX_STEPS_PER_DAY}
@@ -72,11 +74,11 @@ export default function StepsSection({
               update({ steps_goal: null })
             }}
             aria-label="Daily step goal"
-            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-violet-500"
+            className="w-28"
           />
           <span className="text-xs text-ink-faint">steps</span>
         </span>
-      </label>
+      </Field>
       <p className="mt-2 text-xs text-ink-faint">
         Leave this empty and the card just shows your count. There is no default
         here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a
@@ -130,6 +132,6 @@ export default function StepsSection({
           <p className="mt-2 text-xs text-rose-300">{importError}</p>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

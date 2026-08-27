@@ -75,10 +75,13 @@
   --color-supplements: #fbbf24;  /* amber-400 */
 
   /* Radius, as a rule rather than a habit: containers get rounded-card, anything
-   * you tap or type in gets rounded-control. The tree currently has rounded-lg
-   * at 91 sites and rounded-xl at 52 with no stated rule; those call sites are
-   * absorbed by the Card/Button/TextInput primitives rather than renamed here,
-   * so only new chrome uses these today. */
+   * you tap or type in gets rounded-control.
+   *
+   * The primitives in components/ui/ now own this. rounded-xl went from 52 sites
+   * to 5 and rounded-lg from 91 to 53 -- what is left is the one-off buttons and
+   * the dense list rows, which were never cards or controls and are deliberately
+   * not swept in. Change a radius here and every card, input, chip and button in
+   * the app follows; the leftovers do not, which is the honest state of it. */
   --radius-card: 0.75rem;        /* was rounded-xl */
   --radius-control: 0.5rem;      /* was rounded-lg */
 }

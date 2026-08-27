@@ -9,6 +9,8 @@ import {
 } from '../../lib/limits'
 import { num } from '../../lib/parse'
 import type { Settings as SettingsType } from '../../types'
+import Card from '../ui/Card'
+import TextInput from '../ui/TextInput'
 
 /** Water goal and quick-add buttons.
  *
@@ -62,7 +64,7 @@ export default function WaterSection({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">💧 Water</h2>
       <p className="mb-4 text-sm text-slate-400">
         The card on your dashboard. Nothing here is required — leave it alone and
@@ -98,7 +100,7 @@ export default function WaterSection({
             Set my own
             {!derived && (
               <span className="mt-1 flex items-center gap-2">
-                <input
+                <TextInput accent="water"
                   type="number"
                   min={1}
                   max={MAX_WATER_GOAL_ML}
@@ -116,7 +118,7 @@ export default function WaterSection({
                     update({ water_goal_ml: 2500 })
                   }}
                   aria-label="Daily water goal in ml"
-                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-sky-500"
+                  className="w-28"
                 />
                 <span className="text-xs text-ink-faint">ml</span>
               </span>
@@ -131,7 +133,7 @@ export default function WaterSection({
           {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
             <span key={index} className="flex items-center gap-1">
               <span className="text-xs text-ink-faint">+</span>
-              <input
+              <TextInput accent="water" pad="sm"
                 type="number"
                 min={1}
                 max={MAX_WATER_QUICK_ADD_ML}
@@ -139,7 +141,7 @@ export default function WaterSection({
                 onChange={(event) => setQuickAdd(index, event.target.value)}
                 onBlur={guardQuickAdd(index)}
                 aria-label={`Quick-add button ${index + 1}, in ml`}
-                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-base sm:text-sm focus:border-sky-500"
+                className="w-20"
               />
             </span>
           ))}
@@ -148,6 +150,6 @@ export default function WaterSection({
           </span>
         </div>
       </div>
-    </section>
+    </Card>
   )
 }

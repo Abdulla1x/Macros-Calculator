@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { dismissBanner, isBannerDismissed } from '../lib/dismissals'
+import Card from './ui/Card'
 
 /** The live status notice, when the server has one set.
  *
@@ -26,7 +27,7 @@ export default function StatusBanner({ banner }: { banner: string | null }) {
   return (
     <div role="status" aria-live="polite">
       {banner && !dismissed && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <Card tone="warn" pad="none" className="mb-4 flex items-start gap-3 px-4 py-3 text-sm">
           <span aria-hidden="true">⚠️</span>
           <p className="flex-1">{banner}</p>
           <button
@@ -39,7 +40,7 @@ export default function StatusBanner({ banner }: { banner: string | null }) {
           >
             ✕
           </button>
-        </div>
+        </Card>
       )}
     </div>
   )

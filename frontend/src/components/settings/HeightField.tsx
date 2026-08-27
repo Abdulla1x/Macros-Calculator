@@ -1,7 +1,8 @@
-import { fieldClass } from './fieldClass'
 import { num } from '../../lib/parse'
 import { cmToFtIn, ftInToCm } from '../../lib/units'
 import type { Settings as SettingsType } from '../../types'
+import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 /** Height, in whichever unit the weight preference implies.
  *
@@ -21,16 +22,15 @@ export default function HeightField({
 }) {
   if (settings.weight_unit !== 'lb') {
     return (
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-400">Height (cm)</span>
-        <input
+      <Field label="Height (cm)">
+        <TextInput
           type="number"
           value={settings.height_cm ?? ''}
           onChange={(event) => update({ height_cm: num(event.target.value) })}
           onBlur={onBlur}
-          className={fieldClass}
+          className="w-full"
         />
-      </label>
+      </Field>
     )
   }
 
@@ -47,11 +47,17 @@ export default function HeightField({
   }
 
   return (
-    <div className="text-sm">
-      <span className="mb-1 block text-slate-400">Height</span>
+    <Field as="div" label="Height"
+      caption={
+        <>
+        Stored in centimetres; shown in feet and inches because your weight unit
+        is pounds.
+        </>
+      }
+    >
       <div className="flex gap-2">
         <label className="flex-1">
-          <input
+          <TextInput
             type="number"
             aria-label="Height, feet"
             placeholder="ft"
@@ -60,11 +66,11 @@ export default function HeightField({
               set(num(event.target.value), settings.height_cm ? inches : null)
             }
             onBlur={onBlur}
-            className={fieldClass}
+            className="w-full"
           />
         </label>
         <label className="flex-1">
-          <input
+          <TextInput
             type="number"
             aria-label="Height, inches"
             placeholder="in"
@@ -73,14 +79,10 @@ export default function HeightField({
               set(settings.height_cm ? feet : null, num(event.target.value))
             }
             onBlur={onBlur}
-            className={fieldClass}
+            className="w-full"
           />
         </label>
       </div>
-      <span className="mt-1 block text-xs text-ink-faint">
-        Stored in centimetres; shown in feet and inches because your weight unit
-        is pounds.
-      </span>
-    </div>
+    </Field>
   )
 }

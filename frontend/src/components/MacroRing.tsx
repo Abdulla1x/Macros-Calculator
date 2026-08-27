@@ -1,4 +1,5 @@
 import { raisedSurface } from '../lib/chartTheme'
+import Card from './ui/Card'
 
 interface Props {
   label: string
@@ -24,7 +25,7 @@ export default function MacroRing({ label, value, goal, unit, color, caption }: 
   const progress = Math.min(ratio, 1)
 
   return (
-    <div className="flex flex-col items-center rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <Card pad="sm" className="flex flex-col items-center">
       <div className="relative h-32 w-32">
         <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
           <circle cx="64" cy="64" r={radius} fill="none" stroke={raisedSurface} strokeWidth="11" />
@@ -52,6 +53,6 @@ export default function MacroRing({ label, value, goal, unit, color, caption }: 
           {caption}
         </span>
       )}
-    </div>
+    </Card>
   )
 }

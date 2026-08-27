@@ -26,9 +26,8 @@ import {
   activeDot,
 } from '../lib/chartTheme'
 import type { AdminStats, AdminUserRow } from '../types'
+import Card from '../components/ui/Card'
 
-const cardClass = 'rounded-xl border border-slate-800 bg-slate-900 p-5'
-const tileClass = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
 
 const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`
@@ -118,14 +117,14 @@ export default function Admin() {
         <>
           <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {tiles.map((tile) => (
-              <div key={tile.label} className={tileClass}>
+              <Card pad="sm" key={tile.label}>
                 <p className="text-xs text-slate-400">{tile.label}</p>
                 <p className="mt-1 text-xl font-bold">{tile.value}</p>
-              </div>
+              </Card>
             ))}
           </section>
 
-          <section className={cardClass}>
+          <Card as="section">
             <h2 className="text-sm font-semibold">Accounts per day</h2>
             <p className="mb-3 text-xs text-slate-400">
               Last {stats.window_days} days · {plural(stats.signups_30d, 'signup')}{' '}
@@ -180,9 +179,9 @@ export default function Admin() {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-          </section>
+          </Card>
 
-          <section className={cardClass}>
+          <Card as="section">
             <h2 className="text-sm font-semibold">Meals logged per day</h2>
             <p className="mb-3 text-xs text-slate-400">
               Counted on the day the meal was entered, not the day it was eaten.
@@ -214,9 +213,9 @@ export default function Admin() {
                 />
               </BarChart>
             </ResponsiveContainer>
-          </section>
+          </Card>
 
-          <section className={cardClass}>
+          <Card as="section">
             <h2 className="mb-3 text-sm font-semibold">
               Accounts <span className="text-ink-faint">({users.length})</span>
             </h2>
@@ -288,7 +287,7 @@ export default function Admin() {
                 </table>
               </div>
             )}
-          </section>
+          </Card>
 
           <p className="text-xs text-ink-faint">
             AI calls today: {stats.ai_calls_today} of{' '}

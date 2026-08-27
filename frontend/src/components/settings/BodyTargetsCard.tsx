@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import type { BodyTargets } from '../../types'
+import Card from '../ui/Card'
 
 // Field name → what to ask the user for. Keyed on what the API returns so a
 // field added server-side without a label here still shows *something*.
@@ -50,10 +51,10 @@ export default function BodyTargetsCard({
   if (failed) return null
   if (!targets) {
     return (
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-1 font-semibold">What your profile works out to</h2>
         <p className="text-sm text-slate-400">Loading…</p>
-      </section>
+      </Card>
     )
   }
 
@@ -115,7 +116,7 @@ export default function BodyTargetsCard({
   ]
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">What your profile works out to</h2>
       <p className="mb-4 text-sm text-slate-400">
         {measured
@@ -155,6 +156,6 @@ export default function BodyTargetsCard({
           </div>
         ))}
       </dl>
-    </section>
+    </Card>
   )
 }

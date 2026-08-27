@@ -2,6 +2,10 @@ import { useSearchParams } from 'react-router-dom'
 import BodyTargetsCard from '../../components/settings/BodyTargetsCard'
 import CaloriePlanSection from '../../components/settings/CaloriePlanSection'
 import { useSettingsPanel } from './panelContext'
+import Card from '../../components/ui/Card'
+import TextInput from '../../components/ui/TextInput'
+import OptionChip from '../../components/ui/OptionChip'
+import Field from '../../components/ui/Field'
 
 interface GoalField {
   key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
@@ -41,7 +45,7 @@ export default function GoalsPanel() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Tracked macros</h2>
         <p className="mb-4 text-sm text-slate-400">
           Calories and protein are always tracked. Enable carbs and fat if you want the full
@@ -54,10 +58,7 @@ export default function GoalsPanel() {
               { key: 'track_fat', label: 'Track fat' },
             ] as const
           ).map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
+            <OptionChip key={key}>
               <input
                 type="checkbox"
                 checked={settings[key]}
@@ -65,15 +66,15 @@ export default function GoalsPanel() {
                 className="h-4 w-4 accent-emerald-500"
               />
               {label}
-            </label>
+            </OptionChip>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-4 font-semibold">Daily goals</h2>
 
-        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
+        <OptionChip block className="mb-4">
           <input
             type="checkbox"
             checked={settings.targets_auto}
@@ -89,26 +90,30 @@ export default function GoalsPanel() {
               to confirm, or untick this to go back to setting them by hand.
             </span>
           </span>
-        </label>
+        </OptionChip>
 
         <div className="grid gap-4 sm:grid-cols-2">
           {goalFields.filter((field) => showGoal(field.key)).map((field) => (
-            <label key={field.key} className="block text-sm">
-              <span className="mb-1 block text-slate-400">
-                {field.label} ({field.unit})
-              </span>
-              <input
+            <Field
+              key={field.key}
+              label={
+                <>
+                  {field.label} ({field.unit})
+                </>
+              }
+            >
+              <TextInput
                 type="number"
                 min={1}
                 value={settings[field.key]}
                 readOnly={settings.targets_auto}
                 onChange={(event) => update({ [field.key]: Number(event.target.value) })}
                 onBlur={guard(field.key)}
-                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base focus:border-emerald-500 sm:text-sm ${
+                className={`w-full ${
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
               />
-            </label>
+            </Field>
           ))}
         </div>
         {settings.targets_auto && (
@@ -117,7 +122,7 @@ export default function GoalsPanel() {
             you log a weigh-in.
           </p>
         )}
-      </section>
+      </Card>
 
       <BodyTargetsCard reloadKey={targetsKey} unit={settings.weight_unit} />
 

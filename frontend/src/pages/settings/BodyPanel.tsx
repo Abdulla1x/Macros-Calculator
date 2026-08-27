@@ -1,8 +1,11 @@
 import HeightField from '../../components/settings/HeightField'
-import { fieldClass } from '../../components/settings/fieldClass'
 import { num } from '../../lib/parse'
 import type { ActivityLevel, Sex } from '../../types'
 import { useSettingsPanel } from './panelContext'
+import Card from '../../components/ui/Card'
+import TextInput from '../../components/ui/TextInput'
+import OptionChip from '../../components/ui/OptionChip'
+import Field from '../../components/ui/Field'
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -29,7 +32,7 @@ export default function BodyPanel() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-1 font-semibold">Body profile</h2>
         <p className="mb-4 text-sm text-slate-400">
           Optional, and the app works fine without it. Fill it in and we can work
@@ -39,29 +42,24 @@ export default function BodyPanel() {
         <div className="grid gap-4 sm:grid-cols-2">
           <HeightField settings={settings} update={update} onBlur={guard('height_cm')} />
 
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Date of birth</span>
-            <input
+          <Field label="Date of birth" caption="Stored as the date, so your age stays right without you editing it.">
+            <TextInput
               type="date"
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
-              className={fieldClass}
+              className="w-full"
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Stored as the date, so your age stays right without you editing it.
-            </span>
-          </label>
+          </Field>
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">Activity level</span>
-            <select
+          <Field className="sm:col-span-2" label="Activity level">
+            <TextInput as="select"
               value={settings.activity_level ?? ''}
               onChange={(event) =>
                 update({
                   activity_level: (event.target.value || null) as ActivityLevel | null,
                 })
               }
-              className={fieldClass}
+              className="w-full"
             >
               <option value="">Not set</option>
               {activityOptions.map(({ value, label }) => (
@@ -69,17 +67,14 @@ export default function BodyPanel() {
                   {label}
                 </option>
               ))}
-            </select>
-          </label>
+            </TextInput>
+          </Field>
 
           <div className="text-sm sm:col-span-2">
             <span className="mb-2 block text-slate-400">Sex</span>
             <div className="flex flex-wrap gap-3">
               {sexOptions.map(({ value, label }) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-                >
+                <OptionChip key={value}>
                   <input
                     type="radio"
                     name="sex"
@@ -88,7 +83,7 @@ export default function BodyPanel() {
                     className="h-4 w-4 accent-emerald-500"
                   />
                   {label}
-                </label>
+                </OptionChip>
               ))}
               {settings.sex !== null && (
                 <button
@@ -108,11 +103,16 @@ export default function BodyPanel() {
             </p>
           </div>
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">
-              Goal rate (kg per week)
-            </span>
-            <input
+          <Field className="sm:col-span-2" label="Goal rate (kg per week)"
+            caption={
+              <>
+              Negative to lose, positive to gain, 0 to maintain. Leave it blank
+              and we won't guess — "not set" and "maintain" aren't the same
+              answer. Anything past 1 kg/week gets capped, and we'll say so.
+              </>
+            }
+          >
+            <TextInput
               type="number"
               step={0.05}
               value={settings.goal_rate_kg_per_week ?? ''}
@@ -120,18 +120,13 @@ export default function BodyPanel() {
                 update({ goal_rate_kg_per_week: num(event.target.value) })
               }
               onBlur={guard('goal_rate_kg_per_week')}
-              className={fieldClass}
+              className="w-full"
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Negative to lose, positive to gain, 0 to maintain. Leave it blank
-              and we won't guess — "not set" and "maintain" aren't the same
-              answer. Anything past 1 kg/week gets capped, and we'll say so.
-            </span>
-          </label>
+          </Field>
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Units</h2>
         <p className="mb-4 text-sm text-slate-400">
           How weights are shown on the Weight page. Entries are stored the same way
@@ -144,10 +139,7 @@ export default function BodyPanel() {
               { value: 'lb', label: 'Pounds (lb)' },
             ] as const
           ).map(({ value, label }) => (
-            <label
-              key={value}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
+            <OptionChip key={value}>
               <input
                 type="radio"
                 name="weight_unit"
@@ -157,10 +149,10 @@ export default function BodyPanel() {
                 className="h-4 w-4 accent-emerald-500"
               />
               {label}
-            </label>
+            </OptionChip>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   )
 }

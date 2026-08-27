@@ -8,6 +8,8 @@ import {
   validateSupplement,
 } from '../../lib/limits'
 import type { Supplement } from '../../types'
+import Card from '../ui/Card'
+import Button from '../ui/Button'
 
 /** The supplement list: add, edit, pause, delete.
  *
@@ -154,7 +156,7 @@ export default function SupplementsSection({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">💊 Supplements</h2>
       <p className="mb-4 text-sm text-slate-400">
         What you take, and when. Each time you add becomes a box to tick on your
@@ -293,7 +295,7 @@ export default function SupplementsSection({
         </p>
       )}
       {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-    </section>
+    </Card>
   )
 }
 
@@ -373,13 +375,13 @@ function SupplementForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <button
+        <Button
           onClick={onSave}
           disabled={busy}
-          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+          className="px-3 py-1.5"
         >
           {busy ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
         <button
           onClick={onCancel}
           className="text-sm text-slate-400 hover:text-slate-200"

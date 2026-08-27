@@ -5,6 +5,10 @@ import { isSessionPersistent } from '../auth/token'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
+import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 export default function Login() {
   const { login } = useAuth()
@@ -46,10 +50,7 @@ export default function Login() {
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-        >
+        <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
           <h2 className="text-lg font-semibold">Log in</h2>
           {!persistentSession && (
             <p className="text-sm text-amber-400">
@@ -59,36 +60,34 @@ export default function Login() {
             </p>
           )}
           {notice && <p className="text-sm text-emerald-400">{notice}</p>}
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Email</span>
-            <input
+          <Field label="Email">
+            <TextInput size="md"
               type="email"
               required
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
+              className="w-full"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Password</span>
-            <input
+          </Field>
+          <Field label="Password">
+            <TextInput size="md"
               type="password"
               required
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus:border-emerald-500"
+              className="w-full"
             />
-          </label>
+          </Field>
           {error && <p className="text-sm text-rose-400">{error}</p>}
-          <button
+          <Button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="w-full px-5 py-2"
           >
             {submitting ? 'Logging in…' : 'Log in'}
-          </button>
+          </Button>
           <p className="text-center text-sm text-slate-400">
             <Link
               to="/forgot-password"
@@ -103,7 +102,7 @@ export default function Login() {
               Sign up
             </Link>
           </p>
-        </form>
+        </Card>
         <WarmupNotice />
       </div>
     </div>
