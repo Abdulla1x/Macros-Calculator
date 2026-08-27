@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
@@ -50,13 +50,21 @@ function planCaption(plan: PlanDay | null, failed: boolean): string | undefined 
     : `${moved} — making up ${when}`
 }
 
+// How many quick-log buttons show before the rest are folded away. Six fills
+// three rows of two on a phone and two rows of three from `sm` up, which is
+// about as much as can sit above the fold without pushing the trackers off it.
+// The server caps a listing at 50 and nothing caps how many you can create, so
+// without a limit here one prolific week buries the whole page.
+const QUICK_LOG_VISIBLE = 6
+
 export default function Dashboard() {
   const { settings } = useSettings()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [templates, setTemplates] = useState<MealTemplate[]>([])
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<number | null>(null)
+  const [browsingTemplates, setBrowsingTemplates] = useState(false)
+  const [templateFilter, setTemplateFilter] = useState('')
   // Lifted here rather than held per-row so only one panel is ever open,
   // the same reason confirmDelete above is a single id and not a set.
   const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(
@@ -154,18 +162,6 @@ export default function Dashboard() {
     load()
   }
 
-  const removeTemplate = async (id: number) => {
-    try {
-      await api.deleteMealTemplate(id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed — try again.')
-      return
-    } finally {
-      setConfirmDeleteTemplate(null)
-    }
-    load()
-  }
-
   // Minted on demand rather than alongside every meal in the list: a code is
   // derived from a row, so there is nothing to cache and nothing to keep in
   // sync when the row changes.
@@ -194,6 +190,21 @@ export default function Dashboard() {
   // takes the right response to arrive.
   const dayPlan = planDay?.date === viewedDate ? planDay : null
   const goals = dayPlan ?? settings
+
+  // Collapsed shows the first six; expanded shows everything, filtered.
+  // Collapsing clears the filter too, so reopening never presents a list
+  // mysteriously shorter than the count printed on the button that opened it.
+  const shownTemplates = useMemo(() => {
+    if (!browsingTemplates) return templates.slice(0, QUICK_LOG_VISIBLE)
+    const needle = templateFilter.trim().toLowerCase()
+    if (needle === '') return templates
+    return templates.filter((template) => template.name.toLowerCase().includes(needle))
+  }, [templates, browsingTemplates, templateFilter])
+
+  const toggleBrowsing = () => {
+    setTemplateFilter('')
+    setBrowsingTemplates((open) => !open)
+  }
 
   return (
     <div className="space-y-6">
@@ -309,7 +320,84 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* The daily quick-logs.
+      {/* Hidden entirely until there is something to log. The entry point is
+          the "Save as template" button on Log Meal; a permanent empty-state
+          card would spend prime screen space explaining a feature once.
+
+          ABOVE the tracker grid, which is where this comment always claimed it
+          was while the code put it below. On a phone, re-logging yesterday's
+          breakfast belongs above three progress bars.
+
+          A grid of plain buttons, not the segmented pill this used to be. That
+          pill welded a share and a delete onto the thing you were trying to
+          tap: the delete was px-2 text-xs, far under the 44px minimum, and
+          confirming it grew the pill to four buttons in place and reflowed the
+          whole flex-wrap row. Management moved to Settings -> Library, where
+          you are reading a list rather than aiming at one. A fixed grid never
+          reflows and every cell is a full-width target.
+
+          Six, then the rest unfold in place. Unfolding rather than a modal is
+          deliberate: the two modals this app already has lack Escape, a focus
+          trap and scroll lock, and a third would deepen a debt that the
+          primitive migration may never be run to pay off. The whole list is
+          already in memory, so the filter costs no round trip. */}
+      {templates.length > 0 && (
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <h2 className="mb-3 font-semibold">Quick log</h2>
+
+          {browsingTemplates && (
+            <input
+              value={templateFilter}
+              onChange={(event) => setTemplateFilter(event.target.value)}
+              placeholder="Filter by name…"
+              aria-label="Filter saved meals"
+              className="mb-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base placeholder-ink-muted focus:border-emerald-500 sm:text-sm"
+            />
+          )}
+
+          {shownTemplates.length === 0 ? (
+            <p className="text-sm text-ink-faint">
+              Nothing matches “{templateFilter.trim()}”.
+            </p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {shownTemplates.map((template) => (
+                <li key={template.id}>
+                  {/* Carries the viewed date, not today's: a template tapped
+                      while looking at yesterday must land on yesterday. */}
+                  <Link
+                    to="/log"
+                    state={{ template, logDate: viewedDate }}
+                    className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                  >
+                    <span className="truncate text-sm font-medium text-slate-200">
+                      {template.name}
+                    </span>
+                    <span className="mt-0.5 truncate text-xs text-ink-faint">
+                      {Math.round(template.calories)} kcal ·{' '}
+                      {Math.round(template.protein)} g
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {templates.length > QUICK_LOG_VISIBLE && (
+            <button
+              onClick={toggleBrowsing}
+              aria-expanded={browsingTemplates}
+              className="mt-3 w-full rounded-lg px-3 py-2 text-center text-xs text-ink-faint hover:bg-slate-800 hover:text-slate-300"
+            >
+              {browsingTemplates
+                ? 'Show fewer ▴'
+                : `Browse all (${templates.length}) ▾`}
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* The three daily trackers.
 
           One section holding a grid, not a stack of full-width cards — this is
           where steps and supplements landed, and three trackers each taking a
@@ -317,8 +405,13 @@ export default function Dashboard() {
           Adding another is adding a child here.
 
           It sits below the rings because those are the primary targets, and
-          above the meal list because a quick-log is a thing you tap, not a
-          thing you read.
+          below Quick log because that is a tap you came here to make while
+          these three are a glance.
+
+          NOTE this block used to describe itself as "the daily quick-logs",
+          one word away from the Quick log section directly above it — two
+          different features with nearly the same name in one file. These are
+          trackers; Quick log is meals.
 
           `viewedDate`, not today: the header's ◀ ▶ already move the whole page
           through time, and a tracker that ignored them would be the only part
@@ -333,78 +426,9 @@ export default function Dashboard() {
         <SupplementsCard date={viewedDate} />
       </section>
 
-      {/* Hidden entirely until there is something to log. The entry point is
-          the "Save as template" button on Log Meal; a permanent empty-state
-          card would spend prime screen space explaining a feature once.
-
-          Sits above the two-card grid rather than inside it so it stays near
-          the top on mobile, where re-logging yesterday's breakfast belongs. */}
-      {templates.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="mb-3 font-semibold">Quick log</h2>
-          <ul className="flex flex-wrap gap-2">
-            {templates.map((template) => (
-              <li key={template.id} className="flex items-stretch">
-                {/* Carries the viewed date, not today's: a template tapped
-                    while looking at yesterday must land on yesterday. */}
-                <Link
-                  to="/log"
-                  state={{ template, logDate: viewedDate }}
-                  className="rounded-l-lg border border-r-0 border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-emerald-500 hover:text-emerald-300"
-                >
-                  {template.name}
-                  <span className="ml-2 text-xs text-ink-faint">
-                    {Math.round(template.calories)} kcal ·{' '}
-                    {Math.round(template.protein)} g
-                  </span>
-                </Link>
-                <button
-                  onClick={() =>
-                    showCode(template.name, () => api.shareMealTemplate(template.id))
-                  }
-                  aria-label={`Copy the ${template.name} template as a code`}
-                  title="Copy this template as a code"
-                  className="border border-r-0 border-slate-700 px-2 text-xs text-ink-faint hover:text-emerald-400"
-                >
-                  {/* An emoji rather than U+29C9 (the "copy" glyph): it is missing
-                      from common text fonts and renders as a tofu box next to
-                      the pencil and cross that do resolve. This app already
-                      leans on emoji elsewhere (Water, Steps, Supplements), so
-                      this is both the house convention and safer coverage. */}
-                  📋
-                </button>
-                {confirmDeleteTemplate === template.id ? (
-                  <>
-                    <button
-                      onClick={() => removeTemplate(template.id)}
-                      className="border border-r-0 border-rose-500/50 bg-rose-500/10 px-2 text-xs text-rose-300 hover:bg-rose-500/20"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteTemplate(null)}
-                      className="rounded-r-lg border border-slate-700 px-2 text-xs text-slate-400 hover:text-slate-200"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteTemplate(template.id)}
-                    aria-label={`Delete the ${template.name} template`}
-                    className="rounded-r-lg border border-slate-700 px-2 text-xs text-ink-faint hover:text-rose-400"
-                  >
-                    ✕
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Between the two things that open it — the template pills above and the
-          meal list below — so it is a short scroll from either. */}
+      {/* Directly above the meal list, which is now its only trigger on this
+          page: template sharing moved to Settings -> Library along with the
+          rest of template management. */}
       {shareError && (
         <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
           {shareError}
