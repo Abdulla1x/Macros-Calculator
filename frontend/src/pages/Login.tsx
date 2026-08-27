@@ -7,6 +7,7 @@ import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
 
 export default function Login() {
   const { login } = useAuth()
@@ -58,8 +59,7 @@ export default function Login() {
             </p>
           )}
           {notice && <p className="text-sm text-emerald-400">{notice}</p>}
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Email</span>
+          <Field label="Email">
             <TextInput size="md" className="w-full"
               type="email"
               required
@@ -67,9 +67,8 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Password</span>
+          </Field>
+          <Field label="Password">
             <TextInput size="md" className="w-full"
               type="password"
               required
@@ -77,7 +76,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </label>
+          </Field>
           {error && <p className="text-sm text-rose-400">{error}</p>}
           <button
             type="submit"

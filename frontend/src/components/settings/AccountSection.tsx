@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -82,8 +83,7 @@ export default function AccountSection() {
         </p>
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Current password</span>
+          <Field label="Current password">
             <TextInput className="w-full"
               type="password"
               autoComplete="current-password"
@@ -91,9 +91,8 @@ export default function AccountSection() {
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">New password</span>
+          </Field>
+          <Field label="New password">
             <TextInput className="w-full"
               type="password"
               autoComplete="new-password"
@@ -102,9 +101,8 @@ export default function AccountSection() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Confirm new password</span>
+          </Field>
+          <Field label="Confirm new password">
             <TextInput className="w-full"
               type="password"
               autoComplete="new-password"
@@ -113,7 +111,7 @@ export default function AccountSection() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
-          </label>
+          </Field>
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -165,10 +163,7 @@ export default function AccountSection() {
           </button>
         ) : (
           <form onSubmit={submitDelete} className="max-w-sm space-y-3">
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">
-                Enter your password to confirm
-              </span>
+            <Field label="Enter your password to confirm">
               <TextInput className="w-full"
                 type="password"
                 autoComplete="current-password"
@@ -176,7 +171,7 @@ export default function AccountSection() {
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
               />
-            </label>
+            </Field>
             <div className="flex items-center gap-3">
               <button
                 type="submit"

@@ -5,6 +5,7 @@ import { num } from '../../lib/parse'
 import type { ImportResult, Settings as SettingsType } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -52,8 +53,7 @@ export default function StepsSection({
         to leave you waiting for numbers that will never arrive.
       </p>
 
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-400">Daily goal</span>
+      <Field label="Daily goal">
         <span className="flex items-center gap-2">
           <TextInput accent="steps" className="w-28"
             type="number"
@@ -77,7 +77,7 @@ export default function StepsSection({
           />
           <span className="text-xs text-ink-faint">steps</span>
         </span>
-      </label>
+      </Field>
       <p className="mt-2 text-xs text-ink-faint">
         Leave this empty and the card just shows your count. There is no default
         here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a

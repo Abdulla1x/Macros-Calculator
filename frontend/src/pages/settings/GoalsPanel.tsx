@@ -5,6 +5,7 @@ import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
 import TextInput from '../../components/ui/TextInput'
 import OptionChip from '../../components/ui/OptionChip'
+import Field from '../../components/ui/Field'
 
 interface GoalField {
   key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
@@ -93,10 +94,14 @@ export default function GoalsPanel() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           {goalFields.filter((field) => showGoal(field.key)).map((field) => (
-            <label key={field.key} className="block text-sm">
-              <span className="mb-1 block text-slate-400">
-                {field.label} ({field.unit})
-              </span>
+            <Field
+              key={field.key}
+              label={
+                <>
+                  {field.label} ({field.unit})
+                </>
+              }
+            >
               <TextInput
                 type="number"
                 min={1}
@@ -108,7 +113,7 @@ export default function GoalsPanel() {
                   settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
                 }`}
               />
-            </label>
+            </Field>
           ))}
         </div>
         {settings.targets_auto && (

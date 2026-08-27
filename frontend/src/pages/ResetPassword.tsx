@@ -7,6 +7,7 @@ import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -74,8 +75,7 @@ export default function ResetPassword() {
         {token ? (
           <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="text-lg font-semibold">Choose a new password</h2>
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">New password</span>
+            <Field label="New password" caption="At least 8 characters.">
               <TextInput size="md" className="w-full"
                 type="password"
                 required
@@ -84,12 +84,8 @@ export default function ResetPassword() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <span className="mt-1 block text-xs text-ink-faint">
-                At least 8 characters.
-              </span>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">Confirm password</span>
+            </Field>
+            <Field label="Confirm password">
               <TextInput size="md" className="w-full"
                 type="password"
                 required
@@ -97,7 +93,7 @@ export default function ResetPassword() {
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
               />
-            </label>
+            </Field>
             {error && <p className="text-sm text-rose-400">{error}</p>}
             <button
               type="submit"

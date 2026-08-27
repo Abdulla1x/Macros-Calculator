@@ -7,6 +7,7 @@ import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -54,8 +55,7 @@ export default function Signup() {
               leaving private browsing, keeps you signed in.
             </p>
           )}
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Email</span>
+          <Field label="Email">
             <TextInput size="md" className="w-full"
               type="email"
               required
@@ -63,9 +63,8 @@ export default function Signup() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Password</span>
+          </Field>
+          <Field label="Password" caption="At least 8 characters.">
             <TextInput size="md" className="w-full"
               type="password"
               required
@@ -74,9 +73,6 @@ export default function Signup() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              At least 8 characters.
-            </span>
             {/* Password reset exists in the codebase but is not switched on —
                 sending email needs a provider we don't have yet. Until it is,
                 forgetting this password means losing the account for good, so
@@ -87,7 +83,7 @@ export default function Signup() {
             <span className="mt-1 block text-xs text-amber-300/90">
               There's no password reset yet — keep it somewhere safe.
             </span>
-          </label>
+          </Field>
           {error && <p className="text-sm text-rose-400">{error}</p>}
           <button
             type="submit"

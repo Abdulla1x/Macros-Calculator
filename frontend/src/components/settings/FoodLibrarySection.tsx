@@ -5,6 +5,7 @@ import { num } from '../../lib/parse'
 import type { Food, FoodCreate } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
  *
@@ -359,8 +360,7 @@ function FoodForm({
     key: 'servingSize' | 'calories' | 'protein' | 'carbs' | 'fat',
     label: string,
   ) => (
-    <label className="block text-xs">
-      <span className="mb-1 block text-slate-400">{label}</span>
+    <Field size="xs" label={<>{label}</>}>
       <input
         type="number"
         inputMode="decimal"
@@ -370,7 +370,7 @@ function FoodForm({
         aria-label={label}
         className={`${field} w-full`}
       />
-    </label>
+    </Field>
   )
 
   return (

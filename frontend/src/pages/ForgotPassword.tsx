@@ -6,6 +6,7 @@ import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -71,8 +72,7 @@ export default function ForgotPassword() {
               Enter your email and we'll send you a link to choose a new
               password.
             </p>
-            <label className="block text-sm">
-              <span className="mb-1 block text-slate-400">Email</span>
+            <Field label="Email">
               <TextInput size="md" className="w-full"
                 type="email"
                 required
@@ -80,7 +80,7 @@ export default function ForgotPassword() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-            </label>
+            </Field>
             {error && <p className="text-sm text-rose-400">{error}</p>}
             <button
               type="submit"

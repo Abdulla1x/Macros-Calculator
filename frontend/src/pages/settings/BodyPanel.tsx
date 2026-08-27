@@ -5,6 +5,7 @@ import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
 import TextInput from '../../components/ui/TextInput'
 import OptionChip from '../../components/ui/OptionChip'
+import Field from '../../components/ui/Field'
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -41,20 +42,15 @@ export default function BodyPanel() {
         <div className="grid gap-4 sm:grid-cols-2">
           <HeightField settings={settings} update={update} onBlur={guard('height_cm')} />
 
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Date of birth</span>
+          <Field label="Date of birth" caption="Stored as the date, so your age stays right without you editing it.">
             <TextInput className="w-full"
               type="date"
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Stored as the date, so your age stays right without you editing it.
-            </span>
-          </label>
+          </Field>
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">Activity level</span>
+          <Field className="sm:col-span-2" label="Activity level">
             <TextInput as="select" className="w-full"
               value={settings.activity_level ?? ''}
               onChange={(event) =>
@@ -70,7 +66,7 @@ export default function BodyPanel() {
                 </option>
               ))}
             </TextInput>
-          </label>
+          </Field>
 
           <div className="text-sm sm:col-span-2">
             <span className="mb-2 block text-slate-400">Sex</span>
@@ -105,10 +101,15 @@ export default function BodyPanel() {
             </p>
           </div>
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">
-              Goal rate (kg per week)
-            </span>
+          <Field className="sm:col-span-2" label="Goal rate (kg per week)"
+            caption={
+              <>
+              Negative to lose, positive to gain, 0 to maintain. Leave it blank
+              and we won't guess — "not set" and "maintain" aren't the same
+              answer. Anything past 1 kg/week gets capped, and we'll say so.
+              </>
+            }
+          >
             <TextInput className="w-full"
               type="number"
               step={0.05}
@@ -118,12 +119,7 @@ export default function BodyPanel() {
               }
               onBlur={guard('goal_rate_kg_per_week')}
             />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Negative to lose, positive to gain, 0 to maintain. Leave it blank
-              and we won't guess — "not set" and "maintain" aren't the same
-              answer. Anything past 1 kg/week gets capped, and we'll say so.
-            </span>
-          </label>
+          </Field>
         </div>
       </Card>
 

@@ -2,6 +2,7 @@ import { num } from '../../lib/parse'
 import { cmToFtIn, ftInToCm } from '../../lib/units'
 import type { Settings as SettingsType } from '../../types'
 import TextInput from '../ui/TextInput'
+import Field from '../ui/Field'
 
 /** Height, in whichever unit the weight preference implies.
  *
@@ -21,15 +22,14 @@ export default function HeightField({
 }) {
   if (settings.weight_unit !== 'lb') {
     return (
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-400">Height (cm)</span>
+      <Field label="Height (cm)">
         <TextInput className="w-full"
           type="number"
           value={settings.height_cm ?? ''}
           onChange={(event) => update({ height_cm: num(event.target.value) })}
           onBlur={onBlur}
         />
-      </label>
+      </Field>
     )
   }
 
@@ -46,8 +46,14 @@ export default function HeightField({
   }
 
   return (
-    <div className="text-sm">
-      <span className="mb-1 block text-slate-400">Height</span>
+    <Field as="div" label="Height"
+      caption={
+        <>
+        Stored in centimetres; shown in feet and inches because your weight unit
+        is pounds.
+        </>
+      }
+    >
       <div className="flex gap-2">
         <label className="flex-1">
           <TextInput className="w-full"
@@ -74,10 +80,6 @@ export default function HeightField({
           />
         </label>
       </div>
-      <span className="mt-1 block text-xs text-ink-faint">
-        Stored in centimetres; shown in feet and inches because your weight unit
-        is pounds.
-      </span>
-    </div>
+    </Field>
   )
 }

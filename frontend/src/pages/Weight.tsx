@@ -29,6 +29,7 @@ import {
 import type { Settings, WeightEntry, WeightTrend } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Field from '../components/ui/Field'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
@@ -131,8 +132,7 @@ export default function Weight() {
       <Card as="section">
         <h2 className="mb-3 font-semibold">Log a weigh-in</h2>
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Date</span>
+          <Field label="Date">
             <TextInput className="w-full"
               type="date"
               value={date}
@@ -142,9 +142,8 @@ export default function Weight() {
                 setStatus('idle')
               }}
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Weight ({label})</span>
+          </Field>
+          <Field label={<>Weight ({label})</>}>
             <TextInput className="w-full"
               type="number"
               step="0.1"
@@ -156,7 +155,7 @@ export default function Weight() {
                 setStatus('idle')
               }}
             />
-          </label>
+          </Field>
           <button
             type="submit"
             disabled={status === 'saving'}
