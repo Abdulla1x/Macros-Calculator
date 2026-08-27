@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 import MacroRing from '../components/MacroRing'
 import ShareCodePanel from '../components/ShareCodePanel'
 import StepsCard from '../components/StepsCard'
@@ -17,6 +18,7 @@ import {
   tooltipStyle,
 } from '../lib/chartTheme'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
+import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 
@@ -59,6 +61,7 @@ const QUICK_LOG_VISIBLE = 6
 
 export default function Dashboard() {
   const { settings } = useSettings()
+  const { user } = useAuth()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [templates, setTemplates] = useState<MealTemplate[]>([])
@@ -191,15 +194,24 @@ export default function Dashboard() {
   const dayPlan = planDay?.date === viewedDate ? planDay : null
   const goals = dayPlan ?? settings
 
+  // Ordered by what this device last logged, so the six that show are the six
+  // being used rather than the six most recently created. Read once per mount:
+  // tapping one writes to storage and navigates away, and the new order is
+  // there when the dashboard comes back.
+  const ordered = useMemo(
+    () => (user ? byRecentUse(templates, user.id) : templates),
+    [templates, user],
+  )
+
   // Collapsed shows the first six; expanded shows everything, filtered.
   // Collapsing clears the filter too, so reopening never presents a list
   // mysteriously shorter than the count printed on the button that opened it.
   const shownTemplates = useMemo(() => {
-    if (!browsingTemplates) return templates.slice(0, QUICK_LOG_VISIBLE)
+    if (!browsingTemplates) return ordered.slice(0, QUICK_LOG_VISIBLE)
     const needle = templateFilter.trim().toLowerCase()
-    if (needle === '') return templates
-    return templates.filter((template) => template.name.toLowerCase().includes(needle))
-  }, [templates, browsingTemplates, templateFilter])
+    if (needle === '') return ordered
+    return ordered.filter((template) => template.name.toLowerCase().includes(needle))
+  }, [ordered, browsingTemplates, templateFilter])
 
   const toggleBrowsing = () => {
     setTemplateFilter('')
@@ -368,6 +380,7 @@ export default function Dashboard() {
                   <Link
                     to="/log"
                     state={{ template, logDate: viewedDate }}
+                    onClick={() => user && rememberTemplate(user.id, template.id)}
                     className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
                   >
                     <span className="truncate text-sm font-medium text-slate-200">
