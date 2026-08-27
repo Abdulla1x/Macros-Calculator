@@ -22,6 +22,7 @@ import type {
   OFFProduct,
   PlanDay,
   Settings,
+  WeeklyReview,
   ShareCode,
   SharedMeal,
   StepDay,
@@ -368,6 +369,13 @@ export const api = {
     const query = params.toString()
     return request<AnalyticsSummary>(`/api/analytics/daily${query ? `?${query}` : ''}`)
   },
+
+  // `end` is the last day the review covers, and the caller passes its OWN
+  // local yesterday. No timezone is stored for anyone and the server's today is
+  // UTC, so letting the server pick would give the wrong week to everyone hours
+  // off it. Same reason getAnalytics takes explicit dates.
+  getReview: (end?: string) =>
+    request<WeeklyReview>(`/api/review${end ? `?end=${end}` : ''}`),
 
   analyzeMeal: (form: FormData) =>
     request<MealAnalysisResponse>(
