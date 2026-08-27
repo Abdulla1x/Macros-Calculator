@@ -80,7 +80,7 @@ printf '%s\n' "${results[@]}"
 if [[ $failed == 1 ]]; then
   printf '\n%sSome gates failed.%s\n' "$red" "$reset"
 else
-  printf '\n%sAll gates passed.%s Browser-level checks: see .claude/skills/verify.\n' \
+  printf '\n%sAll gates passed.%s Browser-level checks: scripts/dom-snapshot.mjs.\n' \
     "$green" "$reset"
 fi
 exit $failed
