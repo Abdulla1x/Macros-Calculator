@@ -164,9 +164,17 @@ export default function CalibrationSection() {
             </div>
           )}
 
+          {/* Since foods can be attached to an analysis, a "correction" is no
+              longer only the user moving a number: swapping in a saved food's
+              own macros moves it too, and that is the library disagreeing with
+              the estimate rather than a judgement anyone made. Left unsaid,
+              this section would keep claiming something about the user that
+              some of its rows no longer describe. */}
           <p className="mt-4 text-xs text-ink-faint">
             Counted only from meals you saved straight after an analysis, so the real figure may
-            be a little higher. Editing a meal later is not reflected here. And how much you tell
+            be a little higher. Editing a meal later is not reflected here. Using your own saved
+            numbers for a food counts as a correction as well, so some of these measure your
+            library disagreeing with the estimate rather than you. And how much you tell
             the app changes what this measures — weighed portions and a voice note narrow its
             range considerably, so these figures describe the app on the way <em>you</em> log,
             not on a bare photo.
