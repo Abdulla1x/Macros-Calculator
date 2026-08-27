@@ -268,8 +268,7 @@ export default function Dashboard() {
           </div>
         </div>
         <Link
-          to="/log"
-          state={{ logDate: viewedDate }}
+          to={`/log?date=${viewedDate}`}
           className="rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
         >
           + Log a meal
@@ -378,8 +377,8 @@ export default function Dashboard() {
                   {/* Carries the viewed date, not today's: a template tapped
                       while looking at yesterday must land on yesterday. */}
                   <Link
-                    to="/log"
-                    state={{ template, logDate: viewedDate }}
+                    to={`/log?date=${viewedDate}`}
+                    state={{ template }}
                     onClick={() => user && rememberTemplate(user.id, template.id)}
                     className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
                   >
@@ -476,7 +475,7 @@ export default function Dashboard() {
           {meals.length === 0 ? (
             !error && (
               <p className="py-6 text-center text-sm text-ink-faint">
-                Nothing logged yet — <Link to="/log" state={{ logDate: viewedDate }} className="text-emerald-400 hover:underline">log your first meal</Link>.
+                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 hover:underline">log your first meal</Link>.
               </p>
             )
           ) : (
