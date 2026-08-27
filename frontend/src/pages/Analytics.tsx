@@ -10,6 +10,15 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import CalibrationSection from '../components/CalibrationSection'
+import {
+  axisStroke,
+  axisTick,
+  gridStroke,
+  macroHues,
+  shortDate,
+  tooltipLabelStyle,
+  tooltipStyle,
+} from '../lib/chartTheme'
 import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
@@ -51,10 +60,10 @@ interface MacroChart {
 }
 
 const macroCharts: MacroChart[] = [
-  { key: 'calories', label: 'Calories', color: '#f59e0b', unit: 'kcal' },
-  { key: 'protein', label: 'Protein', color: '#34d399', unit: 'g' },
-  { key: 'carbs', label: 'Carbs', color: '#38bdf8', unit: 'g' },
-  { key: 'fat', label: 'Fat', color: '#fb7185', unit: 'g' },
+  { key: 'calories', label: 'Calories', color: macroHues.calories, unit: 'kcal' },
+  { key: 'protein', label: 'Protein', color: macroHues.protein, unit: 'g' },
+  { key: 'carbs', label: 'Carbs', color: macroHues.carbs, unit: 'g' },
+  { key: 'fat', label: 'Fat', color: macroHues.fat, unit: 'g' },
 ]
 
 export default function Analytics() {
@@ -196,17 +205,17 @@ export default function Analytics() {
               </h2>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={summary.days} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
-                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    tickFormatter={(value: string) => value.slice(5)}
-                    stroke="#334155"
+                    tick={axisTick}
+                    tickFormatter={shortDate}
+                    stroke={axisStroke}
                   />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} stroke="#334155" />
+                  <YAxis tick={axisTick} stroke={axisStroke} />
                   <Tooltip
-                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                    labelStyle={{ color: '#e2e8f0' }}
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
                     formatter={(value) => [`${Math.round(Number(value) * 10) / 10} ${chart.unit}`, chart.label]}
                   />
                   <Line

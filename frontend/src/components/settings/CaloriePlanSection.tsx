@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '../api/client'
-import { addDays, dayRange, localIsoDate, parseIsoDate } from '../lib/dates'
-import { MAX_PLAN_DAYS, MAX_PLAN_HORIZON_DAYS, validatePlan } from '../lib/limits'
-import type { CaloriePlan, DaySurplus, PlanKind } from '../types'
+import { api } from '../../api/client'
+import { addDays, dayRange, localIsoDate, parseIsoDate } from '../../lib/dates'
+import { MAX_PLAN_DAYS, MAX_PLAN_HORIZON_DAYS, validatePlan } from '../../lib/limits'
+import { num } from '../../lib/parse'
+import type { CaloriePlan, DaySurplus, PlanKind } from '../../types'
 
 /** Move calories between days without moving the week.
  *
- * In its own file for the reason FoodLibrarySection is: Settings.tsx already
- * holds five sections and is the largest file in the frontend, and this one has
- * two modes, a day picker and a list of existing plans.
+ * One of the sections of the Settings page. They live in this folder rather
+ * than in Settings.tsx itself, which otherwise carries every one of them at
+ * once. This one has two modes, a day picker and a list of existing plans.
  *
  * **This screen never offers.** Nothing here appears because you went over --
  * no prompt, no "shall we cut the next four days?". You come looking for it.
@@ -20,12 +21,6 @@ import type { CaloriePlan, DaySurplus, PlanKind } from '../types'
  * never picks them. All it does is refuse a set that would drop a day below the
  * calorie floor, and say which day and why.
  */
-
-const num = (value: string) => {
-  if (value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 const short = (iso: string) =>
   parseIsoDate(iso).toLocaleDateString(undefined, {
