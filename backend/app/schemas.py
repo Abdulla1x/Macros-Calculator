@@ -400,6 +400,12 @@ class WaterDay(BaseModel):
 # stray digit, and it sits well past any distance a person covers in a day.
 MAX_STEPS_PER_DAY = 200_000
 
+# Weigh-in reminder cadence bound. Like MAX_STEPS_PER_DAY it carries no health
+# opinion -- this app has no view on how often anyone should weigh themselves.
+# It only keeps the value recognisable as a reminder: past a month the nudge is
+# not reminding you of a habit, it is announcing that you no longer have one.
+MAX_WEIGH_IN_REMINDER_DAYS = 30
+
 
 class StepEntryCreate(BaseModel):
     date: date_type
@@ -768,6 +774,21 @@ class Settings(BaseModel):
     # matches its column exactly, so from_attributes reads it directly and this
     # one needs no _settings_out() conversion.
     steps_goal: int | None = Field(default=None, gt=0, le=MAX_STEPS_PER_DAY)
+
+    # Weigh-in reminder. Both default, for the reason weight_unit does: a PWA
+    # tab opened before this shipped goes on PUTting a body without these keys
+    # until it is reloaded, and a field with no default 422s every one of those
+    # saves.
+    #
+    # None on the time means OFF, which is a third meaning for an empty
+    # settings field -- see the column comments in models.py. It is a patched
+    # field, so switching the reminder off is done by sending null explicitly.
+    weigh_in_reminder_time: ClockTime | None = None
+    # Never None: this one cannot express "off", so it cannot disagree with the
+    # field above, which is the only one entitled to say so.
+    weigh_in_reminder_days: int = Field(
+        default=1, ge=1, le=MAX_WEIGH_IN_REMINDER_DAYS
+    )
 
     @field_validator("birth_date")
     @classmethod

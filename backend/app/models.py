@@ -511,6 +511,40 @@ class Setting(Base):
     # percentage until a goal is set.
     steps_goal: Mapped[int | None] = mapped_column(Integer, default=None)
 
+    # Weigh-in reminder. NULL means OFF -- a third meaning for an empty
+    # settings column, so it is spelled out here rather than left to be
+    # inferred from the two above it: water_goal_ml NULL says "derive it from
+    # my weight", steps_goal NULL says "I have no goal", and this one says
+    # "do not remind me at all".
+    #
+    # The time and the opt-in are one column on purpose, the same reasoning
+    # water_goal_ml gives: NULL already carries the flag, and a value plus a
+    # separate `weigh_in_reminder_on` boolean is two columns that can disagree.
+    #
+    # A plain "HH:MM" string, matching what supplements store. No CHECK
+    # constraint, unlike the three enum columns below: those are short IN (...)
+    # lists, which SQLite and Postgres spell identically, where a time pattern
+    # is a regex and they do not (GLOB vs ~). schemas.ClockTime is the gate,
+    # exactly as it already is for supplement times.
+    weigh_in_reminder_time: Mapped[str | None] = mapped_column(
+        String(5), default=None
+    )
+    # How many days without a weigh-in before the nudge speaks. 1 is "any day I
+    # have not weighed in".
+    #
+    # NOT NULL, which is the opposite of every column above and is the point:
+    # this one cannot express "off", so it cannot contradict the column whose
+    # whole job that is. Nullable would invent a third state sitting next to a
+    # column that already carries on/off. Same shape as targets_auto -- a
+    # Python default for new rows and a server_default to backfill the ones
+    # that predate it.
+    #
+    # Deliberately kept when the reminder is switched off: turning it off and
+    # on again should not silently reset a cadence the user chose.
+    weigh_in_reminder_days: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1"
+    )
+
     __table_args__ = (
         CheckConstraint(
             "weight_unit IN ('kg', 'lb')", name="ck_settings_weight_unit"

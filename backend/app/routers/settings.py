@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 # update_settings for why these behave differently from the seven original ones.
 #
 # Named for the behaviour, not the feature: this began as the body profile and
-# is now the body profile plus water, and every field added from here on joins
-# this group rather than the replaced one.
+# is now the body profile, the tracker goals and the weigh-in reminder, and
+# every field added from here on joins this group rather than the replaced one.
 #
 # `water_quick_adds` is patched too but is NOT in this tuple -- it is the one
 # field whose schema name and column name differ, so it cannot go through the
@@ -30,6 +30,8 @@ _PATCHED_FIELDS = (
     "targets_auto",
     "water_goal_ml",
     "steps_goal",
+    "weigh_in_reminder_time",
+    "weigh_in_reminder_days",
 )
 
 
