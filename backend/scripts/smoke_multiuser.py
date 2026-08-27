@@ -17,7 +17,7 @@ properly — worth wiring in, but it needs the password kept to hand.)
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -316,9 +316,20 @@ def main() -> None:
         def review_check(payload, key):
             return next((c for c in payload["checks"] if c["key"] == key), None)
 
+        # ⚠ Deliberately NOT "window_end < utc today". The server derives the
+        # window from its own LOCAL date while this script only knows UTC, so
+        # east of UTC in the evening the two disagree by a day and the check
+        # fails against a perfectly correct response. That the window ends
+        # yesterday is pinned in pytest, where the clock is controlled; what is
+        # worth asserting against a live server is the span and that it never
+        # runs ahead of real time.
+        window = date.fromisoformat(a_review["window_end"]) - date.fromisoformat(
+            a_review["window_start"]
+        )
+        check(window.days == 6, "the review window spans 7 days")
         check(
-            a_review["window_end"] < datetime.now(timezone.utc).date().isoformat(),
-            "the review window ends before today",
+            a_review["window_end"] <= datetime.now(timezone.utc).date().isoformat(),
+            "the review window never runs ahead of real time",
         )
         check(
             review_check(a_review, "logging") is not None,
