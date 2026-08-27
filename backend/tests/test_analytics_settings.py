@@ -131,14 +131,21 @@ def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
 # break each of them in a different place.
 #
 # Named for the behaviour rather than the feature it started as: this was the
-# body profile alone, and it now carries water too. Anything added to the
-# patched group in routers/settings.py belongs here.
+# body profile alone, and it now carries water, steps and the weigh-in
+# reminder. Anything added to the patched group in routers/settings.py belongs
+# here.
+#
+# "Unset" means omittable from a PUT, not necessarily null in the response.
+# targets_auto and weigh_in_reminder_days are both NOT NULL columns, so their
+# entries here are the shipped defaults rather than None -- which is exactly
+# what a whole-payload assertion should be pinning.
 UNSET_OPTIONALS = {
     "height_cm": None, "birth_date": None, "sex": None,
     "activity_level": None, "goal_rate_kg_per_week": None,
     "targets_auto": False,
     "water_goal_ml": None, "water_quick_adds": None,
     "steps_goal": None,
+    "weigh_in_reminder_time": None, "weigh_in_reminder_days": 1,
 }
 
 
@@ -169,6 +176,7 @@ def test_body_profile_round_trips(client):
         "targets_auto": False,
         "water_goal_ml": None, "water_quick_adds": None,
         "steps_goal": None,
+        "weigh_in_reminder_time": None, "weigh_in_reminder_days": 1,
     }
     assert client.put("/api/settings", json=profile).json() == profile
     assert client.get("/api/settings").json() == profile
@@ -408,3 +416,109 @@ def test_water_settings_bounds_are_refused(client):
     assert client.put(
         "/api/settings", json={**settings, "water_quick_adds": []}
     ).status_code == 422
+
+
+# --- Weigh-in reminder -------------------------------------------------------
+
+
+def test_the_weigh_in_reminder_round_trips(client):
+    settings = client.get("/api/settings").json()
+
+    saved = client.put(
+        "/api/settings",
+        json={**settings, "weigh_in_reminder_time": "20:30",
+              "weigh_in_reminder_days": 7},
+    ).json()
+
+    assert saved["weigh_in_reminder_time"] == "20:30"
+    assert saved["weigh_in_reminder_days"] == 7
+    assert client.get("/api/settings").json() == saved
+
+
+def test_a_put_without_the_reminder_fields_leaves_them_alone(client):
+    """The stale-bundle guarantee again, and the reason both fields are patched.
+
+    A phone still running the pre-deploy bundle PUTs a body with neither key.
+    Under replace semantics that would switch off a reminder the user opted
+    into, and the failure would be silent in the worst possible way: the nudge
+    exists to speak when nothing else does, so nobody notices it going quiet.
+    """
+    settings = client.get("/api/settings").json()
+    client.put(
+        "/api/settings",
+        json={**settings, "weigh_in_reminder_time": "07:15",
+              "weigh_in_reminder_days": 3},
+    )
+
+    legacy_body = {
+        "calorie_goal": 2300, "protein_goal": 160, "carbs_goal": 260,
+        "fat_goal": 75, "track_carbs": False, "track_fat": False,
+    }
+    saved = client.put("/api/settings", json=legacy_body).json()
+
+    assert saved["weigh_in_reminder_time"] == "07:15"
+    assert saved["weigh_in_reminder_days"] == 3
+    assert saved["calorie_goal"] == 2300  # the replaced fields still replace
+
+
+def test_switching_the_reminder_off_keeps_the_cadence(client):
+    """Null on the time is "off". The cadence is deliberately NOT reset with it.
+
+    Two columns rather than one exist so that off/on is not a destructive
+    round trip: someone who pauses a weekly reminder for a fortnight should not
+    come back to a daily one.
+    """
+    settings = client.get("/api/settings").json()
+    client.put(
+        "/api/settings",
+        json={**settings, "weigh_in_reminder_time": "20:00",
+              "weigh_in_reminder_days": 7},
+    )
+
+    saved = client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_time": None,
+                               "weigh_in_reminder_days": 7},
+    ).json()
+
+    assert saved["weigh_in_reminder_time"] is None
+    assert saved["weigh_in_reminder_days"] == 7
+
+
+def test_the_reminder_cadence_bounds_are_refused(client):
+    settings = client.get("/api/settings").json()
+
+    # Zero days is not a cadence -- it would be "remind me about today before
+    # today has happened".
+    assert client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_days": 0}
+    ).status_code == 422
+    assert client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_days": 31}
+    ).status_code == 422
+    # Both ends of the accepted range.
+    assert client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_days": 1}
+    ).status_code == 200
+    assert client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_days": 30}
+    ).status_code == 200
+    # Null is not "off" here -- the time column is the only one entitled to say
+    # that, and a nullable cadence would be a second way to spell the same
+    # state.
+    assert client.put(
+        "/api/settings", json={**settings, "weigh_in_reminder_days": None}
+    ).status_code == 422
+
+
+def test_the_reminder_time_must_look_like_a_clock(client):
+    settings = client.get("/api/settings").json()
+
+    for bad in ("7:00", "24:00", "07:60", "0700", "abc", ""):
+        assert client.put(
+            "/api/settings", json={**settings, "weigh_in_reminder_time": bad}
+        ).status_code == 422, bad
+
+    for good in ("00:00", "07:00", "23:59"):
+        assert client.put(
+            "/api/settings", json={**settings, "weigh_in_reminder_time": good}
+        ).status_code == 200, good

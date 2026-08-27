@@ -29,6 +29,31 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-27-weigh-in-reminder",
+        date="2026-08-27",
+        title="An optional nudge when a weigh-in is due",
+        body=(
+            "**Settings -> Body now has a weigh-in reminder.** Set a time and "
+            "how many days you want to go between weigh-ins, and on a day one "
+            "is due you will see a card at the top of the page with a link "
+            "straight to the weight log. Dismiss it and it stays gone until "
+            "the next day it is due.\n\n"
+            "Leave the time empty -- which is how every account starts -- and "
+            "none of this happens.\n\n"
+            "**It only speaks while the app is open on that device, and it "
+            "will not notify your phone.** Push notifications on Android go "
+            "through Google Play Services and scheduled local ones need a "
+            "browser feature that was never built, so a reminder that reached "
+            "you with the app closed is not something this app can deliver. "
+            "That is the same limit the supplement reminders have, and it is "
+            "better said than left for you to discover.\n\n"
+            "Why bother at all: your weigh-ins are not just a chart. They are "
+            "what the trend line, your measured daily burn and -- if you have "
+            "them switched on -- your automatic daily targets are worked out "
+            "from. Days with no weigh-in make all three thinner."
+        ),
+    ),
+    Announcement(
         id="2026-08-27-settings-tabs-and-quick-log",
         date="2026-08-27",
         title="Settings is in sections now, and Quick log is easier to hit",

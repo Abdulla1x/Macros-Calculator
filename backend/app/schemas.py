@@ -7,6 +7,20 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from .banking import MAX_DAY_DELTA_KCAL, MAX_PLAN_DAYS
 from .share import MAX_CODE_CHARS
 
+# "HH:MM", 24-hour. A plain string rather than datetime.time because it is a
+# *label on a schedule*, not an instant: it has no date and no timezone, and
+# every consumer -- the unique index, the log row, the client's clock
+# comparison -- wants the two digits either side of the colon.
+#
+# Named for the shape rather than the feature. It was called SupplementTime and
+# lived under "Supplement bounds", which stopped being true the moment the
+# weigh-in reminder needed the same type: a settings field annotated
+# SupplementTime is a false claim about what it is. Up here because it is now a
+# shared primitive, not one section's detail.
+ClockTime = Annotated[
+    str, Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+]
+
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -386,6 +400,12 @@ class WaterDay(BaseModel):
 # stray digit, and it sits well past any distance a person covers in a day.
 MAX_STEPS_PER_DAY = 200_000
 
+# Weigh-in reminder cadence bound. Like MAX_STEPS_PER_DAY it carries no health
+# opinion -- this app has no view on how often anyone should weigh themselves.
+# It only keeps the value recognisable as a reminder: past a month the nudge is
+# not reminding you of a habit, it is announcing that you no longer have one.
+MAX_WEIGH_IN_REMINDER_DAYS = 30
+
 
 class StepEntryCreate(BaseModel):
     date: date_type
@@ -446,22 +466,13 @@ MAX_SUPPLEMENT_TIMES = 6
 MAX_SUPPLEMENT_NAME = 100
 MAX_SUPPLEMENT_DOSE = 60
 
-# "HH:MM", 24-hour. A plain string rather than datetime.time because it is a
-# *label on a schedule*, not an instant: it has no date and no timezone, and
-# every consumer -- the unique index, the log row, the client's clock
-# comparison -- wants the two digits either side of the colon.
-SupplementTime = Annotated[
-    str, Field(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
-]
-
-
 class SupplementCreate(BaseModel):
     name: str = Field(min_length=1, max_length=MAX_SUPPLEMENT_NAME)
     # Free text and optional: doses have no common unit (IU, mg, ml, capsules),
     # so a number-plus-enum would be missing whatever someone actually takes.
     # Displayed beside the name, never computed with.
     dose: str | None = Field(default=None, max_length=MAX_SUPPLEMENT_DOSE)
-    times: list[SupplementTime] = Field(
+    times: list[ClockTime] = Field(
         min_length=1, max_length=MAX_SUPPLEMENT_TIMES
     )
     # Present on create so the same model can serve PUT, where pausing is the
@@ -537,7 +548,7 @@ class SupplementSlot(BaseModel):
     supplement_id: int
     name: str
     dose: str | None = None
-    time: SupplementTime
+    time: ClockTime
     taken: bool
     off_schedule: bool = False
 
@@ -565,7 +576,7 @@ class SupplementDay(BaseModel):
 class SupplementLogCreate(BaseModel):
     supplement_id: int
     date: date_type
-    time: SupplementTime
+    time: ClockTime
 
     @field_validator("date")
     @classmethod
@@ -763,6 +774,21 @@ class Settings(BaseModel):
     # matches its column exactly, so from_attributes reads it directly and this
     # one needs no _settings_out() conversion.
     steps_goal: int | None = Field(default=None, gt=0, le=MAX_STEPS_PER_DAY)
+
+    # Weigh-in reminder. Both default, for the reason weight_unit does: a PWA
+    # tab opened before this shipped goes on PUTting a body without these keys
+    # until it is reloaded, and a field with no default 422s every one of those
+    # saves.
+    #
+    # None on the time means OFF, which is a third meaning for an empty
+    # settings field -- see the column comments in models.py. It is a patched
+    # field, so switching the reminder off is done by sending null explicitly.
+    weigh_in_reminder_time: ClockTime | None = None
+    # Never None: this one cannot express "off", so it cannot disagree with the
+    # field above, which is the only one entitled to say so.
+    weigh_in_reminder_days: int = Field(
+        default=1, ge=1, le=MAX_WEIGH_IN_REMINDER_DAYS
+    )
 
     @field_validator("birth_date")
     @classmethod

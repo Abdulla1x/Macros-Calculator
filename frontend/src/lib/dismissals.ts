@@ -8,6 +8,7 @@ import { readLocal, writeLocal } from './storage'
 
 const SEEN_KEY = 'macros_seen_announcements'
 const BANNER_KEY = 'macros_dismissed_banner'
+const WEIGH_IN_KEY = 'macros_dismissed_weigh_in'
 
 export function seenAnnouncementIds(): string[] {
   const raw = readLocal(SEEN_KEY)
@@ -50,4 +51,17 @@ export function isBannerDismissed(banner: string): boolean {
 
 export function dismissBanner(banner: string) {
   writeLocal(BANNER_KEY, banner)
+}
+
+// Keyed by the date it was dismissed for, exactly as the banner above is keyed
+// by its own text. That is what makes "once a day" need no new storage concept
+// and no cleanup: tomorrow's date does not match the stored one, so yesterday's
+// dismissal expires by itself. A set of dismissed dates would grow forever and
+// would still need this comparison.
+export function isWeighInNudgeDismissed(isoDate: string): boolean {
+  return readLocal(WEIGH_IN_KEY) === isoDate
+}
+
+export function dismissWeighInNudge(isoDate: string) {
+  writeLocal(WEIGH_IN_KEY, isoDate)
 }

@@ -153,6 +153,11 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             # Null here means "no goal set" -- the opposite of water_goal_ml
             # above, where null means "derive it". Same shape, different claim.
             "steps_goal": setting.steps_goal,
+            # And a third claim from an empty column: null here means the
+            # weigh-in reminder is switched off entirely. The cadence beside it
+            # is never null and is kept even while the reminder is off.
+            "weigh_in_reminder_time": setting.weigh_in_reminder_time,
+            "weigh_in_reminder_days": setting.weigh_in_reminder_days,
         },
         "meals": [
             # `date` is when it was eaten, `created_at` when it was logged,

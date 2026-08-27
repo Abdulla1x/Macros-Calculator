@@ -137,8 +137,8 @@ export default function AccountSection() {
           <p className="mb-2 text-sm text-slate-400">
             Download everything stored for this account — meals, food library, saved
             meal templates, weight entries, water logs, step counts, supplements and
-            the doses you ticked, calorie plans, body profile, goals and AI analyses
-            — as a single JSON file.
+            the doses you ticked, calorie plans, body profile, goals, reminder
+            settings and AI analyses — as a single JSON file.
           </p>
           <button
             onClick={exportAll}
@@ -155,8 +155,8 @@ export default function AccountSection() {
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
           weight entries, water logs, step counts, supplements and their check-offs,
-          calorie plans, your body profile, goals and AI analyses. This cannot be
-          undone.
+          calorie plans, your body profile, goals, reminder settings and AI
+          analyses. This cannot be undone.
         </p>
         {!confirmingDelete ? (
           <button

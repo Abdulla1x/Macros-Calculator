@@ -61,3 +61,16 @@ export function addDays(iso: string, delta: number): string {
 export function dayRange(start: string, count: number): string[] {
   return Array.from({ length: Math.max(count, 0) }, (_, i) => addDays(start, i))
 }
+
+// Whole days from one YYYY-MM-DD to another. Negative if `to` is earlier.
+//
+// Rounded, not truncated, and that is the whole reason this is a function
+// rather than a subtraction at the call site: parseIsoDate returns local
+// midnight, and local midnights are 23 or 25 hours apart across a DST
+// boundary. A raw division yields 0.958 or 1.042 there, so Math.floor would
+// report "0 days ago" for yesterday twice a year — in the spring, on the one
+// morning a reminder is most likely to be looked at.
+export function daysBetween(from: string, to: string): number {
+  const ms = parseIsoDate(to).getTime() - parseIsoDate(from).getTime()
+  return Math.round(ms / 86_400_000)
+}

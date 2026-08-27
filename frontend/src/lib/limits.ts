@@ -50,6 +50,12 @@ export const DEFAULT_WATER_QUICK_ADDS = [250, 500, 750]
  *  anyone do. It only catches a figure that is not a step count at all. */
 export const MAX_STEPS_PER_DAY = 200_000
 
+/** schemas.py MAX_WEIGH_IN_REMINDER_DAYS. Carries no opinion about how often
+ *  anyone should weigh themselves — it only keeps the value recognisable as a
+ *  reminder. Past a month the nudge is not reminding you of a habit, it is
+ *  announcing you no longer have one. */
+export const MAX_WEIGH_IN_REMINDER_DAYS = 30
+
 /** calculations.py WATER_ML_PER_KG. Needed here for one message only: the
  *  card has to name the rate before any weigh-in exists for the server to
  *  report it alongside. */
@@ -212,6 +218,18 @@ export const settingsFieldRules: Partial<Record<keyof Settings, FieldRule>> = {
       if (value <= 0) return 'Water goal has to be greater than zero.'
       if (value > MAX_WATER_GOAL_ML) {
         return `A daily goal above ${MAX_WATER_GOAL_ML.toLocaleString()} ml is more than the body can safely clear — this app will not set one.`
+      }
+      return null
+    },
+  },
+  weigh_in_reminder_days: {
+    label: 'Reminder frequency',
+    check: (value) => {
+      if (!Number.isInteger(value) || value < 1) {
+        return 'Remind me after at least one day — a reminder about today, before today has happened, is not a reminder.'
+      }
+      if (value > MAX_WEIGH_IN_REMINDER_DAYS) {
+        return `More than ${MAX_WEIGH_IN_REMINDER_DAYS} days between reminders is long enough that the reminder is not the thing that needs fixing.`
       }
       return null
     },
