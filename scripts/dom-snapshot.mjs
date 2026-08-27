@@ -132,6 +132,7 @@ const PRIVATE_ROUTES = [
   '/log',
   '/weight',
   '/analytics',
+  '/review',
   '/settings',
   '/settings/goals',
   '/settings/body',
@@ -209,7 +210,17 @@ const isoDaysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOStrin
  *
  *  The templates matter as much as the charts: Quick log is hidden entirely
  *  until an account has one, so before this the whole section -- and every
- *  change ever made to it -- was outside the comparison. */
+ *  change ever made to it -- was outside the comparison.
+ *
+ *  ⚠ So do the body profile, the water logs and the steps goal, for exactly the
+ *  same reason and found the same way. The weekly review shows a section only
+ *  where the account has already opted into that thing -- a steps goal exists,
+ *  water has been logged, the profile is complete enough to derive a burn -- so
+ *  seeding meals alone left four of its eight checks permanently outside the
+ *  comparison. That is the third time this harness has had a hole of this
+ *  shape: Quick log (meal templates) and the AI panel (collapsed by default)
+ *  were the first two. **A default state that renders nothing does not make a
+ *  section inert, it makes it unwatched.** */
 async function seed(token) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
   for (let n = 0; n < SEED_TEMPLATES; n += 1) {
@@ -245,7 +256,39 @@ async function seed(token) {
       headers,
       body: JSON.stringify({ date, weight_kg: 82.5 - day * 0.05 }),
     })
+    // Alternating either side of the 2450 ml goal that 82.5 kg derives, so the
+    // water check lands mid-range rather than at 0 or 7 -- a count stuck at an
+    // extreme would not show a change in how it is rendered.
+    await apiJson('/api/water', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ date, ml: day % 2 === 0 ? 2600 : 1200 }),
+    })
+    await apiJson('/api/steps', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ date, steps: day % 2 === 0 ? 11000 : 6000 }),
+    })
   }
+
+  // Last, and after the weigh-ins: targets_auto recomputes the four goals from
+  // the profile on save, and it needs a weight to read. A profile written first
+  // would store goals derived from no weigh-in at all.
+  //
+  // These values are what make /review's "targets" check say something rather
+  // than refuse -- 14 weigh-ins over 14 days clears TDEE_MIN_WEIGH_INS and
+  // TDEE_MIN_SPAN_DAYS, so the burn comes out measured rather than estimated.
+  await apiJson('/api/settings', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      calorie_goal: 2000, protein_goal: 150, carbs_goal: 250, fat_goal: 70,
+      track_carbs: true, track_fat: true, weight_unit: 'kg',
+      height_cm: 180, birth_date: '1990-05-04', sex: 'male',
+      activity_level: 'moderate', goal_rate_kg_per_week: -0.5,
+      targets_auto: false, steps_goal: 10000,
+    }),
+  })
 }
 
 /** Replace the values that change between runs without the page changing.
@@ -347,7 +390,10 @@ const { token, fresh } = await authenticate()
 console.log(`account ${EMAIL} (${fresh ? 'created' : 'existing'})`)
 if (fresh) {
   await seed(token)
-  console.log(`seeded ${SEED_DAYS} days of meals and weigh-ins, ${SEED_TEMPLATES} templates`)
+  console.log(
+    `seeded ${SEED_DAYS} days of meals, weigh-ins, water and steps, ` +
+      `${SEED_TEMPLATES} templates, and a complete body profile`,
+  )
 }
 
 const announcements = await apiJson('/api/announcements')
