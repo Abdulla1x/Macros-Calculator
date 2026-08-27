@@ -24,6 +24,30 @@ import { SETTINGS_TABS, settingsTabFor } from './settings/tabs'
  * The draft lives here, above the router outlet, so switching tabs cannot lose
  * an unsaved edit -- only leaving /settings can.
  */
+/** Does the working copy differ from the row the server has?
+ *
+ * Deliberately not `JSON.stringify(a) !== JSON.stringify(b)`. That is correct
+ * only while key order stays stable, which it does today purely because the
+ * draft is always built by spreading the saved row -- a rule that holds by
+ * luck, and this codebase has been bitten before by a comment asserting an
+ * invariant its own contents did not enforce. Walking the keys costs nothing
+ * and needs no such assumption. `water_quick_adds` is the only array on the
+ * row, hence the element-wise arm.
+ */
+function settingsDiffer(a: SettingsType, b: SettingsType): boolean {
+  return (Object.keys(a) as (keyof SettingsType)[]).some((key) => {
+    const left = a[key]
+    const right = b[key]
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return (
+        left.length !== right.length ||
+        left.some((value, index) => value !== right[index])
+      )
+    }
+    return left !== right
+  })
+}
+
 export default function Settings() {
   const { settings: saved, error: loadError, updateSettings } = useSettings()
   // A local working copy, so edits are not published to the rest of the app
@@ -44,6 +68,33 @@ export default function Settings() {
   useEffect(() => {
     if (saved) setDraft(saved)
   }, [saved])
+
+  // Computed before the early return below, because the two effects that
+  // depend on it are hooks and cannot sit after a conditional return.
+  const dirty = draft !== null && saved !== null && settingsDiffer(draft, saved)
+
+  // Covers a reload, a closed tab and a followed external link. It does NOT
+  // cover in-app navigation: react-router 7's useBlocker needs a data router
+  // and this app mounts <BrowserRouter> + <Routes>, so leaving /settings by
+  // the nav still drops an unsaved draft silently. What the sticky bar buys is
+  // that the draft can no longer be forgotten about -- it cannot scroll away
+  // and it does not hide behind a tab switch, which is where the loss actually
+  // came from.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  // "Saved ✓" is an acknowledgement, not a state to sit in. Without this the
+  // bar would stay on screen after every save until the next keystroke, which
+  // is a permanent strip of chrome reporting something that already happened.
+  useEffect(() => {
+    if (status !== 'saved') return
+    const timer = setTimeout(() => setStatus('idle'), 2_500)
+    return () => clearTimeout(timer)
+  }, [status])
 
   if (!draft) {
     return <p className="text-slate-400">{loadError || 'Loading…'}</p>
@@ -142,17 +193,44 @@ export default function Settings() {
 
       <Outlet context={context} />
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={status === 'saving'}
-          className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-        >
-          {status === 'saving' ? 'Saving…' : 'Save settings'}
-        </button>
-        {status === 'saved' && <span className="text-sm text-emerald-400">Saved ✓</span>}
-        {status === 'error' && <span className="text-sm text-rose-400">{error}</span>}
-      </div>
+      {/* Pinned to the bottom of the viewport rather than sitting at the end of
+          the page, which is the whole fix: the old button was ten sections down
+          with more sections below it, so the way to lose an edit was simply to
+          scroll past it.
+
+          It appears for any unsaved change to the settings row, on whichever of
+          the three deferred tabs you are standing -- NOT only for the tab that
+          made the change. Per-tab visibility would hide a pending Body edit the
+          moment you clicked Trackers, which is the same silent loss moved from
+          scrolling to tab-switching. Ticking a supplement or correcting a food
+          still summons nothing, because neither touches this row.
+
+          bottom clears the fixed tab bar (min-h-[3.25rem] plus its safe-area
+          inset in Layout.tsx); at md+ there is no bottom bar to clear. */}
+      {tab.deferred && (dirty || status !== 'idle') && (
+        <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-20 md:bottom-4">
+          <div className="flex items-center justify-between gap-3 rounded-card border border-line-strong bg-raised px-4 py-3 shadow-lg shadow-slate-950/50">
+            <p className="min-w-0 text-sm">
+              {status === 'saved' ? (
+                <span className="text-emerald-400">Saved ✓</span>
+              ) : status === 'error' ? (
+                <span className="text-rose-400">{error}</span>
+              ) : (
+                <span className="text-ink-muted">You have unsaved changes</span>
+              )}
+            </p>
+            {status !== 'saved' && (
+              <button
+                onClick={save}
+                disabled={status === 'saving'}
+                className="shrink-0 rounded-control bg-brand px-5 py-2 text-sm font-semibold text-brand-ink hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {status === 'saving' ? 'Saving…' : 'Save'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {rejected && (
         <AlertDialog

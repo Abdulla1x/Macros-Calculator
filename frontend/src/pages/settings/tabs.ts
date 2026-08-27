@@ -22,6 +22,11 @@ export interface SettingsTab {
    *  between. It also keeps Danger zone off a control you can hit by accident
    *  while reaching for the tab beside it. */
   inBar: boolean
+  /** Whether this panel edits the shared settings row, and so feeds the Save
+   *  bar. Library and Account write straight to the server as you go and must
+   *  never summon it -- that difference in behaviour is how the two save models
+   *  on this page teach themselves, instead of a sentence explaining them. */
+  deferred: boolean
 }
 
 const GOALS: SettingsTab = {
@@ -29,14 +34,15 @@ const GOALS: SettingsTab = {
   label: 'Goals',
   title: 'Goals & targets',
   inBar: true,
+  deferred: true,
 }
 
 export const SETTINGS_TABS: SettingsTab[] = [
   GOALS,
-  { path: 'body', label: 'Body', title: 'Body profile', inBar: true },
-  { path: 'trackers', label: 'Trackers', title: 'Daily trackers', inBar: true },
-  { path: 'food', label: 'Library', title: 'Your library', inBar: true },
-  { path: 'account', label: 'Account', title: 'Account & data', inBar: false },
+  { path: 'body', label: 'Body', title: 'Body profile', inBar: true, deferred: true },
+  { path: 'trackers', label: 'Trackers', title: 'Daily trackers', inBar: true, deferred: true },
+  { path: 'food', label: 'Library', title: 'Your library', inBar: true, deferred: false },
+  { path: 'account', label: 'Account', title: 'Account & data', inBar: false, deferred: false },
 ]
 
 /** The tab a pathname is on, falling back to Goals.
