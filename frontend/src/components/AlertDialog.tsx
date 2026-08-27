@@ -5,8 +5,18 @@
  * is exactly what someone skips on the way to typing a number — so the moment
  * a value is actually refused, the app has to interrupt rather than annotate.
  *
- * Shares its shell with AnnouncementsModal so there is one dialog style in the
- * app rather than two that drift apart. */
+ * It does NOT share a shell with AnnouncementsModal, whatever an earlier
+ * version of this comment claimed. Only the backdrop line is identical; the
+ * panel differs already (rounded-xl/slate-800/slate-900 here, the semantic
+ * rounded-card/line/surface tokens there), which is exactly the drift the old
+ * claim said could not happen. Neither dialog closes on Escape, traps focus, or
+ * locks background scroll.
+ *
+ * Deliberately not fixed here: one shared ui/Modal carrying all three is the
+ * primitive migration's job, and hand-patching two copies in the meantime is
+ * how you end up with three. Recorded rather than quietly left, because a
+ * comment asserting a rule its own contents break is a trap this repo has paid
+ * for more than once. */
 export default function AlertDialog({
   title,
   message,
