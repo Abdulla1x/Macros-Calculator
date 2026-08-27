@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { readNoteDraft, writeNoteDraft } from '../lib/draft'
 import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
+import Card from './ui/Card'
 
 interface Props {
   settings: Settings | null
@@ -205,7 +206,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold">AI meal analysis</h2>
         <button
@@ -448,6 +449,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           </button>
         </div>
       )}
-    </section>
+    </Card>
   )
 }

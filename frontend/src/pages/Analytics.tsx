@@ -22,6 +22,7 @@ import {
 import { localIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
+import Card from '../components/ui/Card'
 
 /** One average tile, with its sample size when that is not the obvious one.
  *
@@ -175,7 +176,7 @@ export default function Analytics() {
                 : []),
               { label: 'Total calories', value: Math.round(summary.totals.calories).toLocaleString(), note: null },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <Card pad="sm" key={stat.label}>
                 <p className="text-xs text-slate-400">{stat.label}</p>
                 <p className="mt-1 text-xl font-bold">{stat.value}</p>
                 {/* Only when this macro's denominator differs from the number
@@ -183,7 +184,7 @@ export default function Analytics() {
                     would be noise that trains people to stop reading the one
                     time it matters. */}
                 {stat.note && <p className="mt-1 text-xs text-slate-400">{stat.note}</p>}
-              </div>
+              </Card>
             ))}
           </section>
 
@@ -199,7 +200,7 @@ export default function Analytics() {
           </p>
 
           {visibleCharts.map((chart) => (
-            <section key={chart.key} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <Card as="section" key={chart.key}>
               <h2 className="mb-3 font-semibold" style={{ color: chart.color }}>
                 {chart.label} over time
               </h2>
@@ -228,10 +229,10 @@ export default function Analytics() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </section>
+            </Card>
           ))}
 
-          <section className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
+          <Card as="section" pad="none" className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-400">
@@ -258,21 +259,21 @@ export default function Analytics() {
                 ))}
               </tbody>
             </table>
-          </section>
+          </Card>
         </>
       ) : loadError ? (
-        <p className="rounded-xl border border-rose-900/60 bg-slate-900 p-6 text-center text-sm text-rose-300">
+        <Card as="p" tone="danger" pad="lg" className="text-center text-sm text-rose-300">
           {loadError}
-        </p>
+        </Card>
       ) : (
-        <p className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-ink-faint">
+        <Card as="p" pad="lg" className="text-center text-sm text-ink-faint">
           No meals in this date range yet.
-        </p>
+        </Card>
       )}
 
       <CalibrationSection />
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Backup & restore</h2>
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -308,7 +309,7 @@ export default function Analytics() {
         <p className="mt-2 text-xs text-ink-faint">
           CSV columns: date, name, calories, protein (carbs and fat optional).
         </p>
-      </section>
+      </Card>
     </div>
   )
 }

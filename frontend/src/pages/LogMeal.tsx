@@ -15,6 +15,7 @@ import type {
   MealTemplate,
   SharedMeal,
 } from '../types'
+import Card from '../components/ui/Card'
 
 interface Row {
   key: number
@@ -469,18 +470,18 @@ export default function LogMeal() {
       />
 
       {fromCode && (
-        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <Card as="p" tone="warn" pad="sm" className="text-sm">
           These numbers came from whoever sent you the code. The app has not checked
           them and cannot — they may have been weighed, estimated or guessed. Change
           anything that looks wrong before you save; this is your copy now.
-        </p>
+        </Card>
       )}
 
       <MealAnalyzer key={analyzerNonce} settings={settings} onApply={applyAnalysis} />
 
       <section className="space-y-4">
         {rows.map((row, index) => (
-          <div key={row.key} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+          <Card pad="sm" key={row.key}>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-300">
                 {rows.length === 1 ? 'Ingredient' : `Ingredient ${index + 1}`}
@@ -592,7 +593,7 @@ export default function LogMeal() {
                 {Math.round(rowTotals(row).protein * 10) / 10} g protein
               </p>
             )}
-          </div>
+          </Card>
         ))}
 
         <button
@@ -603,7 +604,7 @@ export default function LogMeal() {
         </button>
       </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Meal details</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
@@ -737,7 +738,7 @@ export default function LogMeal() {
             {message.text}
           </p>
         )}
-      </section>
+      </Card>
     </div>
   )
 }

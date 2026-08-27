@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import Card from './ui/Card'
 
 /** The last thing between a thrown render error and a blank white page.
  *
@@ -41,7 +42,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
-        <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <Card pad="lg" className="w-full max-w-md">
           <h1 className="text-lg font-semibold">Something broke on this page</h1>
           <p className="mt-3 text-sm text-slate-300">
             Not your data — that is safe on the server. This is the app failing
@@ -64,7 +65,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <p className="mt-4 break-words text-xs text-slate-400">
             {this.state.error.message || String(this.state.error)}
           </p>
-        </div>
+        </Card>
       </div>
     )
   }

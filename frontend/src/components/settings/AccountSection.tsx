@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 import { fieldClass } from './fieldClass'
+import Card from '../ui/Card'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -67,7 +68,7 @@ export default function AccountSection() {
 
   return (
     <>
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-1 font-semibold">Account</h2>
         <p className="mb-1 text-sm text-slate-400">Signed in as {user?.email}</p>
         {/* The only durable way back to the release notes. The pop-up links there
@@ -148,9 +149,9 @@ export default function AccountSection() {
           </button>
           {exportError && <p className="mt-2 text-sm text-rose-400">{exportError}</p>}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-rose-900/60 bg-slate-900 p-5">
+      <Card as="section" tone="danger">
         <h2 className="mb-1 font-semibold text-rose-300">Danger zone</h2>
         <p className="mb-4 text-sm text-slate-400">
           Deleting your account permanently removes all meals, foods, meal templates,
@@ -207,7 +208,7 @@ export default function AccountSection() {
             )}
           </form>
         )}
-      </section>
+      </Card>
     </>
   )
 }

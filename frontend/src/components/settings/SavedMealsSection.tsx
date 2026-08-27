@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import ShareCodePanel from '../ShareCodePanel'
 import type { MealTemplate } from '../../types'
+import Card from '../ui/Card'
 
 /** The saved meals behind Quick log: see them, share one, remove one.
  *
@@ -80,7 +81,7 @@ export default function SavedMealsSection() {
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">🍽️ Saved meals</h2>
       <p className="mb-4 text-sm text-slate-400">
         The one-tap entries in <strong className="text-slate-300">Quick log</strong> on
@@ -191,6 +192,6 @@ export default function SavedMealsSection() {
           onClose={() => setShareCode(null)}
         />
       )}
-    </section>
+    </Card>
   )
 }

@@ -27,12 +27,12 @@ import {
   TREND_COLOR,
 } from '../lib/chartTheme'
 import type { Settings, WeightEntry, WeightTrend } from '../types'
+import Card from '../components/ui/Card'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
 const CHART_DAYS = 90
 
-const cardClass = 'rounded-xl border border-slate-800 bg-slate-900 p-5'
 const fieldClass =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
 
@@ -129,7 +129,7 @@ export default function Weight() {
         <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>
       )}
 
-      <section className={cardClass}>
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Log a weigh-in</h2>
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
@@ -176,9 +176,9 @@ export default function Weight() {
             ? `Replaces the ${formatWeight(existingForDate.weight_kg, unit)} ${label} already logged for this day.`
             : `One weigh-in per day — saving the same date again replaces it. Change ${label} in Settings.`}
         </p>
-      </section>
+      </Card>
 
-      <section className={cardClass}>
+      <Card as="section">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h2 className="font-semibold">Last {CHART_DAYS} days</h2>
           {trend && trend.point_count > 0 && (
@@ -247,9 +247,9 @@ export default function Weight() {
             No weigh-ins yet — log one above and the chart starts here.
           </p>
         )}
-      </section>
+      </Card>
 
-      <section className={cardClass}>
+      <Card as="section">
         <h2 className="mb-3 font-semibold">History</h2>
         {entries.length === 0 ? (
           <p className="py-6 text-center text-sm text-ink-faint">Nothing logged yet.</p>
@@ -305,7 +305,7 @@ export default function Weight() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
     </div>
   )
 }

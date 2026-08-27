@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import { MAX_STEPS_PER_DAY, validateSettingsField } from '../../lib/limits'
 import { num } from '../../lib/parse'
 import type { ImportResult, Settings as SettingsType } from '../../types'
+import Card from '../ui/Card'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -41,7 +42,7 @@ export default function StepsSection({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <h2 className="mb-1 font-semibold">👟 Steps</h2>
       <p className="mb-4 text-sm text-slate-400">
         Step counts are typed in by hand. Reading them from your phone or watch
@@ -130,6 +131,6 @@ export default function StepsSection({
           <p className="mt-2 text-xs text-rose-300">{importError}</p>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

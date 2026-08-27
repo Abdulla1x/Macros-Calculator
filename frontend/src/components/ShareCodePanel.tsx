@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import Card from './ui/Card'
 
 /** Shows a meal code and helps the user get it into a message.
  *
@@ -51,10 +52,7 @@ export default function ShareCodePanel({
   }
 
   return (
-    <section
-      ref={box}
-      className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-5"
-    >
+    <Card as="section" tone="brand" ref={box}>
       <div className="mb-1 flex items-start justify-between gap-3">
         <h2 className="font-semibold">Meal code for “{label}”</h2>
         <button
@@ -91,6 +89,6 @@ export default function ShareCodePanel({
           {copied ? 'Copied ✓' : 'Or select the text above and copy it.'}
         </span>
       </div>
-    </section>
+    </Card>
   )
 }

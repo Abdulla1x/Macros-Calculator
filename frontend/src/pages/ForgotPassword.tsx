@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -37,7 +38,7 @@ export default function ForgotPassword() {
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
         {sent ? (
-          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6 text-sm">
+          <Card pad="lg" className="space-y-3 text-sm">
             <h2 className="text-lg font-semibold">Check your inbox</h2>
             <p className="text-slate-400">
               If an account exists for <span className="text-slate-200">{email}</span>,
@@ -61,12 +62,9 @@ export default function ForgotPassword() {
                 Back to log in
               </Link>
             </p>
-          </div>
+          </Card>
         ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-          >
+          <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="text-lg font-semibold">Reset your password</h2>
             <p className="text-sm text-slate-400">
               Enter your email and we'll send you a link to choose a new
@@ -97,7 +95,7 @@ export default function ForgotPassword() {
                 Log in
               </Link>
             </p>
-          </form>
+          </Card>
         )}
         <WarmupNotice />
       </div>

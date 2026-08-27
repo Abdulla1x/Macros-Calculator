@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import BodyTargetsCard from '../../components/settings/BodyTargetsCard'
 import CaloriePlanSection from '../../components/settings/CaloriePlanSection'
 import { useSettingsPanel } from './panelContext'
+import Card from '../../components/ui/Card'
 
 interface GoalField {
   key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
@@ -41,7 +42,7 @@ export default function GoalsPanel() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Tracked macros</h2>
         <p className="mb-4 text-sm text-slate-400">
           Calories and protein are always tracked. Enable carbs and fat if you want the full
@@ -68,9 +69,9 @@ export default function GoalsPanel() {
             </label>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-4 font-semibold">Daily goals</h2>
 
         <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
@@ -117,7 +118,7 @@ export default function GoalsPanel() {
             you log a weigh-in.
           </p>
         )}
-      </section>
+      </Card>
 
       <BodyTargetsCard reloadKey={targetsKey} unit={settings.weight_unit} />
 

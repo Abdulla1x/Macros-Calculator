@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -70,10 +71,7 @@ export default function ResetPassword() {
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
         {token ? (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-          >
+          <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="text-lg font-semibold">Choose a new password</h2>
             <label className="block text-sm">
               <span className="mb-1 block text-slate-400">New password</span>
@@ -109,9 +107,9 @@ export default function ResetPassword() {
             >
               {submitting ? 'Saving…' : 'Set new password'}
             </button>
-          </form>
+          </Card>
         ) : (
-          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-6 text-sm">
+          <Card pad="lg" className="space-y-3 text-sm">
             <h2 className="text-lg font-semibold">That link is incomplete</h2>
             <p className="text-slate-400">
               This page needs the link from your reset email. Some mail apps cut
@@ -126,7 +124,7 @@ export default function ResetPassword() {
                 Request a new link
               </Link>
             </p>
-          </div>
+          </Card>
         )}
         <WarmupNotice />
       </div>

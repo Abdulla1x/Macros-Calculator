@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Card from './ui/Card'
 
 /**
  * The shell every daily quick-log tracker renders inside.
@@ -53,7 +54,7 @@ export default function DailyTrackerCard({
   const width = Math.min(ratio, 1) * 100
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">
           <span className="mr-2">{icon}</span>
@@ -102,6 +103,6 @@ export default function DailyTrackerCard({
       )}
 
       {caption && <p className="mt-3 text-xs text-ink-faint">{caption}</p>}
-    </div>
+    </Card>
   )
 }

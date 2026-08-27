@@ -5,6 +5,7 @@ import { isSessionPersistent } from '../auth/token'
 import StatusBanner from '../components/StatusBanner'
 import WarmupNotice from '../components/WarmupNotice'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import Card from '../components/ui/Card'
 
 export default function Login() {
   const { login } = useAuth()
@@ -46,10 +47,7 @@ export default function Login() {
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6"
-        >
+        <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
           <h2 className="text-lg font-semibold">Log in</h2>
           {!persistentSession && (
             <p className="text-sm text-amber-400">
@@ -103,7 +101,7 @@ export default function Login() {
               Sign up
             </Link>
           </p>
-        </form>
+        </Card>
         <WarmupNotice />
       </div>
     </div>

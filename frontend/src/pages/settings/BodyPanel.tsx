@@ -3,6 +3,7 @@ import { fieldClass } from '../../components/settings/fieldClass'
 import { num } from '../../lib/parse'
 import type { ActivityLevel, Sex } from '../../types'
 import { useSettingsPanel } from './panelContext'
+import Card from '../../components/ui/Card'
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -29,7 +30,7 @@ export default function BodyPanel() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-1 font-semibold">Body profile</h2>
         <p className="mb-4 text-sm text-slate-400">
           Optional, and the app works fine without it. Fill it in and we can work
@@ -129,9 +130,9 @@ export default function BodyPanel() {
             </span>
           </label>
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card as="section">
         <h2 className="mb-3 font-semibold">Units</h2>
         <p className="mb-4 text-sm text-slate-400">
           How weights are shown on the Weight page. Entries are stored the same way
@@ -160,7 +161,7 @@ export default function BodyPanel() {
             </label>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   )
 }

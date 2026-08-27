@@ -9,6 +9,7 @@ import { useSettings } from '../settings/SettingsContext'
 import { trackerHues } from '../lib/chartTheme'
 import type { WaterDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
+import Card from './ui/Card'
 
 interface Props {
   /** The day being viewed on the dashboard, not necessarily today. */
@@ -88,14 +89,14 @@ export default function WaterCard({ date }: Props) {
 
   if (!day) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <Card>
         <h2 className="font-semibold">
           <span className="mr-2">💧</span>Water
         </h2>
         <p className="mt-3 text-xs text-ink-faint">
           {error ?? 'Loading…'}
         </p>
-      </div>
+      </Card>
     )
   }
 

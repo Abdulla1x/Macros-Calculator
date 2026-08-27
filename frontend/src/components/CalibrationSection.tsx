@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Calibration, MacroCalibration } from '../types'
+import Card from './ui/Card'
 
 const round = (value: number) => Math.round(value)
 
@@ -13,7 +14,7 @@ function MacroCard({ label, macro }: { label: string; macro: MacroCalibration })
   const measured = macro.coverage_pct !== null
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+    <Card pad="sm" tone="sunken">
       <p className="text-xs text-slate-400">{label}</p>
 
       {measured ? (
@@ -47,7 +48,7 @@ function MacroCard({ label, macro }: { label: string; macro: MacroCalibration })
           <p className="mt-1 text-xs text-ink-faint">{macro.unavailable_reason}</p>
         </>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -80,7 +81,7 @@ export default function CalibrationSection() {
   }, [attempt])
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <Card as="section">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="font-semibold">How close were the AI's estimates?</h2>
         {data && data.linked > 0 && (
@@ -172,6 +173,6 @@ export default function CalibrationSection() {
           </p>
         </>
       )}
-    </section>
+    </Card>
   )
 }

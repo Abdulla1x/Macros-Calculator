@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import type { SharedMeal } from '../types'
+import Card from './ui/Card'
 
 /** Paste a meal code someone sent you, and get their meal in this form.
  *
@@ -68,7 +69,7 @@ export default function MealCodeInput({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <Card as="section" pad="sm">
       <h2 className="mb-1 text-sm font-semibold text-slate-300">Paste a meal code</h2>
       <p className="mb-3 text-sm text-slate-400">
         Codes are long — paste the whole thing. Nothing is sent to whoever gave it to
@@ -100,6 +101,6 @@ export default function MealCodeInput({
           Cancel
         </button>
       </div>
-    </section>
+    </Card>
   )
 }

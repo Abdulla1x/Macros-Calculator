@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import Card from './ui/Card'
 
 /**
  * Gate for the admin page. Nested inside RequireAuth, so by the time this
@@ -21,9 +22,9 @@ export default function RequireAdmin() {
 
   if (!user?.is_admin) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-ink-faint">
+      <Card pad="lg" className="text-center text-sm text-ink-faint">
         Not found.
-      </div>
+      </Card>
     )
   }
   return <Outlet />
