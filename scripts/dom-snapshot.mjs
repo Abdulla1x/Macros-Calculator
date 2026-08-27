@@ -202,7 +202,25 @@ async function authenticate() {
   )
 }
 
-const isoDaysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+/** ⚠ LOCAL dates, not toISOString().
+ *
+ *  A meal date is user-facing, and the server buckets it on ITS OWN local date
+ *  while the dashboard asks for `localIsoDate()`. toISOString() gives the UTC
+ *  date, so on a machine east of UTC during the evening every seeded day lands
+ *  one behind -- and `isoDaysAgo(0)`, which is meant to be today, becomes
+ *  yesterday. The dashboard's rings and meal list then render EMPTY in the
+ *  snapshot, silently, and only between certain hours.
+ *
+ *  That makes the harness's coverage depend on the clock, which is the one
+ *  thing a determinism harness must not do. Found on a UTC+4 machine at 23:37
+ *  UTC while verifying the weekly review, whose window was short a day for the
+ *  same reason. */
+const isoDaysAgo = (days) => {
+  const day = new Date()
+  day.setDate(day.getDate() - days)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
+}
 
 /** Meals and weigh-ins for the last SEED_DAYS days, so every chart has
  *  something to draw, plus saved meals so the dashboard's Quick log renders.
