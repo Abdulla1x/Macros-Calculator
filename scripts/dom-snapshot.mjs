@@ -304,6 +304,20 @@ async function stableSnapshot(page, attempts = 30, intervalMs = 300) {
 
 const fileNameFor = (route) => `${route === '/' ? 'index' : route.slice(1).replaceAll('/', '_')}.html`
 
+// Panels that render nothing until they are opened, and are therefore invisible
+// to this comparison in their default state.
+//
+// /log's AI analyzer is collapsed to a single button until it is clicked, so
+// its entire contents -- the description box, the photo picker, the library
+// picker, the estimate card -- had never once been compared, and neither had
+// any change ever made to them. That is the same hole meal templates left
+// before this harness seeded them: an empty or collapsed state does not make a
+// section inert, it makes it unwatched. Check what a default state hides before
+// trusting this script's coverage.
+const EXPAND_ON = {
+  '/log': 'button:has-text("Estimate macros with AI")',
+}
+
 async function capture(context, routes, label) {
   const page = await context.newPage()
   for (const route of routes) {
@@ -313,6 +327,13 @@ async function capture(context, routes, label) {
     // content; networkidle then covers the data each page fetches for itself.
     await page.waitForSelector('h1, h2', { timeout: 15_000 })
     await page.waitForLoadState('networkidle')
+    const expander = EXPAND_ON[route]
+    if (expander && (await page.locator(expander).count()) > 0) {
+      await page.locator(expander).click()
+      // The panel fetches the food library when it opens, so wait for that to
+      // land or the snapshot races an empty picker.
+      await page.waitForLoadState('networkidle')
+    }
     await writeFile(join(outDir, fileNameFor(route)), await stableSnapshot(page), 'utf8')
     console.log(`  ${label} ${route}`)
   }

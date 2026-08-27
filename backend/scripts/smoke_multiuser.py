@@ -440,6 +440,21 @@ def main() -> None:
             headers=headers_b,
         )
         check(response.status_code == 404, "B PUT A's food id -> 404")
+        # Attaching a food to an AI analysis reads that row server-side and
+        # writes its macros into the prompt, so it is a second way an id could
+        # cross accounts. Costs no provider call: the router resolves
+        # attachments before it checks for a key and before it reserves a quota
+        # slot, so this is refused without Gemini ever being contacted.
+        response = client.post(
+            "/api/ai/analyze",
+            data={"text": "smoke", "food_id": str(a_food_id)},
+            headers=headers_b,
+        )
+        check(
+            response.status_code == 422
+            and "no longer in your library" in response.text,
+            "B cannot attach A's food id to an AI analysis",
+        )
         response = client.delete(f"/api/weights/{a_weight_id}", headers=headers_b)
         check(response.status_code == 404, "B DELETE A's weight id -> 404")
         response = client.delete(

@@ -29,6 +29,37 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-27-ai-uses-your-saved-foods",
+        date="2026-08-27",
+        title="The AI can use your saved foods instead of guessing them",
+        body=(
+            "**Before you analyse a meal, you can now attach foods from your "
+            "library.** Open \"Use foods from your library\" in the AI panel, "
+            "tick the ones that are on the plate, and their macros are sent "
+            "along as facts rather than left to the model.\n\n"
+            "It splits the work along the line each side is actually good at. "
+            "A photo is poor evidence for how many calories are in chicken "
+            "breast -- you already know that, exactly, because you saved it. A "
+            "photo is good evidence for how much of it is on the plate, which "
+            "is the one thing your library cannot know. **So the AI works out "
+            "the portion and your saved food supplies the macros.** Items that "
+            "came from your library are marked, and tapping \"Use these "
+            "ingredients\" fills the row with your serving size, your numbers "
+            "and the weight the AI estimated.\n\n"
+            "**If the AI names a food you have saved but did not attach**, the "
+            "ingredient below offers to use your saved numbers instead. It "
+            "offers rather than doing it: matching names is a guess, and "
+            "quietly rewriting your macros on a guess is not something this "
+            "app should do.\n\n"
+            "Nothing changes if you ignore all of it -- attach nothing and the "
+            "estimate works exactly as it did. One thing worth knowing: the "
+            "meal total on the estimate card is still the AI's own arithmetic, "
+            "so it can differ slightly from the ingredients underneath it once "
+            "your own numbers are in them. The ingredients are the ones that "
+            "get saved."
+        ),
+    ),
+    Announcement(
         id="2026-08-27-weigh-in-reminder",
         date="2026-08-27",
         title="An optional nudge when a weigh-in is due",

@@ -2,6 +2,7 @@
 import logging
 import os
 import time as time_module
+from collections.abc import Sequence
 from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -13,12 +14,13 @@ from ..auth.deps import get_current_user
 from ..calibration import Pair, parse_estimate, summarise
 from ..db import get_db
 from ..env import env_int
-from ..models import AIAnalysis, Meal, User
+from ..models import AIAnalysis, Food as FoodRow, Meal, User
 from ..schemas import (
     AIProbe,
     AIStatus,
     AnalysisLink,
     Calibration,
+    Food,
     MealAnalysis,
     MealAnalysisResponse,
     TranscriptionResponse,
@@ -42,6 +44,13 @@ MAX_IMAGES = 4
 # limit exists to reject one absurd file, this one exists so a single request
 # can't tie up a free-tier instance's memory holding every upload at once.
 MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024
+# Saved foods the user may attach to one analysis. The same kind of bound as
+# MAX_IMAGES and for the same reason: the quota counts calls, so nothing else
+# here limits what a single call costs. Each food is one compact line of about
+# 12-14 tokens (services/meal_ai.py::_library_block) re-sent on every attempt,
+# because the request is rebuilt per retry -- so ten is roughly 140 tokens
+# against a ~660-token system prompt. Raising it raises the per-analysis bill.
+MAX_ATTACHED_FOODS = 10
 DEFAULT_DAILY_LIMIT = 20
 # Transcription is a cheaper call than analysis and a voice note usually
 # precedes one, so it gets its own allowance rather than eating the analysis
@@ -184,6 +193,52 @@ async def _read_media(
             detail=f"{noun} too large (max {max_bytes // (1024 * 1024)} MB).",
         )
     return data, upload.content_type
+
+
+def _attached_foods(
+    db: Session, user: User, food_ids: Sequence[int]
+) -> list[Food]:
+    """The caller's own library rows for the ids they attached, in the order given.
+
+    Ids in, macros out. The client never sends the numbers, which is what makes
+    the facts quoted into the prompt the *stored* facts rather than whatever a
+    request claimed they were -- and scoping the lookup on user_id is the same
+    rule routers/foods.py::_owned states: an id belonging to someone else is
+    simply not found, so it can never be read into this account's estimate.
+
+    A missing id is refused, not dropped. An analysis that quietly ran without a
+    food the user attached still comes back looking like it used it, and there
+    is no way to tell from the answer -- the "bounded input whose refusal is
+    invisible" failure this project has already shipped once.
+    """
+    if not food_ids:
+        return []
+    # Deduped with order preserved: the same food attached twice is one fact,
+    # not two, and every copy is billed again on every retry.
+    unique = list(dict.fromkeys(food_ids))
+    if len(unique) > MAX_ATTACHED_FOODS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Too many saved foods attached "
+                f"(max {MAX_ATTACHED_FOODS} per analysis)."
+            ),
+        )
+    rows = db.scalars(
+        select(FoodRow).where(FoodRow.id.in_(unique), FoodRow.user_id == user.id)
+    ).all()
+    by_id = {row.id: row for row in rows}
+    if len(by_id) != len(unique):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "One of the foods you attached is no longer in your library. "
+                "Remove it and try again."
+            ),
+        )
+    # Validated into the response schema rather than passed as ORM rows, so
+    # services/meal_ai.py keeps knowing nothing about the database.
+    return [Food.model_validate(by_id[food_id]) for food_id in unique]
 
 
 def calls_today(
@@ -350,6 +405,11 @@ async def analyze(
     # Length caps bound what can be relayed to the paid Gemini API.
     text: str | None = Form(default=None, max_length=2_000),
     prior_analysis: str | None = Form(default=None, max_length=20_000),
+    # Ids of saved foods to quote into the prompt as exact facts. Repeated parts
+    # under one field name, the same shape `image` above uses -- one idiom in
+    # this file for "a list in a multipart form". Only ids travel: see
+    # _attached_foods for why the macros are read here rather than sent.
+    food_id: list[int] = Form(default=[]),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -373,6 +433,12 @@ async def analyze(
             status_code=422,
             detail=f"Too many photos (max {MAX_IMAGES} per analysis).",
         )
+    # Resolved here, ahead of the configuration check and well ahead of
+    # _reserve_call: an attachment the server cannot honour is refused before it
+    # can cost a quota slot, and it is refused identically whether or not a
+    # provider key is set -- which is what lets the isolation and smoke checks
+    # prove the ownership rule without spending a provider call.
+    library_foods = _attached_foods(db, user, food_id)
     if not meal_ai.is_configured():
         raise HTTPException(
             status_code=503,
@@ -422,6 +488,7 @@ async def analyze(
         analysis = await meal_ai.analyze_meal(
             loaded_images, text, prior,
             audio_bytes=audio_bytes, audio_mime=audio_mime,
+            library_foods=library_foods,
         )
     except meal_ai.MealAIBadResponse as exc:
         # The model ran and burned tokens; only its output was unusable, so the

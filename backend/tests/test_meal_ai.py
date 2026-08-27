@@ -10,12 +10,13 @@ from fastapi import HTTPException
 # Importing the provider's errors is fine *here*: these tests exist to prove
 # meal_ai.py translates them, so nothing else has to know they exist.
 from google.genai import errors as genai_errors
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_engine
 from app.models import AIAnalysis
 from app.routers import ai as ai_router
-from app.schemas import AnalyzedItem, MacroRange, MealAnalysis
+from app.schemas import AnalyzedItem, Food, MacroRange, MealAnalysis
 from app.services import meal_ai
 from app.services.meal_ai import _build_contents
 
@@ -355,6 +356,119 @@ def test_provider_failure_refunds_the_quota_slot(client, monkeypatch):
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
 
 
+# --- attaching saved foods to an analysis ------------------------------------
+
+FOOD = {
+    "name": "Chicken breast, raw", "serving_size": 100,
+    "calories": 165, "protein": 31, "carbs": 0, "fat": 3.6,
+}
+
+
+def _capture(monkeypatch):
+    """Configure the AI with a fake that records what the router handed it."""
+    seen: dict = {}
+
+    async def fake(images, text, prior_analysis=None, **kwargs):
+        seen.update(kwargs, images=images, text=text)
+        return SAMPLE
+
+    configure(monkeypatch, fake)
+    return seen
+
+
+def _analysis_count() -> int:
+    with Session(get_engine()) as session:
+        return session.scalar(select(func.count()).select_from(AIAnalysis))
+
+
+def test_analyze_hands_the_provider_the_stored_macros(client, monkeypatch):
+    """The client sends ids; the numbers are read from the caller's own library.
+
+    Asserting the *values* rather than just the count is the point: a request
+    cannot claim a food has different macros than the row it names.
+    """
+    seen = _capture(monkeypatch)
+    food = client.post("/api/foods", json=FOOD).json()
+
+    response = client.post(
+        "/api/ai/analyze", data={"text": "lunch", "food_id": [food["id"]]}
+    )
+
+    assert response.status_code == 200
+    attached = seen["library_foods"]
+    assert [f.name for f in attached] == ["Chicken breast, raw"]
+    assert (attached[0].calories, attached[0].protein) == (165, 31)
+
+
+def test_analyze_dedupes_repeated_ids(client, monkeypatch):
+    seen = _capture(monkeypatch)
+    food = client.post("/api/foods", json=FOOD).json()
+    food_id = food["id"]
+
+    client.post(
+        "/api/ai/analyze", data={"text": "lunch", "food_id": [food_id, food_id]}
+    )
+
+    # One fact, not two -- a duplicate would be billed again on every retry.
+    assert len(seen["library_foods"]) == 1
+
+
+def test_analyze_without_attachments_sends_none(client, monkeypatch):
+    seen = _capture(monkeypatch)
+    client.post("/api/ai/analyze", data={"text": "lunch"})
+    assert seen["library_foods"] == []
+
+
+def test_analyze_refuses_more_attached_foods_than_the_cap(client, monkeypatch):
+    configure(monkeypatch)
+    # Ids that do not exist: the cap is checked before the lookup, so an absurd
+    # request is refused without touching the database at all.
+    too_many = list(range(1, ai_router.MAX_ATTACHED_FOODS + 2))
+
+    response = client.post("/api/ai/analyze", data={"text": "lunch", "food_id": too_many})
+
+    assert response.status_code == 422
+    assert "Too many saved foods" in response.json()["detail"]
+    assert _analysis_count() == 0
+
+
+def test_analyze_refuses_a_food_id_that_no_longer_exists(client, monkeypatch):
+    configure(monkeypatch)
+    response = client.post("/api/ai/analyze", data={"text": "lunch", "food_id": [9999]})
+
+    assert response.status_code == 422
+    assert "no longer in your library" in response.json()["detail"]
+    # Refused before _reserve_call, so it costs the user nothing.
+    assert _analysis_count() == 0
+
+
+def test_analyze_cannot_attach_another_accounts_food(client, client_b, monkeypatch):
+    """B may not quote A's library into B's estimate, and pays no slot to find out."""
+    configure(monkeypatch)
+    a_food = client.post("/api/foods", json=FOOD).json()
+
+    response = client_b.post(
+        "/api/ai/analyze", data={"text": "lunch", "food_id": [a_food["id"]]}
+    )
+
+    # Identical to an id that never existed: B learns nothing about A's library.
+    assert response.status_code == 422
+    assert "no longer in your library" in response.json()["detail"]
+    assert _analysis_count() == 0
+
+
+def test_attached_foods_are_refused_before_the_provider_is_checked(client):
+    """A bad id answers the same way whether or not a key is configured.
+
+    Deliberately no configure() here: the ordering in the router is what lets
+    the isolation suite and the live smoke script prove the ownership rule
+    without spending a provider call.
+    """
+    response = client.post("/api/ai/analyze", data={"text": "lunch", "food_id": [9999]})
+    assert response.status_code == 422
+    assert "no longer in your library" in response.json()["detail"]
+
+
 def test_link_analysis_sets_meal_id(client, monkeypatch):
     configure(monkeypatch)
     analysis_id = client.post(
@@ -409,6 +523,56 @@ def test_build_contents_includes_prior_for_refinement():
     parts = _build_contents([], "I only ate half", SAMPLE)
     assert "Previous analysis to refine" in parts[0]
     assert "I only ate half" in parts[0]
+
+
+# --- attached library foods in the prompt -----------------------------------
+
+CHICKEN = Food(
+    id=1, name="Chicken breast, raw", serving_size=100,
+    calories=165, protein=31, carbs=0, fat=3.6, source="user",
+)
+SKYR = Food(
+    id=2, name="Skyr", serving_size=100,
+    calories=63, protein=11, carbs=None, fat=None, source="user",
+)
+
+
+def test_build_contents_quotes_attached_foods_before_the_description():
+    parts = _build_contents([], "chicken and rice", None, library_foods=[CHICKEN])
+    text = parts[0]
+    assert '"Chicken breast, raw" -- per 100 g: 165 kcal, 31 g protein' in text
+    assert "these numbers are exact" in text
+    # Facts are reference material and the user's words are ground truth, so the
+    # words go last -- closest to the answer.
+    assert text.index("Chicken breast, raw") < text.index("chicken and rice")
+
+
+def test_build_contents_says_which_macros_were_never_recorded():
+    # carbs and fat are nullable on a foods row. A blank in a list of exact
+    # figures reads as zero, which would claim Skyr has no fat.
+    parts = _build_contents([], "skyr", None, library_foods=[SKYR])
+    assert "63 kcal, 11 g protein (carbs and fat not recorded)" in parts[0]
+
+
+def test_attached_foods_do_not_replace_the_default_instruction():
+    """A photo with foods attached and no typed words still gets an instruction.
+
+    The regression this pins: if the library block were appended to the same
+    list the `if not instructions` check reads, it would satisfy that check and
+    the model would receive a photo, a table of macros, and nothing telling it
+    what to do with either.
+    """
+    parts = _build_contents(
+        [(b"img", "image/png")], None, None, library_foods=[CHICKEN]
+    )
+    assert len(parts) == 2
+    assert "Analyze the meal in the photo." in parts[1]
+    assert "Chicken breast, raw" in parts[1]
+
+
+def test_build_contents_omits_the_block_when_nothing_is_attached():
+    parts = _build_contents([], "chicken and rice", None)
+    assert "saved food library" not in parts[0]
 
 
 # --- analyze_meal's response handling (fake genai client, no network) -------

@@ -22,7 +22,7 @@ from google.genai import types
 from pydantic import ValidationError
 
 from ..env import env_float
-from ..schemas import MealAnalysis
+from ..schemas import Food, MealAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +144,14 @@ Rules:
   and record each such guess in `assumptions`.
 - `items`: one entry per distinct food. `portion_grams` and the macros are
   for that portion (not per 100 g).
+- The user may attach foods from their saved library, listed below with exact
+  macros per a stated serving size. Those numbers are facts, not estimates: if
+  an attached food is part of this meal, do NOT re-estimate its macros. Set
+  that item's `matched_food_name` to the attached name exactly as written,
+  estimate only `portion_grams`, and scale the given macros to that portion
+  (item macros stay per-portion, as above). Leave `matched_food_name` null for
+  every item that is not one of them, and never invent a name that is not in
+  the list.
 - The `calories`/`protein`/`carbs`/`fat` ranges cover the whole meal:
   `estimate` is your single best guess (approximately the sum of the items);
   `low`/`high` reflect genuine uncertainty — wide when preparation or
@@ -359,12 +367,49 @@ def _default_instruction(image_count: int, has_audio: bool) -> str:
     return f"Analyze the meal in {photos}."
 
 
+def _library_block(foods: Sequence[Food]) -> str:
+    """Attached library foods, rendered as facts rather than as suggestions.
+
+    One compact line per food is what keeps this affordable: roughly 12-14
+    tokens each, re-sent on *every* attempt, since analyze_meal rebuilds the
+    request per retry. MAX_ATTACHED_FOODS in routers/ai.py is therefore the real
+    bound on what attaching can add to the bill, and this format is the other
+    half of that arithmetic.
+
+    A macro the user never recorded is said in words instead of being left
+    blank. carbs and fat are nullable on a foods row, the model is meant to
+    estimate the missing one itself, and an empty slot in a list of exact
+    figures reads as zero -- which would silently claim a food has no fat.
+    """
+    lines = ["The user's saved food library -- these numbers are exact, not estimates:"]
+    for food in foods:
+        # :g so a whole number prints as "165" rather than "165.0"; these lines
+        # are read by a model that copies what it sees.
+        macros = [f"{food.calories:g} kcal", f"{food.protein:g} g protein"]
+        missing = [
+            label
+            for label, value in (("carbs", food.carbs), ("fat", food.fat))
+            if value is None
+        ]
+        macros += [
+            f"{value:g} g {label}"
+            for label, value in (("carbs", food.carbs), ("fat", food.fat))
+            if value is not None
+        ]
+        line = f'- "{food.name}" -- per {food.serving_size:g} g: ' + ", ".join(macros)
+        if missing:
+            line += f" ({' and '.join(missing)} not recorded)"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _build_contents(
     images: Sequence[tuple[bytes, str | None]],
     text: str | None,
     prior_analysis: MealAnalysis | None,
     audio_bytes: bytes | None = None,
     audio_mime: str | None = None,
+    library_foods: Sequence[Food] | None = None,
 ) -> list:
     parts: list = []
     # Order is preserved: the user picked these in a sequence, and the prompt
@@ -383,16 +428,29 @@ def _build_contents(
             )
         )
 
+    # The library block is deliberately kept out of the instruction list below,
+    # and that separation is load-bearing. `if not instructions` is what gives a
+    # photo-only request something to act on; folding facts into the same list
+    # would satisfy that check and send a photo, a table of macros, and no
+    # instruction telling the model what to do with either.
     lines: list[str] = []
+    if library_foods:
+        lines.append(_library_block(library_foods))
+
+    instructions: list[str] = []
     if prior_analysis is not None:
-        lines.append(
+        instructions.append(
             "Previous analysis to refine (JSON): "
             + prior_analysis.model_dump_json()
         )
     if text:
-        lines.append(f"User's description/notes: {text}")
-    if not lines:
-        lines.append(_default_instruction(len(images), bool(audio_bytes)))
+        instructions.append(f"User's description/notes: {text}")
+    if not instructions:
+        instructions.append(_default_instruction(len(images), bool(audio_bytes)))
+    # Reference material first, the user's own words last. The prompt declares
+    # those words ground truth that overrides the image, so they sit closest to
+    # the answer rather than buried above a list of foods.
+    lines.extend(instructions)
     parts.append("\n\n".join(lines))
     return parts
 
@@ -404,6 +462,7 @@ async def analyze_meal(
     *,
     audio_bytes: bytes | None = None,
     audio_mime: str | None = None,
+    library_foods: Sequence[Food] | None = None,
 ) -> MealAnalysis:
     async def call(model: str, http_options: types.HttpOptions):
         # Built per attempt, not hoisted: a key or model changed in the
@@ -414,6 +473,7 @@ async def analyze_meal(
             model=model,
             contents=_build_contents(
                 images, text, prior_analysis, audio_bytes, audio_mime,
+                library_foods,
             ),
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
