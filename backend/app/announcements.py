@@ -29,6 +29,40 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-08-27-settings-tabs-and-quick-log",
+        date="2026-08-27",
+        title="Settings is in sections now, and Quick log is easier to hit",
+        body=(
+            "**Settings was one very long page and is now four tabs** -- Goals, "
+            "Body, Trackers and Library -- with your account, export and "
+            "deletion on their own page, linked from the top right. Each "
+            "section has its own web address, so you can bookmark one, and the "
+            "back button moves between them the way you would expect.\n\n"
+            "**The Save button is now a bar that stays with you.** It only "
+            "appears when you have actually changed something, and it no "
+            "longer scrolls off the screen. That was a real way to lose work: "
+            "you could edit your height, scroll past Save to add a supplement, "
+            "leave the page, and the height change was quietly gone. Anything "
+            "that saves the moment you touch it -- supplements, your food "
+            "library, calorie plans -- still does, and never summons the bar.\n\n"
+            "**Quick log on the dashboard is a grid you can actually tap.** "
+            "Each saved meal used to be a button with a share and a delete "
+            "welded to its side, so the thing you wanted was flanked by two "
+            "you did not, and confirming a delete made the whole row jump "
+            "about. Now the whole tile logs the meal. Sharing and deleting "
+            "moved to **Settings -> Library**, where there is also a filter "
+            "for finding one by name.\n\n"
+            "It shows the six you have logged most recently rather than the "
+            "six you saved most recently, with the rest a tap away behind "
+            "\u201cBrowse all\u201d. It has also moved above the water, steps "
+            "and supplement cards, since re-logging yesterday\u2019s breakfast "
+            "is more often what you came for.\n\n"
+            "One smaller thing: the day you are logging a meal for is now in "
+            "the address bar. Refreshing the page part-way through no longer "
+            "moves the meal to today."
+        ),
+    ),
+    Announcement(
         id="2026-08-26-easier-on-phones",
         date="2026-08-26",
         title="A better shape on a phone, and easier to read everywhere",
