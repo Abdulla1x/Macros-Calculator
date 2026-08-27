@@ -227,7 +227,7 @@ export default function CaloriePlanSection({
           Nothing here is a debt. One big day already shows up as a slightly
           slower week on its own — this only lets you decide where it lands.
           Protein never moves; carbohydrate and fat absorb the difference.
-          Plans apply straight away, without the Save button.
+          Plans apply straight away, without the Save bar.
         </p>
       </div>
 
