@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api/client'
-import { MAX_FOOD_NAME, validateFood } from '../lib/limits'
-import type { Food, FoodCreate } from '../types'
+import { api } from '../../api/client'
+import { MAX_FOOD_NAME, validateFood } from '../../lib/limits'
+import { num } from '../../lib/parse'
+import type { Food, FoodCreate } from '../../types'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
  *
- * In its own file rather than inside Settings.tsx, which is where the other
- * four sections live. Deliberate: this is the largest of them -- a list that
- * grows on its own, a filter, an inline form and a delete confirmation -- and
- * Settings.tsx is already the biggest file in the frontend.
+ * One of the sections of the Settings page. They live in this folder rather
+ * than in Settings.tsx itself, which otherwise carries every one of them at
+ * once. This is the largest -- a list that grows on its own, a filter, an
+ * inline form and a delete confirmation.
  *
  * Why the section exists at all: FoodAutocomplete saves every Open Food Facts
  * pick into the library without asking, and LogMeal saves every ingredient the
@@ -45,14 +46,6 @@ const draftFrom = (food: Food): Draft => ({
   carbs: food.carbs == null ? '' : String(food.carbs),
   fat: food.fat == null ? '' : String(food.fat),
 })
-
-// The same parse LogMeal and Settings use. Number('') is 0, and for carbs and
-// fat a blank box means "not recorded", which is a different claim from zero.
-const num = (value: string) => {
-  if (value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 const macroSummary = (food: Food) =>
   `${food.calories} kcal · ${food.protein} g protein / ${food.serving_size} g`

@@ -6,6 +6,7 @@ import MealAnalyzer from '../components/MealAnalyzer'
 import MealCodeInput from '../components/MealCodeInput'
 import { addDays, localIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
+import { num } from '../lib/parse'
 import { useSettings } from '../settings/SettingsContext'
 import type {
   FoodCreate,
@@ -41,15 +42,6 @@ const emptyRow = (): Row => ({
   fromLibrary: false,
   saveToLibrary: true,
 })
-
-// Non-numeric input ("abc", "1e999") becomes null, not NaN — NaN would pass
-// validation and then serialize as null in the payload, silently corrupting
-// the meal.
-const num = (value: string) => {
-  if (value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 const rowIsValid = (row: Row) => {
   const weight = num(row.weight)

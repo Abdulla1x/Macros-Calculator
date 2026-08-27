@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
-import CaloriePlanSection from '../components/CaloriePlanSection'
-import FoodLibrarySection from '../components/FoodLibrarySection'
+import CaloriePlanSection from '../components/settings/CaloriePlanSection'
+import FoodLibrarySection from '../components/settings/FoodLibrarySection'
 import {
   DEFAULT_WATER_QUICK_ADDS,
   MAX_WATER_GOAL_ML,
@@ -20,6 +20,7 @@ import {
   validateSupplement,
   validateWaterQuickAdd,
 } from '../lib/limits'
+import { num } from '../lib/parse'
 import { cmToFtIn, ftInToCm } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
 import type {
@@ -43,15 +44,6 @@ const goalFields: GoalField[] = [
   { key: 'carbs_goal', label: 'Daily carbs', unit: 'g' },
   { key: 'fat_goal', label: 'Daily fat', unit: 'g' },
 ]
-
-// Ported from LogMeal.tsx rather than using the bare Number() the goal fields
-// use below. For a nullable profile field the difference matters: Number('')
-// is 0, and a height of zero is a very different claim from "not set yet".
-const num = (value: string) => {
-  if (value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
