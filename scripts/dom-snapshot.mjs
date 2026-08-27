@@ -118,12 +118,21 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password
 // Everything behind RequireAuth. `/nope` is any unmatched address, which renders
 // NotFound inside the Layout. There are no parameterised routes in this app, so
 // this list is the whole surface.
+//
+// `/settings` is kept alongside its five panels on purpose: it is a redirect to
+// /settings/goals, and snapshotting it is what would catch the redirect quietly
+// breaking or landing somewhere else.
 const PRIVATE_ROUTES = [
   '/',
   '/log',
   '/weight',
   '/analytics',
   '/settings',
+  '/settings/goals',
+  '/settings/body',
+  '/settings/trackers',
+  '/settings/food',
+  '/settings/account',
   '/whats-new',
   '/admin',
   '/nope',
