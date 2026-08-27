@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import BodyTargetsCard from '../../components/settings/BodyTargetsCard'
 import CaloriePlanSection from '../../components/settings/CaloriePlanSection'
 import { useSettingsPanel } from './panelContext'
@@ -26,9 +26,15 @@ const goalFields: GoalField[] = [
 export default function GoalsPanel() {
   const { settings, update, guard, onRejected, targetsKey } = useSettingsPanel()
   // The day the dashboard was showing when the planning link was followed, so
-  // the planner opens on it rather than on today. Undefined when Settings is
+  // the planner opens on it rather than on today. Absent when Settings is
   // reached any other way, which is the ordinary case.
-  const planDate = (useLocation().state as { planDate?: string } | null)?.planDate
+  //
+  // A search param rather than router state, which is what carried it before
+  // the split. location.state does not survive a reload and cannot be shared or
+  // bookmarked, and this app has already shipped one bug from state outliving
+  // what it described (a shared-meal notice that stayed on screen over the next
+  // meal typed by hand). A param has neither failure mode.
+  const planDate = useSearchParams()[0].get('plan') ?? undefined
 
   const showGoal = (key: GoalField['key']) =>
     key === 'carbs_goal' ? settings.track_carbs : key === 'fat_goal' ? settings.track_fat : true

@@ -301,8 +301,7 @@ export default function Dashboard() {
       {settings && (
         <div className="-mt-2 text-right">
           <Link
-            to="/settings"
-            state={{ planDate: viewedDate }}
+            to={`/settings/goals?plan=${viewedDate}`}
             className="text-xs text-ink-faint hover:text-slate-300"
           >
             Plan a bigger day, or spread one you already had →
