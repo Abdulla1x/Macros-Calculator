@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { readNoteDraft, writeNoteDraft } from '../lib/draft'
+import type { LibraryContext } from '../lib/libraryMatch'
+import { matchItem, perPortion } from '../lib/libraryMatch'
 import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
-import type { Confidence, MealAnalysisResponse, Settings } from '../types'
+import type { Confidence, Food, MealAnalysisResponse, Settings } from '../types'
 import Card from './ui/Card'
+import LibraryFoodPicker from './LibraryFoodPicker'
 import TextInput from './ui/TextInput'
 import Button from './ui/Button'
 
 interface Props {
   settings: Settings | null
-  onApply: (analysis: MealAnalysisResponse) => void
+  // The library travels with the analysis because the page below has to resolve
+  // the same matches this component displays, and re-fetching there would be a
+  // second request for an answer already in memory.
+  onApply: (analysis: MealAnalysisResponse, foods: LibraryContext) => void
 }
 
 const confidenceBadge: Record<Confidence, string> = {
@@ -35,6 +41,11 @@ const RETRY_NOTICE_AFTER_MS = 5_000
 // two ever disagree the server still wins, and it answers 422.
 const MAX_IMAGES = 4
 
+// Mirrors MAX_ATTACHED_FOODS in the same file, for the same reason and with the
+// same rule about who wins. Each attached food is prompt tokens on every
+// attempt, so this is a bill, not a preference.
+const MAX_ATTACHED_FOODS = 10
+
 export default function MealAnalyzer({ settings, onApply }: Props) {
   // Seeded from the draft so a note survives a trip to another page and back.
   // Expanded too when there is one, or the restored text would sit inside a
@@ -48,7 +59,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [transcribing, setTranscribing] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [library, setLibrary] = useState<Food[]>([])
+  const [attached, setAttached] = useState<Food[]>([])
   const noteRef = useRef<HTMLTextAreaElement>(null)
+  const libraryRequested = useRef(false)
 
   const audio = useAudioRecorder()
   const { blob: recording, durationMs, clear: clearRecording } = audio
@@ -64,6 +78,22 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     const timer = setTimeout(() => setRetrying(true), RETRY_NOTICE_AFTER_MS)
     return () => clearTimeout(timer)
   }, [analyzing])
+
+  // Fetched when the panel is opened rather than on mount: /log should not pay
+  // for a request until the AI is actually in use. Once per mount, guarded by a
+  // ref — attaching changes nothing about the library, and a row that goes stale
+  // costs a refused id, which is a sentence rather than a wrong number.
+  //
+  // A failure is swallowed on purpose. The picker then has nothing to offer and
+  // says so, and every other part of the analyzer still works.
+  useEffect(() => {
+    if (!expanded || libraryRequested.current) return
+    libraryRequested.current = true
+    api
+      .getFoods()
+      .then(setLibrary)
+      .catch(() => undefined)
+  }, [expanded])
 
   // Mirrored to the draft on every keystroke rather than on unmount: a
   // navigation can unmount this component without warning, and an effect
@@ -175,6 +205,9 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       const form = new FormData()
       // Repeated under one field name — the backend reads `image` as a list.
       files.forEach((item) => form.append('image', item))
+      // Ids only: the server reads the macros out of the library itself, so a
+      // request cannot claim a saved food has numbers it does not have.
+      attached.forEach((food) => form.append('food_id', String(food.id)))
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form))
@@ -288,6 +321,22 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           )}
         </div>
       </div>
+
+      <LibraryFoodPicker
+        foods={library}
+        attached={attached}
+        max={MAX_ATTACHED_FOODS}
+        onAttach={(food) =>
+          setAttached((current) =>
+            current.length >= MAX_ATTACHED_FOODS || current.some((f) => f.id === food.id)
+              ? current
+              : [...current, food],
+          )
+        }
+        onDetach={(foodId) =>
+          setAttached((current) => current.filter((food) => food.id !== foodId))
+        }
+      />
 
       {audio.supported && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -417,32 +466,58 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           )}
 
           <ul className="mt-3 space-y-1">
-            {analysis.items.map((item) => (
-              <li
-                key={item.name}
-                className="flex items-center justify-between text-sm text-slate-300"
-              >
-                <span>
-                  {item.name}{' '}
-                  <span className="text-xs text-ink-faint">
-                    ({round(item.portion_grams)} g)
+            {analysis.items.map((item) => {
+              // Matched against the attached foods only. The rest of the library
+              // is deliberately not consulted here: an item nobody attached is
+              // the model's own estimate, and quietly rewriting it because a name
+              // coincides would be the app deciding on the user's behalf. LogMeal
+              // offers that swap per row instead.
+              const matched = matchItem(item, attached)
+              // The library's figures where there are any, so this list and the
+              // rows the apply button produces cannot disagree about one
+              // ingredient.
+              const macros = matched ? perPortion(item, matched) : item
+              return (
+                <li
+                  key={item.name}
+                  className="flex items-center justify-between gap-2 text-sm text-slate-300"
+                >
+                  <span>
+                    {item.name}{' '}
+                    <span className="text-xs text-ink-faint">
+                      ({round(item.portion_grams)} g)
+                    </span>
+                    {matched && (
+                      <span className="ml-1.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
+                        your library
+                      </span>
+                    )}
                   </span>
-                </span>
-                <span className="text-xs text-slate-400">
-                  {round(item.calories)} kcal · {Math.round(item.protein * 10) / 10} g P{' '}
-                  <span
-                    title={`${item.confidence} confidence`}
-                    className={confidenceBadge[item.confidence].split(' ')[1]}
-                  >
-                    {confidenceDots[item.confidence]}
+                  <span className="shrink-0 text-xs text-slate-400">
+                    {round(macros.calories)} kcal ·{' '}
+                    {Math.round(macros.protein * 10) / 10} g P{' '}
+                    <span
+                      title={`${item.confidence} confidence`}
+                      className={confidenceBadge[item.confidence].split(' ')[1]}
+                    >
+                      {confidenceDots[item.confidence]}
+                    </span>
                   </span>
-                </span>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
 
+          {analysis.items.some((item) => matchItem(item, attached)) && (
+            <p className="mt-2 text-xs text-ink-faint">
+              Macros marked “your library” are your own saved numbers — only the
+              portion was estimated. The meal total above is the AI's own, so it
+              can differ from these by a little.
+            </p>
+          )}
+
           <button
-            onClick={() => onApply(analysis)}
+            onClick={() => onApply(analysis, { attached, library })}
             className="mt-4 w-full rounded-lg border border-emerald-500/50 bg-emerald-500/10 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"
           >
             Use these ingredients ↓ (edit them below before saving)

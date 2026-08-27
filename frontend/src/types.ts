@@ -474,6 +474,9 @@ export interface AnalyzedItem {
   carbs: number | null
   fat: number | null
   confidence: Confidence
+  /** Which attached library food this item is, echoed back by name. Null when
+   *  the model estimated it, which is every item when nothing was attached. */
+  matched_food_name: string | null
 }
 
 export interface MacroRange {

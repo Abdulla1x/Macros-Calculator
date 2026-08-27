@@ -6,9 +6,13 @@ import MealAnalyzer from '../components/MealAnalyzer'
 import MealCodeInput from '../components/MealCodeInput'
 import { addDays, localIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
+import type { LibraryContext } from '../lib/libraryMatch'
+import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
 import { num } from '../lib/parse'
 import { useSettings } from '../settings/SettingsContext'
 import type {
+  AnalyzedItem,
+  Food,
   FoodCreate,
   Meal,
   MealAnalysisResponse,
@@ -119,6 +123,47 @@ const rowsFromTemplate = (template: Applicable): Row[] =>
         saveToLibrary: false,
       }))
 
+// One item of an AI estimate as a row. Two shapes, and which one you get is the
+// whole point of attaching a food:
+//
+//  * Unmatched -- the model estimated everything, so weight == serving size and
+//    factor = 1 passes its per-portion numbers through untouched (the same trick
+//    rowFromTotals uses).
+//  * Matched -- serving size and macros are the user's own saved figures while
+//    weight is the model's portion estimate, so rowTotals scales the one by the
+//    other. The AI estimated the portion; the library supplied the macros.
+const rowFromAnalyzedItem = (item: AnalyzedItem, attached: Food[]): Row => {
+  const matched = matchItem(item, attached)
+  if (!matched) {
+    return {
+      ...emptyRow(),
+      name: item.name,
+      weight: String(item.portion_grams),
+      servingSize: String(item.portion_grams),
+      calories: String(item.calories),
+      protein: String(item.protein),
+      carbs: item.carbs == null ? '' : String(item.carbs),
+      fat: item.fat == null ? '' : String(item.fat),
+      saveToLibrary: false,
+    }
+  }
+  const fields = rowFieldsFromMatch(item, matched)
+  return {
+    ...emptyRow(),
+    name: fields.name,
+    weight: String(fields.weight),
+    servingSize: String(fields.servingSize),
+    calories: String(fields.calories),
+    protein: String(fields.protein),
+    carbs: fields.carbs === null ? '' : String(fields.carbs),
+    fat: fields.fat === null ? '' : String(fields.fat),
+    // The row really did come from the library, so the badge it lights is true
+    // and the offer-to-cache tick correctly stays away: it is already saved.
+    fromLibrary: true,
+    saveToLibrary: false,
+  }
+}
+
 const rowTotals = (row: Row) => {
   const factor = Number(row.weight) / Number(row.servingSize)
   const scale = (value: string) => {
@@ -131,6 +176,44 @@ const rowTotals = (row: Row) => {
     carbs: scale(row.carbs),
     fat: scale(row.fat),
   }
+}
+
+/** "Use your saved numbers", when a row's name is one of the user's foods.
+ *
+ * Offered, never applied. The model never claimed this row is that food -- only
+ * that the names happen to agree -- and rewriting macros on that basis is the
+ * app deciding for the user. Where the user *did* attach the food, the match is
+ * applied outright in rowFromAnalyzedItem, because picking it was the claim.
+ *
+ * Resolved on every render from the current name, so renaming a row re-asks the
+ * question and there is no stored answer that can go stale. Tapping it hands the
+ * work to selectFood, which already sets serving size, macros and the library
+ * flag -- and deliberately leaves `weight` alone, which is what keeps the AI's
+ * portion estimate while replacing the numbers it was guessing at.
+ */
+function SavedNumbersOffer({
+  name,
+  foods,
+  onUse,
+}: {
+  name: string
+  foods: Food[]
+  onUse: (food: Food) => void
+}) {
+  const match = findByName(name, foods)
+  if (!match) return null
+  return (
+    <button
+      type="button"
+      onClick={() => onUse(match)}
+      className="mt-3 flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-control border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-left text-xs text-emerald-300 hover:bg-emerald-500/10"
+    >
+      <span>Use your saved numbers for “{match.name}”</span>
+      <span className="text-ink-faint">
+        {match.calories} kcal · {match.protein} g P / {match.serving_size} g
+      </span>
+    </button>
+  )
 }
 
 export default function LogMeal() {
@@ -186,6 +269,10 @@ export default function LogMeal() {
   // directly left it standing over an empty form, and then over the next meal
   // the user typed by hand.
   const [fromCode, setFromCode] = useState(false)
+  // The library as the analyzer saw it, kept only to offer a swap on rows the
+  // user did not attach. Empty until an estimate is applied, so a hand-typed
+  // meal is unaffected.
+  const [libraryFoods, setLibraryFoods] = useState<Food[]>([])
   const lastContext = useRef(
     `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`,
   )
@@ -207,6 +294,7 @@ export default function LogMeal() {
     setMealName(editMeal?.name ?? shared?.name ?? template?.name ?? '')
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
+    setLibraryFoods([])
     setFromCode(Boolean(shared))
     setMessage(null)
     // Switching what this page is for -- a new meal, an edit, a template --
@@ -251,22 +339,9 @@ export default function LogMeal() {
     })
   }
 
-  const applyAnalysis = (analysis: MealAnalysisResponse) => {
-    // AI macros are for the estimated portion, so weight == serving size and
-    // the existing scaling logic passes them through unchanged (factor = 1).
-    setRows(
-      analysis.items.map((item) => ({
-        ...emptyRow(),
-        name: item.name,
-        weight: String(item.portion_grams),
-        servingSize: String(item.portion_grams),
-        calories: String(item.calories),
-        protein: String(item.protein),
-        carbs: item.carbs == null ? '' : String(item.carbs),
-        fat: item.fat == null ? '' : String(item.fat),
-        saveToLibrary: false,
-      })),
-    )
+  const applyAnalysis = (analysis: MealAnalysisResponse, foods: LibraryContext) => {
+    setRows(analysis.items.map((item) => rowFromAnalyzedItem(item, foods.attached)))
+    setLibraryFoods(foods.library)
     setMealName((current) => current.trim() || analysis.meal_name)
     setAnalysisId(analysis.analysis_id)
     setMessage(null)
@@ -368,6 +443,7 @@ export default function LogMeal() {
       clearNoteDraft()
       // The numbers it described are no longer on screen.
       setFromCode(false)
+      setLibraryFoods([])
       setAnalyzerNonce((n) => n + 1)
     } catch (error) {
       setMessage({
@@ -574,6 +650,14 @@ export default function LogMeal() {
                 </label>
               )}
             </div>
+
+            {!row.fromLibrary && (
+              <SavedNumbersOffer
+                name={row.name}
+                foods={libraryFoods}
+                onUse={(food) => selectFood(row.key, food)}
+              />
+            )}
 
             {!row.fromLibrary && row.name.trim() !== '' && (
               <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-slate-400">
