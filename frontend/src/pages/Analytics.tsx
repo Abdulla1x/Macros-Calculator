@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   CartesianGrid,
   Line,
@@ -269,6 +270,22 @@ export default function Analytics() {
           No meals in this date range yet.
         </Card>
       )}
+
+      {/* Above the calibration section rather than below it: the review quotes
+          one line of that section, so meeting it first makes the longer version
+          read as the detail behind a sentence already seen. */}
+      <Card as="section">
+        <h2 className="font-semibold">Weekly review</h2>
+        <p className="mt-2 text-sm text-ink-muted">
+          The same figures read as a week: how much you logged, how your intake
+          and protein compared with your targets, and whether your weight is
+          moving the way you asked it to.{' '}
+          <Link to="/review" className="underline hover:text-emerald-300">
+            Open the weekly review
+          </Link>
+          .
+        </p>
+      </Card>
 
       <CalibrationSection />
 

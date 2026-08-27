@@ -541,7 +541,17 @@ export default function Dashboard() {
               on this page in full — the rings and the meal list above — so
               leaving it out of the trend costs nothing and keeps the chart and
               the average below it telling the same story. */}
-          <h2 className="mb-3 font-semibold">Previous 7 days</h2>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="font-semibold">Previous 7 days</h2>
+            {/* The review covers exactly this window, so the link belongs on
+                the numbers it summarises rather than in a card of its own.
+                Outside the `week &&` guard below on purpose: a week with
+                nothing logged is precisely when "you logged no meals, so there
+                is nothing to review yet" is worth reading. */}
+            <Link to="/review" className="text-xs text-ink-muted underline hover:text-emerald-300">
+              Weekly review →
+            </Link>
+          </div>
           {week && week.days.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={week.days} margin={chartMargin}>
