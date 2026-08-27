@@ -7,6 +7,15 @@ import ShareCodePanel from '../components/ShareCodePanel'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
+import {
+  axisStroke,
+  axisTick,
+  chartMargin,
+  macroHues,
+  shortDate,
+  tooltipLabelStyle,
+  tooltipStyle,
+} from '../lib/chartTheme'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
@@ -251,7 +260,7 @@ export default function Dashboard() {
             value={consumed.calories}
             goal={goals.calorie_goal}
             unit="kcal"
-            color="#f59e0b"
+            color={macroHues.calories}
             caption={planCaption(dayPlan, planFailed)}
           />
           <MacroRing
@@ -259,7 +268,7 @@ export default function Dashboard() {
             value={consumed.protein}
             goal={goals.protein_goal}
             unit="g"
-            color="#34d399"
+            color={macroHues.protein}
           />
           {settings.track_carbs && (
             <MacroRing
@@ -267,7 +276,7 @@ export default function Dashboard() {
               value={consumed.carbs}
               goal={goals.carbs_goal}
               unit="g"
-              color="#38bdf8"
+              color={macroHues.carbs}
             />
           )}
           {settings.track_fat && (
@@ -276,7 +285,7 @@ export default function Dashboard() {
               value={consumed.fat}
               goal={goals.fat_goal}
               unit="g"
-              color="#fb7185"
+              color={macroHues.fat}
             />
           )}
         </section>
@@ -497,28 +506,28 @@ export default function Dashboard() {
           <h2 className="mb-3 font-semibold">Previous 7 days</h2>
           {week && week.days.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={week.days} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+              <AreaChart data={week.days} margin={chartMargin}>
                 <defs>
                   <linearGradient id="calGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                    <stop offset="0%" stopColor={macroHues.calories} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={macroHues.calories} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  tickFormatter={(value: string) => value.slice(5)}
-                  stroke="#334155"
+                  tick={axisTick}
+                  tickFormatter={shortDate}
+                  stroke={axisStroke}
                 />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} stroke="#334155" />
+                <YAxis tick={axisTick} stroke={axisStroke} />
                 <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                  labelStyle={{ color: '#e2e8f0' }}
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
                 />
                 <Area
                   type="monotone"
                   dataKey="calories"
-                  stroke="#f59e0b"
+                  stroke={macroHues.calories}
                   strokeWidth={2}
                   fill="url(#calGradient)"
                 />

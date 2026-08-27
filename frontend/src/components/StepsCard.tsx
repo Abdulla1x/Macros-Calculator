@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { MAX_STEPS_PER_DAY } from '../lib/limits'
+import { trackerHues } from '../lib/chartTheme'
 import type { StepDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 
@@ -98,7 +99,7 @@ export default function StepsCard({ date }: Props) {
       value={day.steps}
       goal={day.goal}
       unit="steps"
-      color="#a78bfa"
+      color={trackerHues.steps}
       error={error}
       caption={<StepsCaption day={day} />}
       actions={

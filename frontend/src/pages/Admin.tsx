@@ -12,28 +12,23 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
+import {
+  adminHues,
+  axisStroke,
+  axisTick,
+  barRadius,
+  chartMargin,
+  gridStroke,
+  legendStyle,
+  shortDate,
+  tooltipLabelStyle,
+  tooltipStyle,
+  activeDot,
+} from '../lib/chartTheme'
 import type { AdminStats, AdminUserRow } from '../types'
-
-// Validated against this app's chart surface (#0f172a) for lightness band,
-// chroma, CVD separation and contrast. Blue and amber rather than the more
-// obvious blue and green: blue/green is the worst possible pair under
-// tritanopia (ΔE 5.7), where blue/amber separates at 28.7.
-const ACTIVE_COLOR = '#3b82f6'
-const SIGNUP_COLOR = '#d97706'
-const MEALS_COLOR = '#0d9488'
 
 const cardClass = 'rounded-xl border border-slate-800 bg-slate-900 p-5'
 const tileClass = 'rounded-xl border border-slate-800 bg-slate-900 p-4'
-
-const axisTick = { fill: '#64748b', fontSize: 11 }
-const tooltipStyle = {
-  background: '#1e293b',
-  border: '1px solid #334155',
-  borderRadius: 8,
-}
-
-/** Drop the year, matching every other chart in the app. */
-const shortDate = (value: string) => value.slice(5)
 
 const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`
@@ -147,21 +142,21 @@ export default function Admin() {
                   signups: point.count,
                   active: stats.activity[index]?.active_users ?? 0,
                 }))}
-                margin={{ top: 5, right: 5, bottom: 0, left: -20 }}
+                margin={chartMargin}
               >
-                <CartesianGrid stroke="#1e293b" vertical={false} />
+                <CartesianGrid stroke={gridStroke} vertical={false} />
                 <XAxis
                   dataKey="date"
                   tick={axisTick}
                   tickFormatter={shortDate}
-                  stroke="#334155"
+                  stroke={axisStroke}
                 />
-                <YAxis tick={axisTick} stroke="#334155" allowDecimals={false} />
+                <YAxis tick={axisTick} stroke={axisStroke} allowDecimals={false} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelStyle={{ color: '#e2e8f0' }}
+                  labelStyle={tooltipLabelStyle}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+                <Legend wrapperStyle={legendStyle} />
                 {/* Signups are discrete events, so they get bars; "active" is
                     a level that persists, so it gets a line. The differing
                     mark is a second channel carrying the same distinction the
@@ -169,23 +164,18 @@ export default function Admin() {
                 <Bar
                   name="New signups"
                   dataKey="signups"
-                  fill={SIGNUP_COLOR}
-                  radius={[4, 4, 0, 0]}
+                  fill={adminHues.signups}
+                  radius={barRadius}
                   isAnimationActive={false}
                 />
                 <Line
                   name="Active accounts"
                   type="monotone"
                   dataKey="active"
-                  stroke={ACTIVE_COLOR}
+                  stroke={adminHues.active}
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{
-                    r: 5,
-                    fill: ACTIVE_COLOR,
-                    stroke: '#0f172a',
-                    strokeWidth: 2,
-                  }}
+                  activeDot={activeDot(adminHues.active)}
                   isAnimationActive={false}
                 />
               </ComposedChart>
@@ -201,25 +191,25 @@ export default function Admin() {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart
                 data={stats.activity}
-                margin={{ top: 5, right: 5, bottom: 0, left: -20 }}
+                margin={chartMargin}
               >
-                <CartesianGrid stroke="#1e293b" vertical={false} />
+                <CartesianGrid stroke={gridStroke} vertical={false} />
                 <XAxis
                   dataKey="date"
                   tick={axisTick}
                   tickFormatter={shortDate}
-                  stroke="#334155"
+                  stroke={axisStroke}
                 />
-                <YAxis tick={axisTick} stroke="#334155" allowDecimals={false} />
+                <YAxis tick={axisTick} stroke={axisStroke} allowDecimals={false} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelStyle={{ color: '#e2e8f0' }}
+                  labelStyle={tooltipLabelStyle}
                 />
                 <Bar
                   name="Meals"
                   dataKey="meals"
-                  fill={MEALS_COLOR}
-                  radius={[4, 4, 0, 0]}
+                  fill={adminHues.meals}
+                  radius={barRadius}
                   isAnimationActive={false}
                 />
               </BarChart>

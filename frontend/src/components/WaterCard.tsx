@@ -6,6 +6,7 @@ import {
   WATER_ML_PER_KG,
 } from '../lib/limits'
 import { useSettings } from '../settings/SettingsContext'
+import { trackerHues } from '../lib/chartTheme'
 import type { WaterDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 
@@ -109,7 +110,7 @@ export default function WaterCard({ date }: Props) {
       value={day.total_ml}
       goal={day.goal_ml}
       unit="ml"
-      color="#38bdf8"
+      color={trackerHues.water}
       error={error}
       caption={<GoalCaption day={day} />}
       actions={

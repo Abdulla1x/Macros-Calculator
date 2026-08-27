@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { localIsoDate } from '../lib/dates'
+import { trackerHues } from '../lib/chartTheme'
 import type { SupplementDay, SupplementSlot } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 
@@ -142,7 +143,7 @@ export default function SupplementsCard({ date }: Props) {
       value={day.taken}
       goal={day.scheduled}
       unit="doses"
-      color="#fbbf24"
+      color={trackerHues.supplements}
       error={error}
       caption={<DoseCaption day={day} isToday={isToday} overdue={overdue.length} next={next} />}
       actions={

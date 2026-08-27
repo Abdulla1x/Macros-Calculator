@@ -60,11 +60,12 @@
   --color-brand-ink: #020617;    /* slate-950 */
 
   /* The hues the app already assigns per macro and per tracker. Naming them here
-   * covers the utility-class uses only -- the ring, chart and card colours are
-   * hex literals passed as recharts props in Dashboard.tsx, Analytics.tsx,
-   * WaterCard.tsx, StepsCard.tsx and SupplementsCard.tsx, and var() in an SVG
-   * presentation attribute is browser-dependent. Consolidating those is
-   * lib/chartTheme.ts's job, not this file's. */
+   * covers the utility-class uses only. The ring, chart and card colours are
+   * passed as recharts props and as plain `color` strings, where var() in an
+   * SVG presentation attribute is browser-dependent -- those now live in
+   * lib/chartTheme.ts, which mirrors these values by hand and says so.
+   *
+   * Change a hue and both files need it. Nothing asserts the pairing. */
   --color-calories: #f59e0b;     /* amber-500 */
   --color-protein: #34d399;      /* emerald-400 */
   --color-carbs: #38bdf8;        /* sky-400 */

@@ -13,13 +13,20 @@ import { api } from '../api/client'
 import { localIsoDate } from '../lib/dates'
 import { displayToKg, formatRate, formatWeight, unitLabel } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
+import {
+  activeDot,
+  axisStroke,
+  axisTick,
+  chartMargin,
+  gridStroke,
+  legendStyle,
+  RAW_COLOR,
+  shortDate,
+  tooltipLabelStyle,
+  tooltipStyle,
+  TREND_COLOR,
+} from '../lib/chartTheme'
 import type { Settings, WeightEntry, WeightTrend } from '../types'
-
-// Emphasis form: the trend line is the subject, the raw weigh-ins are context.
-// One accent hue plus the de-emphasis gray — validated against this app's chart
-// surface (#0f172a) for lightness band, CVD separation and contrast.
-const TREND_COLOR = '#3b82f6'
-const RAW_COLOR = '#64748b'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
@@ -184,32 +191,28 @@ export default function Weight() {
         {chartData.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-                <CartesianGrid stroke="#1e293b" vertical={false} />
+              <ComposedChart data={chartData} margin={chartMargin}>
+                <CartesianGrid stroke={gridStroke} vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  tickFormatter={(value: string) => value.slice(5)}
-                  stroke="#334155"
+                  tick={axisTick}
+                  tickFormatter={shortDate}
+                  stroke={axisStroke}
                 />
                 {/* Not zero-based: body weight varies by a few percent, and a
                     0-anchored axis would flatten every real change to nothing. */}
                 <YAxis
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={axisTick}
+                  stroke={axisStroke}
                   domain={['dataMin - 1', 'dataMax + 1']}
                   tickFormatter={(value: number) => value.toFixed(1)}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: 8,
-                  }}
-                  labelStyle={{ color: '#e2e8f0' }}
+                  contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
                   formatter={(value) => `${Number(value).toFixed(1)} ${label}`}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+                <Legend wrapperStyle={legendStyle} />
                 {/* strokeWidth 0 rather than stroke "none": the dots are the
                     mark, but the legend swatch still needs a colour to draw,
                     or this series is identified by its label alone. */}
@@ -221,7 +224,7 @@ export default function Weight() {
                   strokeWidth={0}
                   legendType="circle"
                   dot={{ r: 4, fill: RAW_COLOR, stroke: 'none' }}
-                  activeDot={{ r: 5, fill: RAW_COLOR, stroke: '#0f172a', strokeWidth: 2 }}
+                  activeDot={activeDot(RAW_COLOR)}
                   isAnimationActive={false}
                 />
                 <Line
@@ -232,7 +235,7 @@ export default function Weight() {
                   strokeWidth={2}
                   legendType="plainline"
                   dot={false}
-                  activeDot={{ r: 5, fill: TREND_COLOR, stroke: '#0f172a', strokeWidth: 2 }}
+                  activeDot={activeDot(TREND_COLOR)}
                   isAnimationActive={false}
                 />
               </ComposedChart>
