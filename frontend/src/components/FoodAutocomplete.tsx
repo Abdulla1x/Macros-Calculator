@@ -107,12 +107,13 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
 
   return (
     <div ref={containerRef} className="relative">
-      <TextInput className="w-full"
+      <TextInput
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => value.trim().length >= 2 && setOpen(true)}
         placeholder="Type a food name…"
+        className="w-full"
       />
       {/* The panel below is deliberately the input's own border and ground rather
           than a Card: it is the drawer belonging to the field above it, and

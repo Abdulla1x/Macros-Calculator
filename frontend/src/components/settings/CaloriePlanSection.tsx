@@ -5,6 +5,7 @@ import { MAX_PLAN_DAYS, MAX_PLAN_HORIZON_DAYS, validatePlan } from '../../lib/li
 import { num } from '../../lib/parse'
 import type { CaloriePlan, DaySurplus, PlanKind } from '../../types'
 import Card from '../ui/Card'
+import Button from '../ui/Button'
 
 /** Move calories between days without moving the week.
  *
@@ -431,13 +432,13 @@ export default function CaloriePlanSection({
           {error && <p className="text-sm text-rose-400">{error}</p>}
 
           <div className="flex items-center gap-3">
-            <button
+            <Button
               onClick={submit}
               disabled={busy}
-              className="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="px-4 py-1.5"
             >
               {busy ? 'Saving…' : 'Save plan'}
-            </button>
+            </Button>
             <button
               onClick={close}
               disabled={busy}

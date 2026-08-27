@@ -43,21 +43,23 @@ export default function BodyPanel() {
           <HeightField settings={settings} update={update} onBlur={guard('height_cm')} />
 
           <Field label="Date of birth" caption="Stored as the date, so your age stays right without you editing it.">
-            <TextInput className="w-full"
+            <TextInput
               type="date"
               value={settings.birth_date ?? ''}
               onChange={(event) => update({ birth_date: event.target.value || null })}
+              className="w-full"
             />
           </Field>
 
           <Field className="sm:col-span-2" label="Activity level">
-            <TextInput as="select" className="w-full"
+            <TextInput as="select"
               value={settings.activity_level ?? ''}
               onChange={(event) =>
                 update({
                   activity_level: (event.target.value || null) as ActivityLevel | null,
                 })
               }
+              className="w-full"
             >
               <option value="">Not set</option>
               {activityOptions.map(({ value, label }) => (
@@ -110,7 +112,7 @@ export default function BodyPanel() {
               </>
             }
           >
-            <TextInput className="w-full"
+            <TextInput
               type="number"
               step={0.05}
               value={settings.goal_rate_kg_per_week ?? ''}
@@ -118,6 +120,7 @@ export default function BodyPanel() {
                 update({ goal_rate_kg_per_week: num(event.target.value) })
               }
               onBlur={guard('goal_rate_kg_per_week')}
+              className="w-full"
             />
           </Field>
         </div>

@@ -7,6 +7,7 @@ import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -73,22 +74,23 @@ export default function ForgotPassword() {
               password.
             </p>
             <Field label="Email">
-              <TextInput size="md" className="w-full"
+              <TextInput size="md"
                 type="email"
                 required
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="w-full"
               />
             </Field>
             {error && <p className="text-sm text-rose-400">{error}</p>}
-            <button
+            <Button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="w-full px-5 py-2"
             >
               {submitting ? 'Sending…' : 'Send reset link'}
-            </button>
+            </Button>
             <p className="text-center text-sm text-slate-400">
               Remembered it?{' '}
               <Link to="/login" className="text-emerald-400 hover:text-emerald-300">

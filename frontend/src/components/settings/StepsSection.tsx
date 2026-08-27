@@ -55,7 +55,7 @@ export default function StepsSection({
 
       <Field label="Daily goal">
         <span className="flex items-center gap-2">
-          <TextInput accent="steps" className="w-28"
+          <TextInput accent="steps"
             type="number"
             min={1}
             max={MAX_STEPS_PER_DAY}
@@ -74,6 +74,7 @@ export default function StepsSection({
               update({ steps_goal: null })
             }}
             aria-label="Daily step goal"
+            className="w-28"
           />
           <span className="text-xs text-ink-faint">steps</span>
         </span>

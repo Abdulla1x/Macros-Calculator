@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Card from './ui/Card'
+import Button from './ui/Button'
 
 /** Shows a meal code and helps the user get it into a message.
  *
@@ -79,12 +80,12 @@ export default function ShareCodePanel({
         className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-base break-all text-slate-300 sm:text-xs"
       />
       <div className="mt-3 flex items-center gap-3">
-        <button
+        <Button
           onClick={copy}
-          className="rounded-lg bg-brand text-brand-ink px-4 py-2 text-sm font-semibold"
+          className="px-4 py-2"
         >
           Copy code
-        </button>
+        </Button>
         <span className="text-xs text-slate-400">
           {copied ? 'Copied ✓' : 'Or select the text above and copy it.'}
         </span>

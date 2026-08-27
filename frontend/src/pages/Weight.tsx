@@ -30,6 +30,7 @@ import type { Settings, WeightEntry, WeightTrend } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
@@ -133,7 +134,7 @@ export default function Weight() {
         <h2 className="mb-3 font-semibold">Log a weigh-in</h2>
         <form onSubmit={save} className="flex flex-wrap items-end gap-3">
           <Field label="Date">
-            <TextInput className="w-full"
+            <TextInput
               type="date"
               value={date}
               max={localIsoDate()}
@@ -141,10 +142,11 @@ export default function Weight() {
                 setDate(event.target.value)
                 setStatus('idle')
               }}
+              className="w-full"
             />
           </Field>
           <Field label={<>Weight ({label})</>}>
-            <TextInput className="w-full"
+            <TextInput
               type="number"
               step="0.1"
               min="0"
@@ -154,15 +156,16 @@ export default function Weight() {
                 setWeight(event.target.value)
                 setStatus('idle')
               }}
+              className="w-full"
             />
           </Field>
-          <button
+          <Button
             type="submit"
             disabled={status === 'saving'}
-            className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="px-5 py-2"
           >
             {status === 'saving' ? 'Saving…' : existingForDate ? 'Update' : 'Save'}
-          </button>
+          </Button>
           {status === 'saved' && <span className="text-sm text-emerald-400">Saved ✓</span>}
         </form>
         {/* One weigh-in per day, so re-saving a date is a correction. Said out

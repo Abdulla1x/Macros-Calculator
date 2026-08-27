@@ -1,4 +1,5 @@
 import Modal from './ui/Modal'
+import Button from './ui/Button'
 
 /** A blocking "that didn't work" dialog.
  *
@@ -28,13 +29,13 @@ export default function AlertDialog({
     <Modal role="alertdialog" label={title} onClose={onClose}>
       <h2 className="mb-2 text-lg font-semibold text-amber-300">{title}</h2>
       <p className="text-sm text-slate-300">{message}</p>
-      <button
+      <Button
         onClick={onClose}
         autoFocus
-        className="mt-5 w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+        className="mt-5 w-full px-5 py-2"
       >
         OK
-      </button>
+      </Button>
     </Modal>
   )
 }

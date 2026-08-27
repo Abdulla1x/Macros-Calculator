@@ -17,6 +17,7 @@ import type {
 } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import Button from '../components/ui/Button'
 
 interface Row {
   key: number
@@ -510,59 +511,65 @@ export default function LogMeal() {
               </div>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs text-slate-400">Weight eaten (g)</span>
-                <TextInput className="w-full"
+                <TextInput
                   type="number"
                   min={0}
                   value={row.weight}
                   onChange={(e) => updateRow(row.key, { weight: e.target.value })}
+                  className="w-full"
                 />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs text-slate-400">Serving size (g)</span>
-                <TextInput className="w-full"
+                <TextInput
                   type="number"
                   min={1}
                   value={row.servingSize}
                   onChange={(e) => updateRow(row.key, { servingSize: e.target.value })}
+                  className="w-full"
                 />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs text-slate-400">Calories / serving</span>
-                <TextInput className="w-full"
+                <TextInput
                   type="number"
                   min={0}
                   value={row.calories}
                   onChange={(e) => updateRow(row.key, { calories: e.target.value })}
+                  className="w-full"
                 />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-xs text-slate-400">Protein / serving (g)</span>
-                <TextInput className="w-full"
+                <TextInput
                   type="number"
                   min={0}
                   value={row.protein}
                   onChange={(e) => updateRow(row.key, { protein: e.target.value })}
+                  className="w-full"
                 />
               </label>
               {settings?.track_carbs && (
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs text-slate-400">Carbs / serving (g)</span>
-                  <TextInput className="w-full"
+                  <TextInput
                     type="number"
                     min={0}
                     value={row.carbs}
                     onChange={(e) => updateRow(row.key, { carbs: e.target.value })}
+                    className="w-full"
                   />
                 </label>
               )}
               {settings?.track_fat && (
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs text-slate-400">Fat / serving (g)</span>
-                  <TextInput className="w-full"
+                  <TextInput
                     type="number"
                     min={0}
                     value={row.fat}
                     onChange={(e) => updateRow(row.key, { fat: e.target.value })}
+                    className="w-full"
                   />
                 </label>
               )}
@@ -602,11 +609,12 @@ export default function LogMeal() {
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block text-xs text-slate-400">Meal name</span>
-            <TextInput className="w-full"
+            <TextInput
               type="text"
               value={mealName}
               onChange={(e) => setMealName(e.target.value)}
               placeholder="e.g. Chicken & rice bowl"
+              className="w-full"
             />
           </label>
           {/* Nearly every meal is logged today or yesterday, so a chip is fewer
@@ -631,7 +639,7 @@ export default function LogMeal() {
               >
                 ◀
               </button>
-              <TextInput className="w-full flex-1"
+              <TextInput
                 id="meal-date"
                 type="date"
                 value={mealDate}
@@ -641,6 +649,7 @@ export default function LogMeal() {
                 // very next stepper tap into an exception. Dashboard's picker
                 // already guards the same way.
                 onChange={(e) => e.target.value && setMealDate(e.target.value)}
+                className="w-full flex-1"
               />
               <button
                 type="button"
@@ -712,13 +721,13 @@ export default function LogMeal() {
             >
               {savingTemplate ? 'Saving…' : '☆ Save as template'}
             </button>
-            <button
+            <Button
               onClick={save}
               disabled={saving || savingTemplate}
-              className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="px-6 py-2.5"
             >
               {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
-            </button>
+            </Button>
           </div>
         </div>
 

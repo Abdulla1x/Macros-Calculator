@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import type { SharedMeal } from '../types'
 import Card from './ui/Card'
+import Button from './ui/Button'
 
 /** Paste a meal code someone sent you, and get their meal in this form.
  *
@@ -85,14 +86,14 @@ export default function MealCodeInput({
       />
       {error && <p className="mt-2 text-sm text-amber-300">{error}</p>}
       <div className="mt-3 flex gap-2">
-        <button
+        <Button
           type="button"
           onClick={load}
           disabled={loading}
-          className="rounded-lg bg-brand text-brand-ink px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          className="px-4 py-2"
         >
           {loading ? 'Loading…' : 'Load meal'}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={close}

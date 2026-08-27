@@ -102,11 +102,12 @@ export default function SavedMealsSection() {
 
       {items.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <TextInput className="min-w-0 flex-1"
+          <TextInput
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter saved meals"
+            className="min-w-0 flex-1"
           />
           <span className="text-xs text-slate-400">
             {items.length} meal{items.length === 1 ? '' : 's'}

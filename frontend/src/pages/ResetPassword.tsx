@@ -8,6 +8,7 @@ import { useAnnouncements } from '../hooks/useAnnouncements'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
+import Button from '../components/ui/Button'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -76,32 +77,34 @@ export default function ResetPassword() {
           <Card as="form" pad="lg" className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="text-lg font-semibold">Choose a new password</h2>
             <Field label="New password" caption="At least 8 characters.">
-              <TextInput size="md" className="w-full"
+              <TextInput size="md"
                 type="password"
                 required
                 minLength={8}
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="w-full"
               />
             </Field>
             <Field label="Confirm password">
-              <TextInput size="md" className="w-full"
+              <TextInput size="md"
                 type="password"
                 required
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
+                className="w-full"
               />
             </Field>
             {error && <p className="text-sm text-rose-400">{error}</p>}
-            <button
+            <Button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              className="w-full px-5 py-2"
             >
               {submitting ? 'Saving…' : 'Set new password'}
-            </button>
+            </Button>
           </Card>
         ) : (
           <Card pad="lg" className="space-y-3 text-sm">

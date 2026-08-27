@@ -9,6 +9,7 @@ import {
 import type { Announcement } from '../types'
 import AnnouncementBody from './AnnouncementBody'
 import Modal from './ui/Modal'
+import Button from './ui/Button'
 
 // A + alias, not the bare personal address: inbound mail stays filterable, and
 // the address is disposable once scrapers find it in this very public DOM.
@@ -120,12 +121,12 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
         </>
       )}
 
-      <button
+      <Button
         onClick={close}
-        className="mt-5 w-full rounded-control bg-brand px-5 py-2 text-sm font-semibold text-brand-ink hover:bg-emerald-400"
+        className="mt-5 w-full px-5 py-2"
       >
         Got it
-      </button>
+      </Button>
 
       <p className="mt-3 text-center text-xs text-ink-faint">
         Found a bug or want something?{' '}

@@ -9,6 +9,7 @@ import {
 } from '../../lib/limits'
 import type { Supplement } from '../../types'
 import Card from '../ui/Card'
+import Button from '../ui/Button'
 
 /** The supplement list: add, edit, pause, delete.
  *
@@ -374,13 +375,13 @@ function SupplementForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <button
+        <Button
           onClick={onSave}
           disabled={busy}
-          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+          className="px-3 py-1.5"
         >
           {busy ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
         <button
           onClick={onCancel}
           className="text-sm text-slate-400 hover:text-slate-200"

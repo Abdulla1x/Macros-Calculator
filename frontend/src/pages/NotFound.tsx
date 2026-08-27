@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { primaryButtonClass } from '../components/ui/Button'
 
 /** What an unmatched URL renders.
  *
@@ -28,7 +29,7 @@ export default function NotFound() {
       </p>
       <Link
         to="/"
-        className="inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+        className={`${primaryButtonClass} inline-block px-4 py-2`}
       >
         Back to the dashboard
       </Link>

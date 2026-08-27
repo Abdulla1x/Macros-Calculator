@@ -23,6 +23,7 @@ import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import { primaryButtonClass } from '../components/ui/Button'
 
 // What the caption under the calorie ring says, if anything.
 //
@@ -271,7 +272,7 @@ export default function Dashboard() {
         </div>
         <Link
           to={`/log?date=${viewedDate}`}
-          className="rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+          className={`${primaryButtonClass} px-5 py-2.5`}
         >
           + Log a meal
         </Link>
@@ -359,11 +360,12 @@ export default function Dashboard() {
           <h2 className="mb-3 font-semibold">Quick log</h2>
 
           {browsingTemplates && (
-            <TextInput className="mb-3 w-full"
+            <TextInput
               value={templateFilter}
               onChange={(event) => setTemplateFilter(event.target.value)}
               placeholder="Filter by name…"
               aria-label="Filter saved meals"
+              className="mb-3 w-full"
             />
           )}
 

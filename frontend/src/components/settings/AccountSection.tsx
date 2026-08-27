@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
+import Button from '../ui/Button'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -84,32 +85,35 @@ export default function AccountSection() {
 
         <form onSubmit={submitPassword} className="max-w-sm space-y-3">
           <Field label="Current password">
-            <TextInput className="w-full"
+            <TextInput
               type="password"
               autoComplete="current-password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full"
             />
           </Field>
           <Field label="New password">
-            <TextInput className="w-full"
+            <TextInput
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full"
             />
           </Field>
           <Field label="Confirm new password">
-            <TextInput className="w-full"
+            <TextInput
               type="password"
               autoComplete="new-password"
               required
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full"
             />
           </Field>
           <div className="flex items-center gap-3">
@@ -164,24 +168,25 @@ export default function AccountSection() {
         ) : (
           <form onSubmit={submitDelete} className="max-w-sm space-y-3">
             <Field label="Enter your password to confirm">
-              <TextInput className="w-full"
+              <TextInput
                 type="password"
                 autoComplete="current-password"
                 required
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
+                className="w-full"
               />
             </Field>
             <div className="flex items-center gap-3">
-              <button
+              <Button variant="danger"
                 type="submit"
                 disabled={deleteStatus === 'deleting'}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-60"
+                className="px-4 py-2"
               >
                 {deleteStatus === 'deleting'
                   ? 'Deleting…'
                   : 'Permanently delete my account'}
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={() => {

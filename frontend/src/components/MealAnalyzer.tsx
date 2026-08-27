@@ -5,6 +5,7 @@ import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
 import Card from './ui/Card'
 import TextInput from './ui/TextInput'
+import Button from './ui/Button'
 
 interface Props {
   settings: Settings | null
@@ -224,12 +225,13 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-slate-400">Describe it</span>
-          <TextInput as="textarea" className="w-full"
+          <TextInput as="textarea"
             ref={noteRef}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={4}
             placeholder={'e.g. "Grilled chicken with ~1 tbsp olive oil, I only ate half the rice"'}
+            className="w-full"
           />
         </label>
 
@@ -311,13 +313,13 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       )}
 
       <div className="mt-3 flex items-center gap-3">
-        <button
+        <Button
           onClick={() => analyze(false)}
           disabled={analyzing || transcribing}
-          className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+          className="px-5 py-2"
         >
           {analyzing ? 'Analyzing…' : analysis ? 'Analyze again' : 'Analyze'}
-        </button>
+        </Button>
         {analysis && (
           <button
             onClick={() => analyze(true)}

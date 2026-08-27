@@ -6,6 +6,7 @@ import { useSettings } from '../settings/SettingsContext'
 import type { Settings as SettingsType } from '../types'
 import type { SettingsPanel } from './settings/panelContext'
 import { SETTINGS_TABS, settingsTabFor } from './settings/tabs'
+import Button from '../components/ui/Button'
 
 /** The Settings shell: one draft, one Save, five addresses.
  *
@@ -220,13 +221,13 @@ export default function Settings() {
               )}
             </p>
             {status !== 'saved' && (
-              <button
+              <Button
                 onClick={save}
                 disabled={status === 'saving'}
-                className="shrink-0 rounded-control bg-brand px-5 py-2 text-sm font-semibold text-brand-ink hover:bg-emerald-400 disabled:opacity-60"
+                className="shrink-0 px-5 py-2"
               >
                 {status === 'saving' ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
             )}
           </div>
         </div>

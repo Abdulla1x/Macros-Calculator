@@ -23,11 +23,12 @@ export default function HeightField({
   if (settings.weight_unit !== 'lb') {
     return (
       <Field label="Height (cm)">
-        <TextInput className="w-full"
+        <TextInput
           type="number"
           value={settings.height_cm ?? ''}
           onChange={(event) => update({ height_cm: num(event.target.value) })}
           onBlur={onBlur}
+          className="w-full"
         />
       </Field>
     )
@@ -56,7 +57,7 @@ export default function HeightField({
     >
       <div className="flex gap-2">
         <label className="flex-1">
-          <TextInput className="w-full"
+          <TextInput
             type="number"
             aria-label="Height, feet"
             placeholder="ft"
@@ -65,10 +66,11 @@ export default function HeightField({
               set(num(event.target.value), settings.height_cm ? inches : null)
             }
             onBlur={onBlur}
+            className="w-full"
           />
         </label>
         <label className="flex-1">
-          <TextInput className="w-full"
+          <TextInput
             type="number"
             aria-label="Height, inches"
             placeholder="in"
@@ -77,6 +79,7 @@ export default function HeightField({
               set(settings.height_cm ? feet : null, num(event.target.value))
             }
             onBlur={onBlur}
+            className="w-full"
           />
         </label>
       </div>
