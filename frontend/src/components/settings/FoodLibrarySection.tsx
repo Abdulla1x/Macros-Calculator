@@ -179,8 +179,8 @@ export default function FoodLibrarySection({
           every Open Food Facts result you pick is saved here automatically
         </strong>
         , along with anything you ticked “save to library” on. This is where you
-        correct one that is wrong. Changes here save straight away — the Save
-        button below is for the settings above it.
+        correct one that is wrong. Changes here save straight away — nothing on
+        this tab waits for a Save.
       </p>
       <p className="mb-4 text-sm text-slate-400">
         Editing a food changes what gets filled in{' '}

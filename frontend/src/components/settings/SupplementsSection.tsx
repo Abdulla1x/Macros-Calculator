@@ -11,12 +11,15 @@ import type { Supplement } from '../../types'
 
 /** The supplement list: add, edit, pause, delete.
  *
- * The one section on this page that saves as you go. Everything above it edits
- * a draft of the single `settings` row and waits for the Save button, but a
- * supplement is a row in its own table with its own endpoints, and holding
- * those in a draft would mean a half-typed supplement silently lost by
- * navigating away. Mixed save semantics on one page is a real cost, so the
- * header says which one this is rather than leaving it to be discovered.
+ * The one section on the Trackers tab that saves as you go. The water and step
+ * goals above it are columns on the single `settings` row, so they edit a draft
+ * and wait for the Save bar; a supplement is a row in its own table with its
+ * own endpoints, and holding those in a draft would mean a half-typed
+ * supplement silently lost by navigating away.
+ *
+ * Mixed save semantics on one tab is a real cost, so it is paid twice over: the
+ * copy says which model this is, and the Save bar stays away when you tick
+ * something here, which says the same thing without words.
  */
 export default function SupplementsSection({
   onRejected,
@@ -163,8 +166,8 @@ export default function SupplementsSection({
         . Push notifications on Android go through Google Play Services and
         scheduled local ones need a browser feature that was never built, so a
         reminder that reached you with the app closed is not something this app
-        can deliver. Changes in this section save straight away — the Save
-        button below is for the settings above it.
+        can deliver. Changes in this section save straight away — the Save bar
+        is for the water and step goals above.
       </p>
 
       {loading ? (

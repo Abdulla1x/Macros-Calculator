@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
@@ -137,7 +137,14 @@ export default function LogMeal() {
   const editMeal = (location.state as { editMeal?: Meal } | null)?.editMeal ?? null
   // Set when navigating from a dashboard day-view, so a new meal defaults to the
   // day being viewed rather than today.
-  const logDate = (location.state as { logDate?: string } | null)?.logDate ?? null
+  //
+  // A search param rather than router state, unlike the four below it: those
+  // carry objects a URL cannot hold, while this is one ISO date. State does not
+  // survive a reload, and this app has already shipped a bug from state
+  // outliving what it described -- a shared-meal notice that stood over the next
+  // meal typed by hand. A date in the address has neither problem, and it means
+  // a half-finished entry survives a refresh on the day it was meant for.
+  const logDate = useSearchParams()[0].get('date')
   // Set when a Quick log template was tapped on the dashboard.
   const template =
     (location.state as { template?: MealTemplate } | null)?.template ?? null
@@ -454,8 +461,8 @@ export default function LogMeal() {
           // analysisId, and saving with a stale one would link an AI estimate
           // to a meal it never produced, quietly corrupting the calibration
           // figures on the Analytics page.
-          navigate('/log', {
-            state: { sharedMeal, sharedCode: code, logDate: mealDate },
+          navigate(`/log?date=${mealDate}`, {
+            state: { sharedMeal, sharedCode: code },
             replace: true,
           })
         }

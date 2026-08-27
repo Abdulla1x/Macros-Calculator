@@ -1,49 +1,52 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import AlertDialog from '../components/AlertDialog'
-import AccountSection from '../components/settings/AccountSection'
-import BodyTargetsCard from '../components/settings/BodyTargetsCard'
-import CaloriePlanSection from '../components/settings/CaloriePlanSection'
-import FoodLibrarySection from '../components/settings/FoodLibrarySection'
-import HeightField from '../components/settings/HeightField'
-import StepsSection from '../components/settings/StepsSection'
-import SupplementsSection from '../components/settings/SupplementsSection'
-import WaterSection from '../components/settings/WaterSection'
-import { fieldClass } from '../components/settings/fieldClass'
 import { validateSettingsField } from '../lib/limits'
-import { num } from '../lib/parse'
 import { useSettings } from '../settings/SettingsContext'
-import type {
-  ActivityLevel,
-  Sex,
-  Settings as SettingsType,
-} from '../types'
+import type { Settings as SettingsType } from '../types'
+import type { SettingsPanel } from './settings/panelContext'
+import { SETTINGS_TABS, settingsTabFor } from './settings/tabs'
 
-interface GoalField {
-  key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
-  label: string
-  unit: string
+/** The Settings shell: one draft, one Save, five addresses.
+ *
+ * This page used to be a single scroll of twelve sections with the Save button
+ * stranded in the middle of it -- three immediate-write sections and the whole
+ * Account block rendered *below* the button that saves the ones above. The
+ * concrete failure that fell out of that shape: edit your body profile, scroll
+ * past Save to add a supplement, navigate away, and the profile edit is gone
+ * with nothing having said so.
+ *
+ * Routes rather than an accordion or useState tabs, for a reason from the code
+ * rather than from taste: the dashboard deep-links into the calorie planner, and
+ * an accordion would open that link collapsed while tab state would break
+ * back/forward. Every section now has an address.
+ *
+ * The draft lives here, above the router outlet, so switching tabs cannot lose
+ * an unsaved edit -- only leaving /settings can.
+ */
+/** Does the working copy differ from the row the server has?
+ *
+ * Deliberately not `JSON.stringify(a) !== JSON.stringify(b)`. That is correct
+ * only while key order stays stable, which it does today purely because the
+ * draft is always built by spreading the saved row -- a rule that holds by
+ * luck, and this codebase has been bitten before by a comment asserting an
+ * invariant its own contents did not enforce. Walking the keys costs nothing
+ * and needs no such assumption. `water_quick_adds` is the only array on the
+ * row, hence the element-wise arm.
+ */
+function settingsDiffer(a: SettingsType, b: SettingsType): boolean {
+  return (Object.keys(a) as (keyof SettingsType)[]).some((key) => {
+    const left = a[key]
+    const right = b[key]
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return (
+        left.length !== right.length ||
+        left.some((value, index) => value !== right[index])
+      )
+    }
+    return left !== right
+  })
 }
-
-const goalFields: GoalField[] = [
-  { key: 'calorie_goal', label: 'Daily calories', unit: 'kcal' },
-  { key: 'protein_goal', label: 'Daily protein', unit: 'g' },
-  { key: 'carbs_goal', label: 'Daily carbs', unit: 'g' },
-  { key: 'fat_goal', label: 'Daily fat', unit: 'g' },
-]
-
-const sexOptions: { value: Sex; label: string }[] = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-]
-
-const activityOptions: { value: ActivityLevel; label: string }[] = [
-  { value: 'sedentary', label: 'Sedentary — desk job, little exercise' },
-  { value: 'light', label: 'Light — exercise 1–3 days a week' },
-  { value: 'moderate', label: 'Moderate — exercise 3–5 days a week' },
-  { value: 'active', label: 'Active — hard exercise 6–7 days a week' },
-  { value: 'very_active', label: 'Very active — physical job, or twice a day' },
-]
 
 export default function Settings() {
   const { settings: saved, error: loadError, updateSettings } = useSettings()
@@ -58,17 +61,40 @@ export default function Settings() {
   // numbers it shows are derived from the row that was just written, and a
   // stale card beside a fresh form is how you end up trusting the wrong one.
   const [targetsKey, setTargetsKey] = useState(0)
-  // The day the dashboard was showing when the planning link was followed, so
-  // the planner opens on it rather than on today. Read from router state the
-  // same way LogMeal reads `logDate`. Undefined when Settings is reached any
-  // other way, which is the ordinary case.
-  const planDate = (useLocation().state as { planDate?: string } | null)?.planDate
   // The refusal message for a value that has just been rejected and undone.
   const [rejected, setRejected] = useState<string | null>(null)
+  const tab = settingsTabFor(useLocation().pathname)
 
   useEffect(() => {
     if (saved) setDraft(saved)
   }, [saved])
+
+  // Computed before the early return below, because the two effects that
+  // depend on it are hooks and cannot sit after a conditional return.
+  const dirty = draft !== null && saved !== null && settingsDiffer(draft, saved)
+
+  // Covers a reload, a closed tab and a followed external link. It does NOT
+  // cover in-app navigation: react-router 7's useBlocker needs a data router
+  // and this app mounts <BrowserRouter> + <Routes>, so leaving /settings by
+  // the nav still drops an unsaved draft silently. What the sticky bar buys is
+  // that the draft can no longer be forgotten about -- it cannot scroll away
+  // and it does not hide behind a tab switch, which is where the loss actually
+  // came from.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  // "Saved ✓" is an acknowledgement, not a state to sit in. Without this the
+  // bar would stay on screen after every save until the next keystroke, which
+  // is a permanent strip of chrome reporting something that already happened.
+  useEffect(() => {
+    if (status !== 'saved') return
+    const timer = setTimeout(() => setStatus('idle'), 2_500)
+    return () => clearTimeout(timer)
+  }, [status])
 
   if (!draft) {
     return <p className="text-slate-400">{loadError || 'Loading…'}</p>
@@ -111,251 +137,100 @@ export default function Settings() {
     }
   }
 
-  const showGoal = (key: GoalField['key']) =>
-    key === 'carbs_goal' ? settings.track_carbs : key === 'fat_goal' ? settings.track_fat : true
+  const context: SettingsPanel = {
+    settings,
+    update,
+    guard,
+    onRejected: setRejected,
+    targetsKey,
+  }
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-sm text-slate-400">Choose what to track and set your daily goals.</p>
+      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div>
+          {/* "Settings" is the eyebrow, not the heading. Each panel owns the
+              <h1>, so heading navigation lands on five distinct names instead
+              of the same word five times. */}
+          <p className="text-xs font-semibold tracking-wide text-ink-faint uppercase">
+            Settings
+          </p>
+          <h1 className="text-2xl font-bold">{tab.title}</h1>
+        </div>
+        {/* Off the tab bar on purpose -- see the inBar note in tabs.ts. A link
+            keeps it one tap away without putting account deletion next to the
+            tab you were reaching for. */}
+        <NavLink
+          to="/settings/account"
+          className={({ isActive }) =>
+            `text-sm ${isActive ? 'text-emerald-300' : 'text-ink-faint hover:text-slate-300'}`
+          }
+        >
+          Account &amp; data →
+        </NavLink>
       </header>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h2 className="mb-3 font-semibold">Tracked macros</h2>
-        <p className="mb-4 text-sm text-slate-400">
-          Calories and protein are always tracked. Enable carbs and fat if you want the full
-          breakdown — they appear on the dashboard, meal log and analytics.
-        </p>
-        <div className="flex flex-wrap gap-4">
-          {(
-            [
-              { key: 'track_carbs', label: 'Track carbs' },
-              { key: 'track_fat', label: 'Track fat' },
-            ] as const
-          ).map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={settings[key]}
-                onChange={(event) => update({ [key]: event.target.checked })}
-                className="h-4 w-4 accent-emerald-500"
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </section>
+      <nav
+        aria-label="Settings sections"
+        className="grid grid-cols-4 gap-1 rounded-card border border-line bg-surface p-1"
+      >
+        {SETTINGS_TABS.filter((item) => item.inBar).map((item) => (
+          <NavLink
+            key={item.path}
+            to={`/settings/${item.path}`}
+            className={({ isActive }) =>
+              `rounded-control px-2 py-2 text-center text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'text-ink-muted hover:bg-raised hover:text-ink'
+              }`
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h2 className="mb-3 font-semibold">Units</h2>
-        <p className="mb-4 text-sm text-slate-400">
-          How weights are shown on the Weight page. Entries are stored the same way
-          either way, so switching converts your history rather than rewriting it.
-        </p>
-        <div className="flex flex-wrap gap-4">
-          {(
-            [
-              { value: 'kg', label: 'Kilograms (kg)' },
-              { value: 'lb', label: 'Pounds (lb)' },
-            ] as const
-          ).map(({ value, label }) => (
-            <label
-              key={value}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
-              <input
-                type="radio"
-                name="weight_unit"
-                value={value}
-                checked={settings.weight_unit === value}
-                onChange={() => update({ weight_unit: value })}
-                className="h-4 w-4 accent-emerald-500"
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </section>
+      <Outlet context={context} />
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h2 className="mb-1 font-semibold">Body profile</h2>
-        <p className="mb-4 text-sm text-slate-400">
-          Optional, and the app works fine without it. Fill it in and we can work
-          out your BMI, roughly what you burn in a day, and daily targets that
-          follow your weight instead of staying where you first set them.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <HeightField settings={settings} update={update} onBlur={guard('height_cm')} />
+      {/* Pinned to the bottom of the viewport rather than sitting at the end of
+          the page, which is the whole fix: the old button was ten sections down
+          with more sections below it, so the way to lose an edit was simply to
+          scroll past it.
 
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-400">Date of birth</span>
-            <input
-              type="date"
-              value={settings.birth_date ?? ''}
-              onChange={(event) => update({ birth_date: event.target.value || null })}
-              className={fieldClass}
-            />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Stored as the date, so your age stays right without you editing it.
-            </span>
-          </label>
+          It appears for any unsaved change to the settings row, on whichever of
+          the three deferred tabs you are standing -- NOT only for the tab that
+          made the change. Per-tab visibility would hide a pending Body edit the
+          moment you clicked Trackers, which is the same silent loss moved from
+          scrolling to tab-switching. Ticking a supplement or correcting a food
+          still summons nothing, because neither touches this row.
 
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">Activity level</span>
-            <select
-              value={settings.activity_level ?? ''}
-              onChange={(event) =>
-                update({
-                  activity_level: (event.target.value || null) as ActivityLevel | null,
-                })
-              }
-              className={fieldClass}
-            >
-              <option value="">Not set</option>
-              {activityOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="text-sm sm:col-span-2">
-            <span className="mb-2 block text-slate-400">Sex</span>
-            <div className="flex flex-wrap gap-3">
-              {sexOptions.map(({ value, label }) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-                >
-                  <input
-                    type="radio"
-                    name="sex"
-                    checked={settings.sex === value}
-                    onChange={() => update({ sex: value })}
-                    className="h-4 w-4 accent-emerald-500"
-                  />
-                  {label}
-                </label>
-              ))}
-              {settings.sex !== null && (
-                <button
-                  type="button"
-                  onClick={() => update({ sex: null })}
-                  className="text-sm text-slate-400 hover:text-slate-200"
-                >
-                  Clear
-                </button>
+          bottom clears the fixed tab bar (min-h-[3.25rem] plus its safe-area
+          inset in Layout.tsx); at md+ there is no bottom bar to clear. */}
+      {tab.deferred && (dirty || status !== 'idle') && (
+        <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-20 md:bottom-4">
+          <div className="flex items-center justify-between gap-3 rounded-card border border-line-strong bg-raised px-4 py-3 shadow-lg shadow-slate-950/50">
+            <p className="min-w-0 text-sm">
+              {status === 'saved' ? (
+                <span className="text-emerald-400">Saved ✓</span>
+              ) : status === 'error' ? (
+                <span className="text-rose-400">{error}</span>
+              ) : (
+                <span className="text-ink-muted">You have unsaved changes</span>
               )}
-            </div>
-            <p className="mt-2 text-xs text-ink-faint">
-              The formula we use to estimate what you burn (Mifflin-St Jeor) only
-              takes male or female. That is a limit of the formula, not of you —
-              the field is optional, and everything else here still works without
-              it.
             </p>
+            {status !== 'saved' && (
+              <button
+                onClick={save}
+                disabled={status === 'saving'}
+                className="shrink-0 rounded-control bg-brand px-5 py-2 text-sm font-semibold text-brand-ink hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {status === 'saving' ? 'Saving…' : 'Save'}
+              </button>
+            )}
           </div>
-
-          <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block text-slate-400">
-              Goal rate (kg per week)
-            </span>
-            <input
-              type="number"
-              step={0.05}
-              value={settings.goal_rate_kg_per_week ?? ''}
-              onChange={(event) =>
-                update({ goal_rate_kg_per_week: num(event.target.value) })
-              }
-              onBlur={guard('goal_rate_kg_per_week')}
-              className={fieldClass}
-            />
-            <span className="mt-1 block text-xs text-ink-faint">
-              Negative to lose, positive to gain, 0 to maintain. Leave it blank
-              and we won't guess — "not set" and "maintain" aren't the same
-              answer. Anything past 1 kg/week gets capped, and we'll say so.
-            </span>
-          </label>
         </div>
-      </section>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h2 className="mb-4 font-semibold">Daily goals</h2>
-
-        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.targets_auto}
-            onChange={(event) => update({ targets_auto: event.target.checked })}
-            className="mt-0.5 h-4 w-4 accent-emerald-500"
-          />
-          <span>
-            Work out my goals from my body profile
-            <span className="mt-1 block text-xs text-ink-faint">
-              Turning this on <strong>replaces</strong> the four goals below with
-              calculated ones, and keeps updating them every time you log a
-              weigh-in. Anything you typed here yourself is not kept — hit Save
-              to confirm, or untick this to go back to setting them by hand.
-            </span>
-          </span>
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {goalFields.filter((field) => showGoal(field.key)).map((field) => (
-            <label key={field.key} className="block text-sm">
-              <span className="mb-1 block text-slate-400">
-                {field.label} ({field.unit})
-              </span>
-              <input
-                type="number"
-                min={1}
-                value={settings[field.key]}
-                readOnly={settings.targets_auto}
-                onChange={(event) => update({ [field.key]: Number(event.target.value) })}
-                onBlur={guard(field.key)}
-                className={`w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base focus:border-emerald-500 sm:text-sm ${
-                  settings.targets_auto ? 'cursor-not-allowed text-slate-400' : ''
-                }`}
-              />
-            </label>
-          ))}
-        </div>
-        {settings.targets_auto && (
-          <p className="mt-3 text-xs text-ink-faint">
-            Calculated from your body profile. These update on save and whenever
-            you log a weigh-in.
-          </p>
-        )}
-      </section>
-
-      <BodyTargetsCard reloadKey={targetsKey} unit={settings.weight_unit} />
-
-      <WaterSection settings={settings} update={update} onRejected={setRejected} />
-      <StepsSection settings={settings} update={update} onRejected={setRejected} />
-      {/* Last of the three trackers. It and the food library below are the two
-          sections here that write straight away rather than feeding the Save
-          button — both say so in their own copy. */}
-      <SupplementsSection onRejected={setRejected} />
-      <CaloriePlanSection onRejected={setRejected} initialDate={planDate} />
-      <FoodLibrarySection onRejected={setRejected} />
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={status === 'saving'}
-          className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-        >
-          {status === 'saving' ? 'Saving…' : 'Save settings'}
-        </button>
-        {status === 'saved' && <span className="text-sm text-emerald-400">Saved ✓</span>}
-        {status === 'error' && <span className="text-sm text-rose-400">{error}</span>}
-      </div>
-
-      <AccountSection />
+      )}
 
       {rejected && (
         <AlertDialog

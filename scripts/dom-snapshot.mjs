@@ -67,6 +67,7 @@
 //   CHROME_PATH   headless shell       (default: newest chromium_headless_shell
 //                                       under ~/.cache/ms-playwright)
 //   SEED_DAYS     days of data to seed (default 14)
+//   SEED_TEMPLATES saved meals to seed  (default 8)
 //
 // ---------------------------------------------------------------------------
 // Why each determinism measure below exists -- every one of them is a real
@@ -103,6 +104,10 @@ const API_URL = process.env.API_URL ?? 'http://localhost:8000'
 const EMAIL = process.env.EMAIL ?? 'snapshot@example.com'
 const PASSWORD = process.env.PASSWORD ?? 'snapshot-password-1'
 const SEED_DAYS = Number(process.env.SEED_DAYS ?? 14)
+// More than the six the dashboard shows before folding the rest away, so the
+// snapshot covers the collapsed grid AND the control that expands it. Eight is
+// the smallest number that does both.
+const SEED_TEMPLATES = Number(process.env.SEED_TEMPLATES ?? 8)
 
 const outDir = process.argv[2]
 if (!outDir) {
@@ -118,12 +123,21 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password
 // Everything behind RequireAuth. `/nope` is any unmatched address, which renders
 // NotFound inside the Layout. There are no parameterised routes in this app, so
 // this list is the whole surface.
+//
+// `/settings` is kept alongside its five panels on purpose: it is a redirect to
+// /settings/goals, and snapshotting it is what would catch the redirect quietly
+// breaking or landing somewhere else.
 const PRIVATE_ROUTES = [
   '/',
   '/log',
   '/weight',
   '/analytics',
   '/settings',
+  '/settings/goals',
+  '/settings/body',
+  '/settings/trackers',
+  '/settings/food',
+  '/settings/account',
   '/whats-new',
   '/admin',
   '/nope',
@@ -190,9 +204,28 @@ async function authenticate() {
 const isoDaysAgo = (days) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
 
 /** Meals and weigh-ins for the last SEED_DAYS days, so every chart has
- *  something to draw. Values are a deterministic ramp, not random. */
+ *  something to draw, plus saved meals so the dashboard's Quick log renders.
+ *  Values are a deterministic ramp, not random.
+ *
+ *  The templates matter as much as the charts: Quick log is hidden entirely
+ *  until an account has one, so before this the whole section -- and every
+ *  change ever made to it -- was outside the comparison. */
 async function seed(token) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  for (let n = 0; n < SEED_TEMPLATES; n += 1) {
+    await apiJson('/api/meal-templates', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: `Snapshot template ${n}`,
+        calories: 400 + n * 25,
+        protein: 30 + n,
+        carbs: 40 + n,
+        fat: 12 + n,
+        items: [],
+      }),
+    })
+  }
   for (let day = 0; day < SEED_DAYS; day += 1) {
     const date = isoDaysAgo(day)
     await apiJson('/api/meals', {
@@ -293,7 +326,7 @@ const { token, fresh } = await authenticate()
 console.log(`account ${EMAIL} (${fresh ? 'created' : 'existing'})`)
 if (fresh) {
   await seed(token)
-  console.log(`seeded ${SEED_DAYS} days of meals and weigh-ins`)
+  console.log(`seeded ${SEED_DAYS} days of meals and weigh-ins, ${SEED_TEMPLATES} templates`)
 }
 
 const announcements = await apiJson('/api/announcements')
