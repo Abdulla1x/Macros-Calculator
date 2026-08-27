@@ -64,7 +64,11 @@ export default function Signup() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
-          <Field label="Password" caption="At least 8 characters.">
+          {/* No `caption` prop here: this field has TWO notes and Field renders
+              its caption after the children, which would put "At least 8
+              characters." below the password-reset warning rather than above
+              it. Both stay as children, in order. */}
+          <Field label="Password">
             <TextInput size="md" className="w-full"
               type="password"
               required
@@ -73,6 +77,7 @@ export default function Signup() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <span className="mt-1 block text-xs text-ink-faint">At least 8 characters.</span>
             {/* Password reset exists in the codebase but is not switched on —
                 sending email needs a provider we don't have yet. Until it is,
                 forgetting this password means losing the account for good, so
