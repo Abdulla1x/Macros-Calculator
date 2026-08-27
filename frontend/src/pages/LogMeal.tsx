@@ -190,6 +190,16 @@ const rowTotals = (row: Row) => {
  * work to selectFood, which already sets serving size, macros and the library
  * flag -- and deliberately leaves `weight` alone, which is what keeps the AI's
  * portion estimate while replacing the numbers it was guessing at.
+ *
+ * Expect this to fire less often than it sounds like it should, and that is not
+ * a bug to fix by loosening the match. Measured against the real provider: the
+ * model returns "Grilled chicken breast" where the library holds "Chicken
+ * breast, raw", because it describes what was eaten and the library stores an
+ * ingredient. So this mostly catches hand-typed rows and single-word foods.
+ * Matching on a substring instead would start offering "Brown rice" for a row
+ * called "rice", and an offer the user taps is a wrong number just as surely as
+ * an automatic swap is. Attaching the food is the reliable path, and it is the
+ * one the estimate itself is built around.
  */
 function SavedNumbersOffer({
   name,
