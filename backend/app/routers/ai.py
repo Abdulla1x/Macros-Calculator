@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
-from ..calibration import Pair, parse_estimate, summarise
+from ..calibration import CalibrationSummary, Pair, parse_estimate, summarise
 from ..db import get_db
 from ..env import env_int
 from ..models import AIAnalysis, Food as FoodRow, Meal, User
@@ -592,34 +592,28 @@ def link_analysis(
     db.commit()
 
 
-@router.get("/calibration", response_model=Calibration)
-def calibration(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """How this account's saved meals compare to the estimates behind them.
+def calibration_summary(db: Session, user_id: int) -> CalibrationSummary:
+    """This account's estimates against the meals actually saved from them.
 
-    Read-only, and deliberately spends no quota: every row in ai_analyses *is*
-    one billable provider call, which is what `calls_today` and the admin stats
-    count. Reserving a slot to answer a question about slots already spent would
-    corrupt the counter it reports on.
+    Lifted out of the endpoint below because the weekly review reports one line
+    of it, and two copies of this join would be two things to keep in step --
+    `routers/review.py` imports it the way `routers/plan.py` already imports
+    `_get_or_create` from `routers/settings.py`.
 
-    No date window. The corrected subset is small by nature -- correcting an
-    estimate is the rare path -- and slicing it by the Analytics page's 30-day
-    range would empty it for most accounts. Calibration is a property of the
-    model and this user, not of a month.
+    Spends no quota by construction: it only reads rows that each already
+    represent one billable call.
     """
     rows = db.execute(
         select(AIAnalysis.analysis_json, Meal.calories, Meal.protein)
         .join(Meal, Meal.id == AIAnalysis.meal_id)
         .where(
-            AIAnalysis.user_id == user.id,
+            AIAnalysis.user_id == user_id,
             AIAnalysis.kind == KIND_ANALYSIS,
             AIAnalysis.meal_id.is_not(None),
             # Both sides are ownership-checked when the link is written, so this
             # is redundant today. It is here because every other router states
             # the scope at the query rather than trusting a distant invariant.
-            Meal.user_id == user.id,
+            Meal.user_id == user_id,
         )
     ).all()
 
@@ -628,7 +622,7 @@ def calibration(
     analyses = db.scalar(
         select(func.count())
         .select_from(AIAnalysis)
-        .where(AIAnalysis.user_id == user.id, AIAnalysis.kind == KIND_ANALYSIS)
+        .where(AIAnalysis.user_id == user_id, AIAnalysis.kind == KIND_ANALYSIS)
     )
 
     pairs: list[Pair] = []
@@ -648,3 +642,23 @@ def calibration(
         linked=len(rows),
         unreadable=unreadable,
     )
+
+
+@router.get("/calibration", response_model=Calibration)
+def calibration(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """How this account's saved meals compare to the estimates behind them.
+
+    Read-only, and deliberately spends no quota: every row in ai_analyses *is*
+    one billable provider call, which is what `calls_today` and the admin stats
+    count. Reserving a slot to answer a question about slots already spent would
+    corrupt the counter it reports on.
+
+    No date window. The corrected subset is small by nature -- correcting an
+    estimate is the rare path -- and slicing it by the Analytics page's 30-day
+    range would empty it for most accounts. Calibration is a property of the
+    model and this user, not of a month.
+    """
+    return calibration_summary(db, user.id)

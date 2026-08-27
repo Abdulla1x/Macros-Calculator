@@ -367,6 +367,7 @@ def weight_check(
     weigh_ins: int,
     window_days: int,
     min_points: int,
+    days_since_weigh_in: int | None = None,
 ) -> ReviewCheck:
     """Measured rate of change against the rate the user asked for.
 
@@ -375,6 +376,14 @@ def weight_check(
     the exact noise `TDEE_MIN_SPAN_DAYS` exists to refuse -- `calculations.py`
     records a 7-day window producing 2700 kcal against 2498 from the formula
     off a 0.01 kg move. Publishing weekly does not license computing weekly.
+
+    ⚠️ It also refuses a rate that is no longer current. `weekly_rate` windows
+    from the **latest weigh-in**, not from today, so an account that stopped
+    weighing in three months ago still gets a perfectly well-fitted slope --
+    and rendering it here as "your trend weight is falling" would be a
+    present-tense claim about a measurement that stopped. On the Weight page a
+    chart of the actual dates saves it; a review has no such context, so the
+    staleness has to be checked rather than shown.
     """
     if goal_rate_kg is None:
         return ReviewCheck(
@@ -410,6 +419,22 @@ def weight_check(
             sample_days=window_days,
             detail="",
             unavailable_reason=reason,
+        )
+
+    if days_since_weigh_in is not None and days_since_weigh_in > REVIEW_WINDOW_DAYS:
+        return ReviewCheck(
+            key="weight",
+            status=UNKNOWN,
+            value=rate_kg,
+            target=goal_rate_kg,
+            unit="kg/week",
+            sample_days=window_days,
+            detail="",
+            unavailable_reason=(
+                f"Your last weigh-in was {days_since_weigh_in} days ago, so "
+                f"there is no current trend to compare. Weigh in and this "
+                f"fills in again."
+            ),
         )
 
     return ReviewCheck(
@@ -570,6 +595,7 @@ def summarise(
     rate_kg: float | None,
     goal_rate_kg: float | None,
     weigh_ins: int,
+    days_since_weigh_in: int | None = None,
     water_days_at_goal: int | None = None,
     steps_days_at_goal: int | None = None,
     steps_goal: int | None = None,
@@ -595,7 +621,14 @@ def summarise(
         logging_check(days, window_end),
         intake_check(days, daily_calorie_target, plan_touched),
         protein_check(days, protein_goal),
-        weight_check(rate_kg, goal_rate_kg, weigh_ins, rate_window_days, rate_min_points),
+        weight_check(
+            rate_kg,
+            goal_rate_kg,
+            weigh_ins,
+            rate_window_days,
+            rate_min_points,
+            days_since_weigh_in,
+        ),
         targets_check(targets),
     ]
     if water_days_at_goal is not None:

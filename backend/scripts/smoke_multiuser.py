@@ -58,6 +58,7 @@ def main() -> None:
             ("GET", "/api/meal-templates"),
             ("GET", "/api/settings"),
             ("GET", "/api/analytics/daily"),
+            ("GET", "/api/review"),
             ("GET", "/api/data/export"),
             ("GET", "/api/plan"),
             ("GET", "/api/plan/day"),
@@ -302,6 +303,36 @@ def main() -> None:
             client.get("/api/settings", headers=headers_b).json()["calorie_goal"]
             == b_targets["target_calories"],
             "targets_auto wrote B's calorie goal from B's own body",
+        )
+
+        # The weekly review reads meals, weigh-ins, water, steps and the
+        # settings row in one request. None of those is reached by an id the
+        # caller supplies, so the user filter on each query is the only thing
+        # scoping them -- which is exactly why it is worth asserting against a
+        # real database rather than only against SQLite.
+        a_review = client.get("/api/review", headers=headers_a).json()
+        b_review = client.get("/api/review", headers=headers_b).json()
+
+        def review_check(payload, key):
+            return next((c for c in payload["checks"] if c["key"] == key), None)
+
+        check(
+            a_review["window_end"] < datetime.now(timezone.utc).date().isoformat(),
+            "the review window ends before today",
+        )
+        check(
+            review_check(a_review, "logging") is not None,
+            "the review always answers the logging question",
+        )
+        check(
+            review_check(a_review, "steps") is None
+            and review_check(b_review, "steps") is None,
+            "no steps section without a steps goal on either account",
+        )
+        check(
+            review_check(a_review, "targets")["detail"]
+            != review_check(b_review, "targets")["detail"],
+            "each account's burn is worked out from its own body",
         )
 
         # A PUT that omits the profile keys must not blank them -- the stale

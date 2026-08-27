@@ -1,5 +1,5 @@
 """The weekly review's arithmetic, and the refusals it makes instead of guessing."""
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -376,3 +376,222 @@ def test_calibration_says_which_direction_the_estimates_were_moved():
     assert "up 8%" in up.detail
     assert "down 8%" in down.detail
     assert up.status == NOTE
+
+
+def test_weight_refuses_a_rate_whose_last_weigh_in_is_no_longer_current():
+    """`weekly_rate` windows from the latest weigh-in, not from today.
+
+    So an account that stopped weighing in three months ago still produces a
+    perfectly well-fitted slope, and printing it as "your trend weight is
+    falling" is a present-tense claim about a measurement that stopped. The
+    Weight page gets away with it because a chart of the real dates sits
+    beside the number; a review has no such context.
+    """
+    current = weight_check(-0.4, -0.5, 12, RATE_WINDOW_DAYS, RATE_MIN_POINTS, 2)
+    stale = weight_check(
+        -0.4, -0.5, 12, RATE_WINDOW_DAYS, RATE_MIN_POINTS, REVIEW_WINDOW_DAYS + 1
+    )
+
+    assert current.status != UNKNOWN
+    assert stale.status == UNKNOWN
+    assert "no current trend" in stale.unavailable_reason
+    # The figure survives the refusal, the way every other refusal here keeps
+    # its counts -- only the claim about it is withheld.
+    assert stale.value == -0.4
+
+
+# --- the endpoint --------------------------------------------------------------
+
+
+def test_the_review_dataclass_and_its_response_schema_stay_identical():
+    """The asdict trap, pinned -- the third feature in this app to need it.
+
+    FastAPI runs the dataclass through `dataclasses.asdict` before validating
+    it against the response model, so a field the schema declares and the
+    dataclass omits does not fail: it serializes as the schema's default,
+    silently, and ships a number that is always the same wrong value.
+    """
+    import dataclasses
+
+    from app.review import WeeklyReview as ReviewDataclass
+    from app.schemas import WeeklyReview as ReviewSchema
+
+    assert {f.name for f in dataclasses.fields(ReviewDataclass)} == set(
+        ReviewSchema.model_fields
+    )
+
+
+# PUT /api/settings replaces the four goals and the two toggles, so they are
+# required on every call -- the same reason test_steps.py carries this dict.
+BASE_SETTINGS = {
+    "calorie_goal": 2000, "protein_goal": 150, "carbs_goal": 250,
+    "fat_goal": 70, "track_carbs": False, "track_fat": False,
+}
+
+
+def put_settings(client, **fields):
+    return client.put("/api/settings", json={**BASE_SETTINGS, **fields})
+
+
+def iso(offset: int) -> str:
+    return (date.today() + timedelta(days=offset)).isoformat()
+
+
+def log_meal(client, offset: int, calories=2000.0, protein=150.0):
+    return client.post(
+        "/api/meals",
+        json={
+            "date": iso(offset),
+            "name": f"day {offset}",
+            "calories": calories,
+            "protein": protein,
+        },
+    )
+
+
+def fetch(client, **params):
+    response = client.get("/api/review", params=params)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def check_of(payload, key):
+    return next(c for c in payload["checks"] if c["key"] == key)
+
+
+def test_the_window_is_seven_complete_days_ending_yesterday(client):
+    """Today is a part-logged day and averaging it in flatters every review.
+
+    Breakfast is in and dinner is not, so a mean that includes today reports
+    someone as eating hundreds of kcal less than they do -- exactly the bug
+    `targets._measure_tdee` and the dashboard's trend chart already stop at
+    yesterday to avoid. Here it would make every week read as a better week
+    than it was.
+    """
+    payload = fetch(client)
+
+    assert payload["window_end"] == iso(-1)
+    assert payload["window_start"] == iso(-REVIEW_WINDOW_DAYS)
+
+
+def test_a_meal_logged_today_is_not_in_this_weeks_figures(client):
+    """The behavioural half of the same rule."""
+    log_meal(client, 0, calories=99_000)
+
+    payload = fetch(client)
+
+    assert payload["logged_days"] == 0
+    assert check_of(payload, "intake")["status"] == UNKNOWN
+
+
+def test_meals_inside_the_window_count_and_the_day_before_it_does_not(client):
+    log_meal(client, -1)
+    log_meal(client, -REVIEW_WINDOW_DAYS)
+    log_meal(client, -REVIEW_WINDOW_DAYS - 1)
+
+    payload = fetch(client)
+
+    assert payload["logged_days"] == 2
+
+
+def test_the_client_supplies_the_window_end_from_its_own_local_date(client):
+    """No timezone is stored for anyone and the server's today is UTC.
+
+    So a server-computed "yesterday" is wrong for everyone hours off UTC --
+    the Phase 19 finding. The client sends its own, the way it already does
+    for /api/analytics/daily and /api/plan/day.
+    """
+    log_meal(client, -9)
+
+    payload = fetch(client, end=iso(-8))
+
+    assert payload["window_end"] == iso(-8)
+    assert payload["logged_days"] == 1
+
+
+def test_a_window_ending_in_the_future_is_refused(client):
+    """A clamp would hide the caller's bug; a 422 names it."""
+    assert client.get("/api/review", params={"end": iso(3)}).status_code == 422
+
+
+def test_steps_are_absent_until_a_goal_is_set(client):
+    """`steps_goal` NULL already means "I have no goal" -- models.py says so.
+
+    So the opt-in is an answer the user has already given, and nobody has to
+    configure a second one. Someone who does not track steps is never asked
+    about them.
+    """
+    client.post("/api/steps", json={"date": iso(-2), "steps": 12_000})
+
+    assert "steps" not in [c["key"] for c in fetch(client)["checks"]]
+
+    put_settings(client, steps_goal=10_000)
+    payload = fetch(client)
+
+    assert check_of(payload, "steps")["value"] == 1
+
+
+def test_water_is_absent_until_some_has_been_logged(client):
+    """Water has no flag to read: NULL `water_goal_ml` means "derive it"."""
+    assert "water" not in [c["key"] for c in fetch(client)["checks"]]
+
+    client.post("/api/water", json={"date": iso(-2), "ml": 3000})
+
+    assert "water" in [c["key"] for c in fetch(client)["checks"]]
+
+
+def test_a_tracker_section_survives_a_week_with_nothing_logged_in_it(client):
+    """⚠️ The opt-in must not be "did you use this *in the window*".
+
+    "Logged nothing this week" and "does not use this tracker" are
+    indistinguishable from the data, so a window-scoped test would hide the
+    section from someone who does track water and had a bad week -- which is
+    exactly the week worth reading. Logged well outside the window, absent
+    from it, and the section still appears reporting zero.
+    """
+    client.post("/api/water", json={"date": iso(-40), "ml": 3000})
+
+    check = check_of(fetch(client), "water")
+
+    assert check["value"] == 0
+    assert check["status"] == OFF_TRACK
+
+
+def test_a_calorie_plan_written_for_a_day_still_moves_that_days_target(client):
+    """The stored goal and the effective one differ exactly where a plan lands.
+
+    Telling someone they went over on a day they deliberately planned for would
+    be this feature's first wrong answer, so the comparison uses the composed
+    target and says that it did.
+
+    ⚠️ The plan has to be written for a day that is not yet past --
+    `banking.validate_plan` refuses to adjust a day whose meals are already
+    logged, calling it revisionism rather than adjustment. Its rows outlive
+    that restriction, though, which is the case this pins: a plan written for
+    today is read back by a review whose window includes today.
+    """
+    put_settings(client, calorie_goal=2000)
+    for offset in (0, -1, -2):
+        log_meal(client, offset, calories=2000)
+
+    plain = check_of(fetch(client, end=iso(0)), "intake")
+    assert plain["target"] == 2000
+    assert "calorie plan" not in plain["detail"]
+
+    created = client.post(
+        "/api/plan",
+        json={
+            "kind": "planned",
+            "event_date": iso(0),
+            "dates": [iso(1), iso(2), iso(3)],
+            "calorie_delta": 600,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    planned = check_of(fetch(client, end=iso(0)), "intake")
+
+    # Today carries the +600; the three days funding it are outside the window
+    # and unlogged, so the mean over the three logged days rises by 600/3.
+    assert planned["target"] == 2200
+    assert "calorie plan" in planned["detail"]
