@@ -1,24 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import AlertDialog from '../components/AlertDialog'
 import CaloriePlanSection from '../components/settings/CaloriePlanSection'
 import FoodLibrarySection from '../components/settings/FoodLibrarySection'
+import StepsSection from '../components/settings/StepsSection'
+import WaterSection from '../components/settings/WaterSection'
 import {
-  DEFAULT_WATER_QUICK_ADDS,
-  MAX_WATER_GOAL_ML,
-  MAX_WATER_QUICK_ADD_ML,
-  MAX_STEPS_PER_DAY,
-  MAX_WATER_QUICK_ADDS,
   MAX_SUPPLEMENTS,
   MAX_SUPPLEMENT_DOSE,
   MAX_SUPPLEMENT_NAME,
   MAX_SUPPLEMENT_TIMES,
-  WATER_ML_PER_KG,
   validateSettingsField,
   validateSupplement,
-  validateWaterQuickAdd,
 } from '../lib/limits'
 import { num } from '../lib/parse'
 import { cmToFtIn, ftInToCm } from '../lib/units'
@@ -26,7 +21,6 @@ import { useSettings } from '../settings/SettingsContext'
 import type {
   ActivityLevel,
   BodyTargets,
-  ImportResult,
   Sex,
   Settings as SettingsType,
   Supplement,
@@ -383,136 +377,6 @@ export default function Settings() {
 
 const fieldClass =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-emerald-500'
-
-/** The step goal, and the one place the app admits there is no sync.
- *
- * A single optional input rather than water's radio pair, because the states
- * differ: water is always going to show *a* goal, so the choice is only where
- * it comes from. Steps has no derivation at all, so the choice is whether a
- * goal exists — and an empty box says that perfectly well.
- */
-function StepsSection({
-  settings,
-  update,
-  onRejected,
-}: {
-  settings: SettingsType
-  update: (patch: Partial<SettingsType>) => void
-  onRejected: (message: string) => void
-}) {
-  const fileInput = useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<ImportResult | null>(null)
-  const [importError, setImportError] = useState('')
-
-  const importFile = async (file: File) => {
-    setImporting(true)
-    setImportError('')
-    setImportResult(null)
-    try {
-      setImportResult(await api.importStepsCsv(file))
-    } catch (error) {
-      setImportError(error instanceof Error ? error.message : 'Import failed')
-    } finally {
-      setImporting(false)
-      // Cleared so picking the same file again re-fires onChange.
-      if (fileInput.current) fileInput.current.value = ''
-    }
-  }
-
-  return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h2 className="mb-1 font-semibold">👟 Steps</h2>
-      <p className="mb-4 text-sm text-slate-400">
-        Step counts are typed in by hand. Reading them from your phone or watch
-        needs Health Connect or Apple Health, and neither is open to a web app
-        like this one — so nothing here syncs, and it is better to say that than
-        to leave you waiting for numbers that will never arrive.
-      </p>
-
-      <label className="block text-sm">
-        <span className="mb-1 block text-slate-400">Daily goal</span>
-        <span className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            max={MAX_STEPS_PER_DAY}
-            value={settings.steps_goal ?? ''}
-            onChange={(event) => update({ steps_goal: num(event.target.value) })}
-            onBlur={() => {
-              const problem = validateSettingsField(
-                'steps_goal',
-                settings.steps_goal,
-              )
-              if (!problem) return
-              onRejected(problem)
-              // Undone back to no goal, not to an invented one — the same
-              // rule the profile fields follow, and here "unset" is a legal
-              // state to land in.
-              update({ steps_goal: null })
-            }}
-            aria-label="Daily step goal"
-            className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-violet-500"
-          />
-          <span className="text-xs text-ink-faint">steps</span>
-        </span>
-      </label>
-      <p className="mt-2 text-xs text-ink-faint">
-        Leave this empty and the card just shows your count. There is no default
-        here on purpose: 10,000 is a slogan from a 1960s pedometer advert, not a
-        number worked out from anything about you.
-      </p>
-
-      {/* The import sits here rather than beside the meals CSV import on
-          Analytics, which costs a little consistency. It buys the thing that
-          matters more: it is directly under the sentence saying entry is
-          manual, which is exactly where someone thinks "can I not just upload
-          this?" */}
-      <div className="mt-5 border-t border-slate-800 pt-4">
-        <h3 className="mb-1 text-sm font-semibold">Import a step history</h3>
-        <p className="mb-3 text-xs text-ink-faint">
-          A CSV with a <code className="text-slate-400">date</code> column and a{' '}
-          <code className="text-slate-400">steps</code> column, one row per day.
-          Extra columns are ignored, so Samsung Health's{' '}
-          <em>Download personal data</em> export works as it comes. Apple Health,
-          Huawei Health and Health Connect each export a different format — a
-          huge XML, a JSON archive and a database respectively — so those need
-          converting to two columns first. Days you have already logged are kept,
-          never overwritten.
-        </p>
-        <button
-          type="button"
-          onClick={() => fileInput.current?.click()}
-          disabled={importing}
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:border-violet-500 hover:text-violet-300 disabled:opacity-40"
-        >
-          {importing ? 'Importing…' : '⬆️ Import steps (CSV)'}
-        </button>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(event) =>
-            event.target.files?.[0] && importFile(event.target.files[0])
-          }
-        />
-        {importResult && (
-          <p className="mt-2 text-xs text-slate-400">
-            Imported {importResult.inserted} day
-            {importResult.inserted === 1 ? '' : 's'} — kept{' '}
-            {importResult.skipped_duplicates} already logged,{' '}
-            {importResult.skipped_invalid} row
-            {importResult.skipped_invalid === 1 ? '' : 's'} could not be read.
-          </p>
-        )}
-        {importError && (
-          <p className="mt-2 text-xs text-rose-300">{importError}</p>
-        )}
-      </div>
-    </section>
-  )
-}
 
 /** The supplement list: add, edit, pause, delete.
  *
@@ -892,149 +756,6 @@ function SupplementForm({
     </div>
   )
 }
-
-/** Water goal and quick-add buttons.
- *
- * The goal is a radio pair rather than a "leave blank to derive it" input,
- * because an empty box does not say what an empty box means. Choosing "from my
- * weight" writes null, which is what the server reads as "derive it".
- */
-function WaterSection({
-  settings,
-  update,
-  onRejected,
-}: {
-  settings: SettingsType
-  update: (patch: Partial<SettingsType>) => void
-  onRejected: (message: string) => void
-}) {
-  const derived = settings.water_goal_ml === null
-  const quickAdds = settings.water_quick_adds ?? DEFAULT_WATER_QUICK_ADDS
-
-  // A blank box drops that button rather than storing a zero, so the inputs can
-  // express anywhere from one button up to MAX_WATER_QUICK_ADDS without extra
-  // UI. The count comes from the constant rather than from the length of
-  // DEFAULT_WATER_QUICK_ADDS, which has three entries and is where the
-  // off-by-one came from: the server accepts four and the fourth box was never
-  // rendered, so the last slot was unreachable from the only screen that sets
-  // it.
-  //
-  // The list is compacted on every edit, and that is not tidiness. Assigning
-  // past the end of a shorter array leaves a *hole* — clear two boxes, type
-  // into the third, and you get [300, <empty>, 500]. JSON.stringify writes a
-  // hole as `null`, the server refuses null for a float, and the user gets a
-  // 422 they cannot act on for a field they cannot see is wrong. `filter`
-  // skips holes, which is what makes this the fix rather than a workaround.
-  const setQuickAdd = (index: number, raw: string) => {
-    const next = [...quickAdds]
-    const parsed = num(raw)
-    if (parsed === null) next.splice(index, 1)
-    else next[index] = parsed
-    const dense = next.filter((ml) => Number.isFinite(ml))
-    update({ water_quick_adds: dense.length > 0 ? dense : null })
-  }
-
-  const guardQuickAdd = (index: number) => () => {
-    const problem = validateWaterQuickAdd(quickAdds[index] ?? null)
-    if (!problem) return
-    onRejected(problem)
-    // Undone, not flagged — the same rule the profile fields follow.
-    const next = [...quickAdds]
-    next.splice(index, 1)
-    update({ water_quick_adds: next.length > 0 ? next : null })
-  }
-
-  return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <h2 className="mb-1 font-semibold">💧 Water</h2>
-      <p className="mb-4 text-sm text-slate-400">
-        The card on your dashboard. Nothing here is required — leave it alone and
-        the goal follows your weight.
-      </p>
-
-      <fieldset className="mb-5 space-y-2">
-        <legend className="mb-2 text-sm text-slate-400">Daily goal</legend>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            checked={derived}
-            onChange={() => update({ water_goal_ml: null })}
-            className="mt-1 accent-sky-500"
-          />
-          <span>
-            From my weight
-            <span className="mt-0.5 block text-xs text-ink-faint">
-              {WATER_ML_PER_KG} ml for every kg of your trend weight. A common
-              rule of thumb, not a measurement — and it needs a weigh-in, so
-              until then the card shows a general default and says so.
-            </span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="radio"
-            checked={!derived}
-            onChange={() => update({ water_goal_ml: 2500 })}
-            className="mt-1 accent-sky-500"
-          />
-          <span className="flex-1">
-            Set my own
-            {!derived && (
-              <span className="mt-1 flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={MAX_WATER_GOAL_ML}
-                  value={settings.water_goal_ml ?? ''}
-                  onChange={(event) =>
-                    update({ water_goal_ml: num(event.target.value) })
-                  }
-                  onBlur={() => {
-                    const problem = validateSettingsField(
-                      'water_goal_ml',
-                      settings.water_goal_ml,
-                    )
-                    if (!problem) return
-                    onRejected(problem)
-                    update({ water_goal_ml: 2500 })
-                  }}
-                  aria-label="Daily water goal in ml"
-                  className="w-28 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-base sm:text-sm focus:border-sky-500"
-                />
-                <span className="text-xs text-ink-faint">ml</span>
-              </span>
-            )}
-          </span>
-        </label>
-      </fieldset>
-
-      <div>
-        <p className="mb-2 text-sm text-slate-400">Quick-add buttons</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {Array.from({ length: MAX_WATER_QUICK_ADDS }).map((_, index) => (
-            <span key={index} className="flex items-center gap-1">
-              <span className="text-xs text-ink-faint">+</span>
-              <input
-                type="number"
-                min={1}
-                max={MAX_WATER_QUICK_ADD_ML}
-                value={quickAdds[index] ?? ''}
-                onChange={(event) => setQuickAdd(index, event.target.value)}
-                onBlur={guardQuickAdd(index)}
-                aria-label={`Quick-add button ${index + 1}, in ml`}
-                className="w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-base sm:text-sm focus:border-sky-500"
-              />
-            </span>
-          ))}
-          <span className="text-xs text-ink-faint">
-            ml each. Clear one to remove that button.
-          </span>
-        </div>
-      </div>
-    </section>
-  )
-}
-
 
 function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
