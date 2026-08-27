@@ -4,6 +4,7 @@ import CaloriePlanSection from '../../components/settings/CaloriePlanSection'
 import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
 import TextInput from '../../components/ui/TextInput'
+import OptionChip from '../../components/ui/OptionChip'
 
 interface GoalField {
   key: 'calorie_goal' | 'protein_goal' | 'carbs_goal' | 'fat_goal'
@@ -56,10 +57,7 @@ export default function GoalsPanel() {
               { key: 'track_fat', label: 'Track fat' },
             ] as const
           ).map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
+            <OptionChip key={key}>
               <input
                 type="checkbox"
                 checked={settings[key]}
@@ -67,7 +65,7 @@ export default function GoalsPanel() {
                 className="h-4 w-4 accent-emerald-500"
               />
               {label}
-            </label>
+            </OptionChip>
           ))}
         </div>
       </Card>
@@ -75,7 +73,7 @@ export default function GoalsPanel() {
       <Card as="section">
         <h2 className="mb-4 font-semibold">Daily goals</h2>
 
-        <label className="mb-4 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm">
+        <OptionChip block className="mb-4">
           <input
             type="checkbox"
             checked={settings.targets_auto}
@@ -91,7 +89,7 @@ export default function GoalsPanel() {
               to confirm, or untick this to go back to setting them by hand.
             </span>
           </span>
-        </label>
+        </OptionChip>
 
         <div className="grid gap-4 sm:grid-cols-2">
           {goalFields.filter((field) => showGoal(field.key)).map((field) => (

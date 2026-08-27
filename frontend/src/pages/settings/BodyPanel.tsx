@@ -4,6 +4,7 @@ import type { ActivityLevel, Sex } from '../../types'
 import { useSettingsPanel } from './panelContext'
 import Card from '../../components/ui/Card'
 import TextInput from '../../components/ui/TextInput'
+import OptionChip from '../../components/ui/OptionChip'
 
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'male', label: 'Male' },
@@ -75,10 +76,7 @@ export default function BodyPanel() {
             <span className="mb-2 block text-slate-400">Sex</span>
             <div className="flex flex-wrap gap-3">
               {sexOptions.map(({ value, label }) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-                >
+                <OptionChip key={value}>
                   <input
                     type="radio"
                     name="sex"
@@ -87,7 +85,7 @@ export default function BodyPanel() {
                     className="h-4 w-4 accent-emerald-500"
                   />
                   {label}
-                </label>
+                </OptionChip>
               ))}
               {settings.sex !== null && (
                 <button
@@ -142,10 +140,7 @@ export default function BodyPanel() {
               { value: 'lb', label: 'Pounds (lb)' },
             ] as const
           ).map(({ value, label }) => (
-            <label
-              key={value}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm"
-            >
+            <OptionChip key={value}>
               <input
                 type="radio"
                 name="weight_unit"
@@ -155,7 +150,7 @@ export default function BodyPanel() {
                 className="h-4 w-4 accent-emerald-500"
               />
               {label}
-            </label>
+            </OptionChip>
           ))}
         </div>
       </Card>
