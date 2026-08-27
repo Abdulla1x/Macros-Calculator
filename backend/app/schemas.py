@@ -938,6 +938,18 @@ class WeeklyReview(BaseModel):
     checks: list[ReviewCheck] = []
 
 
+class ReviewSummary(BaseModel):
+    """The weekly review, put into words by the model.
+
+    Deliberately just a string. The figures are already on the page from
+    GET /api/review, and returning them again here would create a second copy
+    that could disagree with the first -- which is exactly the failure this
+    feature is careful about everywhere else.
+    """
+
+    summary: str
+
+
 class ImportResult(BaseModel):
     inserted: int
     skipped_duplicates: int

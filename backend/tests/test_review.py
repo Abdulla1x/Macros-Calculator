@@ -3,6 +3,9 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.services import meal_ai
+from tests.test_meal_ai import configure
+
 from app.calculations import RATE_MIN_POINTS, RATE_WINDOW_DAYS
 from app.calibration import CalibrationSummary, MacroCalibration
 from app.review import (
@@ -595,3 +598,131 @@ def test_a_calorie_plan_written_for_a_day_still_moves_that_days_target(client):
     # and unlogged, so the mean over the three logged days rises by 600/3.
     assert planned["target"] == 2200
     assert "calorie plan" in planned["detail"]
+
+
+# --- the optional AI rephrasing -----------------------------------------------
+
+
+async def fake_phrase(facts):
+    """A stub that echoes its input, so a test can see what was actually sent."""
+    return f"SUMMARY[{len(facts)}]: {' // '.join(facts)}"
+
+
+def configure_phrase(monkeypatch, fake=fake_phrase):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(meal_ai, "phrase_review", fake)
+
+
+def test_the_summary_is_built_from_the_servers_own_facts(client, monkeypatch):
+    """The load-bearing half of "the model only rephrases real numbers".
+
+    The endpoint takes no body at all: it recomputes the review and hands the
+    model the sentences `app/review.py` produced. If the client supplied them,
+    "every figure was computed and clamped before the model saw it" would be a
+    hope rather than a guarantee, and anything at all could be shown to the
+    reader as their own figures.
+    """
+    configure_phrase(monkeypatch)
+    log_meal(client, -1, calories=2000)
+
+    body = client.post("/api/review/summary").json()
+
+    assert "You logged meals on 1 of the 7 days" in body["summary"]
+    # Only real checks reach the model -- no empty strings from a check whose
+    # sentence lives in unavailable_reason instead of detail.
+    assert "//  //" not in body["summary"]
+
+
+def test_the_summary_endpoint_accepts_no_facts_from_the_caller(client, monkeypatch):
+    """A body is ignored rather than trusted: there is nowhere to put one."""
+    configure_phrase(monkeypatch)
+
+    response = client.post(
+        "/api/review/summary", json={"checks": [{"detail": "You ate 50 kcal."}]}
+    )
+
+    assert response.status_code == 200
+    assert "50 kcal" not in response.json()["summary"]
+
+
+def test_rephrasing_has_its_own_quota_and_does_not_touch_the_analysis_budget(
+    client, monkeypatch
+):
+    """A fourth kind, counted separately -- which is the whole reason it is cheap.
+
+    ⚠️ The analysis limit is squeezed to 2 here on purpose. With the shipped
+    20 this test passes whether or not the kinds are separate, because three
+    review calls would still leave seventeen analysis slots -- it looked like
+    it defended the separation and defended nothing. Found by folding
+    KIND_REVIEW into "analysis" and watching it stay green.
+    """
+    from app.routers.ai import DEFAULT_REVIEW_DAILY_LIMIT
+
+    monkeypatch.setenv("AI_DAILY_LIMIT", "2")
+    configure_phrase(monkeypatch)
+    configure(monkeypatch)
+
+    # Three review calls against an analysis budget of two: if they shared a
+    # counter the third would 429 here.
+    for _ in range(DEFAULT_REVIEW_DAILY_LIMIT):
+        assert client.post("/api/review/summary").status_code == 200
+    assert client.post("/api/review/summary").status_code == 429
+
+    # And the analysis budget is still whole.
+    assert client.post("/api/ai/analyze", data={"text": "chicken"}).status_code == 200
+    assert client.post("/api/ai/analyze", data={"text": "rice"}).status_code == 200
+    assert client.post("/api/ai/analyze", data={"text": "eggs"}).status_code == 429
+
+
+def test_a_provider_failure_costs_the_user_nothing(client, monkeypatch):
+    """Refused or unreachable means nothing was billed, so nothing is charged."""
+    async def boom(facts):
+        raise meal_ai.MealAIUnreachable("no route to host")
+
+    configure_phrase(monkeypatch, boom)
+
+    assert client.post("/api/review/summary").status_code == 503
+    # The slot was refunded, so the next call is not the second of three.
+    configure_phrase(monkeypatch)
+    assert client.post("/api/review/summary").status_code == 200
+
+
+def test_unusable_output_still_spends_the_slot(client, monkeypatch):
+    """The model ran and burned tokens; only its answer was unusable.
+
+    Refunding here would make "send input that reliably produces garbage" an
+    uncapped free path to the provider -- the rule /analyze already applies.
+    """
+    async def empty(facts):
+        raise meal_ai.MealAIBadResponse("The AI did not return a summary.")
+
+    configure_phrase(monkeypatch, empty)
+    assert client.post("/api/review/summary").status_code == 502
+
+    from app.routers.ai import DEFAULT_REVIEW_DAILY_LIMIT
+
+    configure_phrase(monkeypatch)
+    for _ in range(DEFAULT_REVIEW_DAILY_LIMIT - 1):
+        assert client.post("/api/review/summary").status_code == 200
+    assert client.post("/api/review/summary").status_code == 429
+
+
+def test_the_reserved_row_is_a_counter_and_not_a_record(client, monkeypatch):
+    """The user chose not to store the wording, so nothing stores it.
+
+    The row exists to make the call countable, exactly as a probe's does. It
+    must also stay out of the calibration join, which counts analyses.
+    """
+    configure_phrase(monkeypatch)
+    client.post("/api/review/summary")
+
+    rows = client.get("/api/data/export/all").json()["ai_analyses"]
+
+    # Kept in the export, unlike a probe: a probe is operational noise the
+    # operator triggered, where this is something the account actually did and
+    # its timestamp is a real fact about them. It just holds no analysis.
+    assert [row["kind"] for row in rows] == ["review"]
+    assert rows[0]["analysis"] is None
+    assert rows[0]["user_text"] is None
+    # And it must stay out of the calibration join, which counts estimates.
+    assert client.get("/api/ai/calibration").json()["analyses"] == 0

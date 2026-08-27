@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import review as review_module
+from ..services import meal_ai
 from ..auth.deps import get_current_user
 from ..calculations import (
     RATE_MIN_POINTS,
@@ -33,9 +34,15 @@ from ..calculations import (
 from ..db import get_db
 from ..models import CaloriePlanDay, Meal, Setting, StepEntry, User, WaterLog, WeightEntry
 from ..review import REVIEW_WINDOW_DAYS, DayIntake, TargetsFacts
-from ..schemas import WeeklyReview
+from ..schemas import ReviewSummary, WeeklyReview
 from ..targets import WEIGHT_LOOKBACK_DAYS, _latest_trend_weight, compute_targets
-from .ai import calibration_summary
+from .ai import (
+    KIND_REVIEW,
+    _provider_http_error,
+    _reserve_call,
+    calibration_summary,
+    review_daily_limit,
+)
 from .settings import _get_or_create
 
 router = APIRouter(prefix="/api/review", tags=["review"])
@@ -194,27 +201,8 @@ def _steps_days_at_goal(
     )
 
 
-@router.get("", response_model=WeeklyReview)
-def weekly_review(
-    end: date_type | None = Query(default=None),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """The last seven complete days, and what can honestly be said about them.
-
-    `end` is the last day the review covers and the client sends **its own**
-    local yesterday, following `/api/analytics/daily` and `/api/plan/day`. No
-    timezone is stored for anyone and the server's `date.today()` is UTC, so a
-    server-computed "yesterday" is wrong for everyone hours off it -- the Phase
-    19 finding, applied before it could bite again.
-
-    The window ends yesterday because today is a part-logged day: averaging
-    breakfast-only into a daily mean understates intake and would make every
-    review read as a better week than it was.
-
-    Read-only, always 200. An account with nothing logged is an ordinary state
-    and the refusals are the answer, each naming what is still missing.
-    """
+def _window_end(end: date_type | None) -> date_type:
+    """The last day the review covers, defaulting to the server's yesterday."""
     today = date_type.today()
     window_end = end if end is not None else today - timedelta(days=1)
     if window_end > today:
@@ -222,12 +210,24 @@ def weekly_review(
         # is better than silently clamping: a client asking for tomorrow has a
         # bug, and quietly answering about yesterday hides it.
         raise HTTPException(status_code=422, detail="end must not be in the future")
+    return window_end
+
+
+def build_review(db: Session, user_id: int, window_end: date_type):
+    """Everything the review says, for one account and one window.
+
+    Shared by the GET below and by the optional rephrasing endpoint, which
+    recomputes the facts rather than accepting them from the client. That is
+    the load-bearing half of "the model only ever rephrases real numbers": if
+    the client supplied the facts, the guarantee would be a hope.
+    """
+
     window_start = window_end - timedelta(days=REVIEW_WINDOW_DAYS - 1)
 
-    setting = _get_or_create(db, user.id)
-    days = _intake_days(db, user.id, window_start, window_end)
-    daily_target, plan_touched = _daily_calorie_target(db, user.id, setting, days)
-    rate, weigh_ins, days_since = _weight_facts(db, user.id, window_end)
+    setting = _get_or_create(db, user_id)
+    days = _intake_days(db, user_id, window_start, window_end)
+    daily_target, plan_touched = _daily_calorie_target(db, user_id, setting, days)
+    rate, weigh_ins, days_since = _weight_facts(db, user_id, window_end)
 
     # `today` for the target machinery is the day after the window closes, so
     # its own measurement window ends where this review's does. Passing the real
@@ -259,15 +259,95 @@ def weekly_review(
         weigh_ins=weigh_ins,
         days_since_weigh_in=days_since,
         water_days_at_goal=_water_days_at_goal(
-            db, user.id, setting, window_start, window_end
+            db, user_id, setting, window_start, window_end
         ),
         steps_days_at_goal=(
             None
             if steps_goal is None
-            else _steps_days_at_goal(db, user.id, steps_goal, window_start, window_end)
+            else _steps_days_at_goal(db, user_id, steps_goal, window_start, window_end)
         ),
         steps_goal=steps_goal,
-        calibration=calibration_summary(db, user.id),
+        calibration=calibration_summary(db, user_id),
         rate_window_days=RATE_WINDOW_DAYS,
         rate_min_points=RATE_MIN_POINTS,
     )
+
+
+@router.get("", response_model=WeeklyReview)
+def weekly_review(
+    end: date_type | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The last seven complete days, and what can honestly be said about them.
+
+    `end` is the last day the review covers and the client sends **its own**
+    local yesterday, following `/api/analytics/daily` and `/api/plan/day`. No
+    timezone is stored for anyone and the server's `date.today()` is UTC, so a
+    server-computed "yesterday" is wrong for everyone hours off it -- the Phase
+    19 finding, applied before it could bite again.
+
+    The window ends yesterday because today is a part-logged day: averaging
+    breakfast-only into a daily mean understates intake and would make every
+    review read as a better week than it was.
+
+    Read-only, always 200, and it spends no AI quota. An account with nothing
+    logged is an ordinary state and the refusals are the answer, each naming
+    what is still missing.
+    """
+    return build_review(db, user.id, _window_end(end))
+
+
+@router.post("/summary", response_model=ReviewSummary)
+async def review_summary(
+    end: date_type | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The same review, put into words by the model. Explicitly requested only.
+
+    **The facts are recomputed here rather than accepted from the client**, and
+    that is what makes "the model only ever rephrases real numbers" a guarantee
+    instead of a hope. A client-supplied body would let anything at all be
+    presented to the reader as their own computed figures.
+
+    Its own quota kind, so it can never eat into the meal analyses someone
+    actually needs -- `_reserve_call` already counts per kind, which is why
+    there are three limits today and now four. It does count against the shared
+    global ceiling, which one call per person per week does not move.
+
+    ⚠️ The row this reserves is a **counter, not a record**. `analysis_json`
+    stays empty, exactly as a probe's does: the summary is returned and not
+    stored, so re-opening the page re-renders the computed review and asks for
+    nothing. Storing it would mean owning the question of when it goes stale,
+    which is a feature and not a side effect.
+
+    A refusal costs nothing: the row is deleted on a provider failure, per
+    `_reserve_call`'s contract.
+    """
+    review = build_review(db, user.id, _window_end(end))
+    facts = [
+        check.detail or check.unavailable_reason or ""
+        for check in review.checks
+    ]
+
+    record = _reserve_call(
+        db,
+        user,
+        kind=KIND_REVIEW,
+        per_user_limit=review_daily_limit(),
+        noun="AI review summary",
+    )
+    try:
+        summary = await meal_ai.phrase_review([fact for fact in facts if fact])
+    except meal_ai.MealAIBadResponse as exc:
+        # The model ran and burned tokens; only its output was unusable, so the
+        # slot stays spent -- the same rule /analyze applies.
+        raise _provider_http_error(exc)
+    except Exception as exc:
+        db.delete(record)
+        db.commit()
+        raise _provider_http_error(exc)
+
+    db.commit()
+    return ReviewSummary(summary=summary)

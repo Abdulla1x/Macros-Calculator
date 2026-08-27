@@ -65,8 +65,17 @@ DEFAULT_GLOBAL_DAILY_LIMIT = 500
 KIND_ANALYSIS = "analysis"
 KIND_TRANSCRIPTION = "transcription"
 KIND_PROBE = "probe"
+# The weekly review's optional rephrasing. A fourth kind rather than a share of
+# the analysis budget: `_reserve_call` already counts per kind, so a review can
+# never eat into the meal analyses someone actually needs.
+KIND_REVIEW = "review"
 
 DEFAULT_PROBE_DAILY_LIMIT = 10
+
+# Three a day. The review changes once a day at most -- its window ends
+# yesterday -- so this is not a rationing decision, it is a stray-loop catcher.
+# One is too few: a failed read and a retry would lock someone out for the day.
+DEFAULT_REVIEW_DAILY_LIMIT = 3
 STATUS_DETAIL_ENV = "MEAL_AI_STATUS_DETAIL"
 
 # One shared probe result for the whole process. Render runs a single free
@@ -141,6 +150,10 @@ def global_daily_limit() -> int:
 
 def _probe_daily_limit() -> int:
     return env_int("AI_PROBE_DAILY_LIMIT", DEFAULT_PROBE_DAILY_LIMIT)
+
+
+def review_daily_limit() -> int:
+    return env_int("AI_REVIEW_DAILY_LIMIT", DEFAULT_REVIEW_DAILY_LIMIT)
 
 
 def _probe_message(exc: Exception) -> str | None:
