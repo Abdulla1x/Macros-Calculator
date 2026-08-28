@@ -892,6 +892,64 @@ class AnalyticsSummary(BaseModel):
     average_days: dict[str, int] = {}
 
 
+class ReviewCheck(BaseModel):
+    """One question the weekly review answers, and the sample behind the answer.
+
+    `value` and `target` are the two numbers `detail` compares, carried
+    alongside the sentence so the UI can render them without parsing prose and
+    a test can assert the arithmetic without asserting the copy.
+
+    `sample_days` is what **this** check was computed over, and it is not the
+    same for every check -- the intake figures cover the seven-day window while
+    the weight rate is fitted over `weekly_rate`'s 28-day one. A single window
+    on the response would force one of them to lie.
+
+    `unavailable_reason` is None exactly when `status` is not "unknown", the
+    same contract TdeeBasis and MacroCalibration already carry.
+    """
+
+    key: str
+    status: Literal["on_track", "off_track", "note", "unknown"]
+    value: float | None
+    target: float | None
+    unit: str
+    sample_days: int
+    detail: str
+    unavailable_reason: str | None = None
+
+
+class WeeklyReview(BaseModel):
+    """The last seven complete days, and what the app can honestly say about them.
+
+    Field-for-field identical to `review.WeeklyReview`, and it has to stay that
+    way: FastAPI runs the dataclass through `dataclasses.asdict` before
+    validating it here, so a field declared here and missing there serializes
+    silently as the default below rather than failing. calibration.py and
+    targets.py both carry the same warning.
+
+    A check the user has not opted into is **absent from `checks`**, not present
+    and empty -- see `review.summarise` for which answer already given decides
+    each one.
+    """
+
+    window_start: date_type
+    window_end: date_type
+    logged_days: int
+    checks: list[ReviewCheck] = []
+
+
+class ReviewSummary(BaseModel):
+    """The weekly review, put into words by the model.
+
+    Deliberately just a string. The figures are already on the page from
+    GET /api/review, and returning them again here would create a second copy
+    that could disagree with the first -- which is exactly the failure this
+    feature is careful about everywhere else.
+    """
+
+    summary: str
+
+
 class ImportResult(BaseModel):
     inserted: int
     skipped_duplicates: int

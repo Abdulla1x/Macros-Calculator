@@ -25,6 +25,7 @@ from .routers import (
     meal_templates,
     meals,
     plan,
+    review,
     settings,
     share,
     steps,
@@ -126,6 +127,7 @@ app.include_router(share.router)
 app.include_router(foods.router)
 app.include_router(weights.router)
 app.include_router(analytics.router)
+app.include_router(review.router)
 app.include_router(settings.router)
 app.include_router(data.router)
 app.include_router(ai.router)

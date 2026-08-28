@@ -22,6 +22,8 @@ import type {
   OFFProduct,
   PlanDay,
   Settings,
+  ReviewSummary,
+  WeeklyReview,
   ShareCode,
   SharedMeal,
   StepDay,
@@ -62,6 +64,9 @@ const DEFAULT_TIMEOUT_MS = 60_000
 // (30s / 12s), so the real ceilings are ~90s and ~37s — plus the upload.
 const ANALYZE_TIMEOUT_MS = 150_000
 const TRANSCRIBE_TIMEOUT_MS = 60_000
+// Same arithmetic for the review summary: a 30s server deadline plus a final
+// 15s attempt on top is a ~45s ceiling, and a cold instance adds to it.
+const REVIEW_TIMEOUT_MS = 90_000
 
 async function request<T>(
   path: string,
@@ -368,6 +373,23 @@ export const api = {
     const query = params.toString()
     return request<AnalyticsSummary>(`/api/analytics/daily${query ? `?${query}` : ''}`)
   },
+
+  // `end` is the last day the review covers, and the caller passes its OWN
+  // local yesterday. No timezone is stored for anyone and the server's today is
+  // UTC, so letting the server pick would give the wrong week to everyone hours
+  // off it. Same reason getAnalytics takes explicit dates.
+  getReview: (end?: string) =>
+    request<WeeklyReview>(`/api/review${end ? `?end=${end}` : ''}`),
+
+  // Explicitly requested only -- it spends one provider call from a small daily
+  // budget of its own. The window has to match the one the page is showing, or
+  // the words would describe a different week from the numbers above them.
+  phraseReview: (end?: string) =>
+    request<ReviewSummary>(
+      `/api/review/summary${end ? `?end=${end}` : ''}`,
+      { method: 'POST' },
+      REVIEW_TIMEOUT_MS,
+    ),
 
   analyzeMeal: (form: FormData) =>
     request<MealAnalysisResponse>(

@@ -64,6 +64,10 @@ _now = time.monotonic
 ANALYZE_TIMEOUT_MS = 30_000
 TRANSCRIBE_TIMEOUT_MS = 12_000
 PROBE_TIMEOUT_MS = 10_000
+# The review is text in, text out -- no images, no audio, no schema -- so it is
+# the cheapest call this app makes and the one least worth waiting on. Nothing
+# is lost by giving up: the page it decorates has already rendered in full.
+REVIEW_TIMEOUT_MS = 15_000
 
 # How long one user action may keep trying before reporting failure. This is the
 # real control: at ~150ms per rejection and a backoff capped at 8s, a minute
@@ -73,6 +77,7 @@ ANALYZE_DEADLINE_S = 60
 # Shorter because a voice note is the first step of a longer flow — the user is
 # waiting to type, not waiting for an answer.
 TRANSCRIBE_DEADLINE_S = 25
+REVIEW_DEADLINE_S = 30
 
 
 class MealAIError(Exception):
@@ -177,6 +182,29 @@ Transcribe the speech in this audio.
 - Keep the speaker's own words and units ("a hundred grams", "two slices").
 - Write food names the way they are conventionally spelled.
 - If there is no intelligible speech, output nothing at all.
+"""
+
+
+REVIEW_PROMPT = """\
+You rewrite already-computed facts about one person's week of food logging \
+into a short, plain summary. You are a phrasing layer and nothing else.
+
+ABSOLUTE RULES — every one of these matters more than the writing:
+- Use ONLY the facts given below. Never introduce a number that is not in them.
+- Never calculate anything. Not a difference, not a percentage, not a total, \
+not a projection.
+- Never give advice, recommendations, targets, goals or suggestions. Do not \
+tell the reader what to eat, how much to eat, what to change, or what to do \
+next — not even gently, and not even if a fact seems to invite it.
+- Never speculate about why anything happened.
+- Where a fact says something could not be measured, say so plainly rather \
+than guessing at it or leaving it out.
+- Do not congratulate, encourage, warn or admonish. Neutral and calm.
+
+FORMAT: at most two short paragraphs of plain prose. No headings, no bullet \
+points, no emoji, no sign-off. Address the reader as "you".
+
+THE FACTS:
 """
 
 
@@ -562,6 +590,53 @@ async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
             model, finish, audio_mime, len(audio_bytes),
         )
         raise MealAIBadResponse("No speech was recognised in the recording.")
+    return text
+
+
+async def phrase_review(facts: Sequence[str]) -> str:
+    """Computed facts in, one short paragraph out. No numbers of its own.
+
+    **This is a phrasing layer and the constraint is the whole design.** Every
+    figure in `facts` was computed and clamped by `app/review.py` before it got
+    here, and the model is forbidden to compute, recommend or add. That is not
+    politeness: every safety guarantee in this app is a clamp on a number, and
+    prose has no clamp -- a model that answered "eat 1,200 kcal" would route
+    around the most carefully reasoned code in the repo in one sentence.
+
+    ⚠️ The rules live in the prompt, so **nothing here can enforce them**. Tests
+    all use a stub and stay green whatever a real model does, which is exactly
+    the Phase 20 finding: a prompt rule is only ever proven by a live call.
+
+    temperature 0.2 rather than 0.0: this is the one call in the app whose job
+    is wording rather than a fact, and a strict zero makes it recite the input
+    almost verbatim, which buys nothing over rendering the sentences directly.
+    """
+    async def call(model: str, http_options: types.HttpOptions):
+        client = genai.Client(api_key=_env(API_KEY_ENV))
+        return await client.aio.models.generate_content(
+            model=model,
+            contents=[REVIEW_PROMPT + "\n".join(f"- {fact}" for fact in facts)],
+            config=types.GenerateContentConfig(
+                temperature=0.2, http_options=http_options
+            ),
+        )
+
+    model, response = await _call_with_retry(
+        call, timeout_ms=REVIEW_TIMEOUT_MS, deadline_s=REVIEW_DEADLINE_S
+    )
+
+    try:
+        text = (response.text or "").strip()
+    except Exception:  # safety-blocked responses raise on .text
+        text = ""
+    if not text:
+        candidates = getattr(response, "candidates", None)
+        finish = candidates[0].finish_reason if candidates else None
+        logger.error(
+            "Gemini returned no review summary (model=%s, finish_reason=%s, facts=%d)",
+            model, finish, len(facts),
+        )
+        raise MealAIBadResponse("The AI did not return a summary. Try again.")
     return text
 
 

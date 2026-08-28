@@ -808,3 +808,50 @@ def test_b_cannot_mint_a_code_for_as_meal_or_template(client, client_b):
     # A's rows survived the attempt, and A can still share them.
     assert client.get(f"/api/share/meal/{a_meal['id']}").status_code == 200
     assert client.get(f"/api/share/template/{a_template['id']}").status_code == 200
+
+
+def test_a_weekly_review_never_reads_another_accounts_week(client, client_b):
+    """The review joins five tables at once, which is five chances to leak.
+
+    Meals, weigh-ins, water, steps and the settings row all feed one response,
+    and none of them is reached by an id the caller supplies -- so the only
+    thing standing between A's review and B's data is the user filter on each
+    query. Asserted positively on both sides: B's figures must be B's, and A,
+    who logged nothing, must get refusals rather than a share of them.
+    """
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    for offset in range(1, 6):
+        day = (date.today() - timedelta(days=offset)).isoformat()
+        client_b.post(
+            "/api/meals",
+            json={"date": day, "name": "Beta Meal", "calories": 2500, "protein": 200},
+        )
+        client_b.post("/api/weights", json={"date": day, "weight_kg": 61.0})
+    client_b.post("/api/water", json={"date": yesterday, "ml": 3000.0})
+    client_b.put(
+        "/api/settings",
+        json={"calorie_goal": 2500, "protein_goal": 200, "carbs_goal": 250,
+              "fat_goal": 70, "track_carbs": False, "track_fat": False,
+              "steps_goal": 10000},
+    )
+    client_b.post("/api/steps", json={"date": yesterday, "steps": 12000})
+
+    a_review = client.get("/api/review").json()
+    b_review = client_b.get("/api/review").json()
+
+    def check(payload, key):
+        return next((c for c in payload["checks"] if c["key"] == key), None)
+
+    assert b_review["logged_days"] == 5
+    assert check(b_review, "intake")["value"] == 2500
+    assert check(b_review, "water") is not None
+    assert check(b_review, "steps")["value"] == 1
+
+    # A logged nothing at all, so every figure must be a refusal rather than a
+    # share of B's -- and the two opt-in sections must not appear on the
+    # strength of B having used them.
+    assert a_review["logged_days"] == 0
+    assert check(a_review, "intake")["value"] is None
+    assert check(a_review, "intake")["unavailable_reason"]
+    assert check(a_review, "water") is None
+    assert check(a_review, "steps") is None

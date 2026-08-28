@@ -643,3 +643,51 @@ export interface AdminUserRow {
    *  about health and a good deal about their life. */
   calorie_plan_days: number
 }
+
+
+/** One question the weekly review answers, and the sample behind the answer.
+ *
+ * `value` and `target` are the two numbers `detail` compares, carried beside
+ * the sentence so the UI never parses prose to render a figure.
+ *
+ * `sample_days` is what THIS check was computed over, and it deliberately
+ * differs between checks: the intake and protein figures cover the seven-day
+ * window while the weight rate is fitted over the 28-day one the trend line
+ * uses. A single window on the response would force one of them to lie.
+ *
+ * Every sentence is assembled server-side, in `app/review.py`, so that copy
+ * this careful is covered by pytest — this app has no frontend tests. */
+export interface ReviewCheck {
+  key: string
+  /** `note` is a check with no goal to be on or off track against, like where
+   *  the daily burn came from. `unknown` is a refusal, and is the only status
+   *  that carries an `unavailable_reason`. */
+  status: 'on_track' | 'off_track' | 'note' | 'unknown'
+  value: number | null
+  target: number | null
+  unit: string
+  sample_days: number
+  detail: string
+  /** Non-null exactly when `status` is `unknown`. */
+  unavailable_reason: string | null
+}
+
+/** The last seven complete days, and what the app can honestly say about them.
+ *
+ * A check the user has not opted into is ABSENT from `checks` rather than
+ * present and empty — someone with no steps goal is never asked about steps. */
+export interface WeeklyReview {
+  window_start: string
+  window_end: string
+  logged_days: number
+  checks: ReviewCheck[]
+}
+
+/** The weekly review, put into words by the model.
+ *
+ * Just a string, deliberately. The figures are already on the page from
+ * GET /api/review; returning them again would create a second copy that could
+ * disagree with the first. */
+export interface ReviewSummary {
+  summary: string
+}

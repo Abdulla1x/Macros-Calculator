@@ -10,6 +10,7 @@ import Login from './pages/Login'
 import LogMeal from './pages/LogMeal'
 import NotFound from './pages/NotFound'
 import ResetPassword from './pages/ResetPassword'
+import Review from './pages/Review'
 import Settings from './pages/Settings'
 import Signup from './pages/Signup'
 import Weight from './pages/Weight'
@@ -43,6 +44,13 @@ export default function App() {
           <Route path="/log" element={<LogMeal />} />
           <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
+          {/* Not in the tab bar, the same posture as /whats-new below: the bar
+              is a fixed five-column grid and a sixth cell drops each one from
+              ~72px to ~60px at 360px, which is narrower than the word
+              "Dashboard" renders at. Reached from the dashboard's own
+              seven-day card, which covers exactly this window, and from
+              Analytics. */}
+          <Route path="/review" element={<Review />} />
           {/* Settings is a shell around five panels rather than one page. The
               shell owns the draft and the Save bar; each panel is a real
               address, so the dashboard's deep link into the calorie planner
