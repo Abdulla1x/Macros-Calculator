@@ -248,6 +248,16 @@ def intake_check(
     the stored goal and the effective one differ on exactly the days a plan
     touches. Reporting someone as 400 kcal over on a day they deliberately
     planned for would be the feature's first wrong answer.
+
+    ⚠️ **On an account with `targets_auto` on, this check and the weight check
+    are not independent, and their agreement is weaker evidence than it looks.**
+    `compute_targets` derives the calorie target from a *measured* TDEE, which
+    `_measure_tdee` fits from mean intake against the weight trend -- so the
+    target already contains both quantities the two checks compare. Measured on
+    real data during the Phase 21 gate: the scale implied a 219 kcal/day
+    shortfall and the food logs showed 161, which reads like two independent
+    signals corroborating and is partly definitional. Say "these agree", never
+    "these confirm each other".
     """
     if not days:
         return ReviewCheck(
