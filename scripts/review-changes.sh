@@ -107,7 +107,7 @@ gates() {
 
   ./scripts/check.sh          # every gate: pytest, ruff, tsc, lint, build
 
-Browser-level checks: see .claude/skills/verify.
+Browser-level checks: drive the app in a real browser (scripts/dev.sh).
 EOF
 }
 
