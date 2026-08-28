@@ -33,8 +33,9 @@ ANNOUNCEMENTS: list[Announcement] = [
         date="2026-08-28",
         title="A weekly review, adding up what the app already knew",
         body=(
-            "**There is a new Weekly review page**, linked from the "
-            "\"Previous 7 days\" card on your dashboard and from Analytics. It "
+            "**There is a new Weekly review page**, in the navigation beside "
+            "Analytics, and linked from the \"Previous 7 days\" card on your "
+            "dashboard. It "
             "pulls together the things this app has always worked out and "
             "never showed in one place: how much you logged, how your calories "
             "and protein compared with your targets, whether your weight is "

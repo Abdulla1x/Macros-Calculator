@@ -20,6 +20,7 @@ const links = [
   { to: '/log', label: 'Log Meal', icon: '🍽️' },
   { to: '/weight', label: 'Weight', icon: '⚖️' },
   { to: '/analytics', label: 'Analytics', icon: '📈' },
+  { to: '/review', label: 'Review', icon: '🗓️' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 
@@ -91,7 +92,7 @@ export default function Layout() {
             the home indicator on a curved display. */}
         <nav
           aria-label="Main"
-          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:static md:flex md:flex-col md:gap-1 md:border-t-0 md:bg-transparent md:px-3 md:pb-0"
+          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:static md:flex md:flex-col md:gap-1 md:border-t-0 md:bg-transparent md:px-3 md:pb-0"
         >
           {links.map((link) => (
             <NavLink
@@ -99,7 +100,7 @@ export default function Layout() {
               to={link.to}
               end={link.to === '/'}
               className={({ isActive }) =>
-                `flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors md:min-h-0 md:flex-row md:justify-start md:gap-3 md:rounded-control md:px-3 md:py-2 md:text-sm ${
+                `flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors min-[360px]:text-[11px] md:min-h-0 md:flex-row md:justify-start md:gap-3 md:rounded-control md:px-3 md:py-2 md:text-sm ${
                   isActive
                     ? 'text-emerald-300 md:bg-emerald-500/15'
                     : 'text-ink-muted hover:text-ink md:hover:bg-raised'
