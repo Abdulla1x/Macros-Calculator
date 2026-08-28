@@ -27,12 +27,6 @@ Thumbs.db
 # VS Code
 .vscode/
 
-# Local agent/editor workspace. Previously only in .git/info/exclude, which is
-# per-clone and never leaves this machine -- so a fresh clone had nothing
-# stopping it committing settings.local.json, which holds local
-# credentials in plaintext. Keep it ignored here for that reason.
-.claude/
-
 # Test artifacts
 .pytest_cache/
 htmlcov/
