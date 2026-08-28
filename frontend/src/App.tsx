@@ -44,12 +44,13 @@ export default function App() {
           <Route path="/log" element={<LogMeal />} />
           <Route path="/weight" element={<Weight />} />
           <Route path="/analytics" element={<Analytics />} />
-          {/* Not in the tab bar, the same posture as /whats-new below: the bar
-              is a fixed five-column grid and a sixth cell drops each one from
-              ~72px to ~60px at 360px, which is narrower than the word
-              "Dashboard" renders at. Reached from the dashboard's own
-              seven-day card, which covers exactly this window, and from
-              Analytics. */}
+          {/* In the tab bar, unlike /whats-new below. It was kept out at first on
+              an ESTIMATE -- that a sixth cell would leave less room than the
+              word "Dashboard" needs -- and the estimate was wrong. Measured:
+              six cells are 60px at 360px and "Dashboard" renders at exactly
+              60px, so it fits, and the labels shrink to 10px below 360px where
+              they would not. The dashboard's seven-day card still links here
+              too, because it covers exactly this window. */}
           <Route path="/review" element={<Review />} />
           {/* Settings is a shell around five panels rather than one page. The
               shell owns the draft and the Save bar; each panel is a real
