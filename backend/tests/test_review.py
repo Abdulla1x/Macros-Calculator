@@ -726,3 +726,19 @@ def test_the_reserved_row_is_a_counter_and_not_a_record(client, monkeypatch):
     assert rows[0]["user_text"] is None
     # And it must stay out of the calibration join, which counts estimates.
     assert client.get("/api/ai/calibration").json()["analyses"] == 0
+
+
+def test_a_safety_cap_is_introduced_rather_than_appended_bare():
+    """"Raised to 1521 kcal" has no subject, and the sentence before it does.
+
+    `target_calories`'s clamp explanation names no subject of its own, so
+    appended straight onto a sentence about the daily burn it reads as though
+    the burn was raised -- when it is the calorie target that moved. Found on
+    production, in a real model summary repeating the ambiguity back verbatim.
+    """
+    reason = "Raised to 1521 kcal — the floor for your estimated expenditure."
+    detail = targets_check(COMPLETE_PROFILE._replace(clamped_reason=reason)).detail
+
+    assert reason in detail, "the explanation still passes through verbatim"
+    assert "Capped for safety: " + reason in detail
+    assert not detail.endswith("days. " + reason), "must not follow the burn bare"

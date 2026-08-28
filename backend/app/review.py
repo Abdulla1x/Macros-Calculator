@@ -498,7 +498,15 @@ def targets_check(facts: TargetsFacts) -> ReviewCheck:
         if facts.basis_reason:
             detail += f" {facts.basis_reason}"
     if facts.clamped_reason:
-        detail += f" {facts.clamped_reason}"
+        # ⚠️ Introduced, never appended bare. `target_calories`'s clamp sentence
+        # has no subject of its own -- "Raised to 1521 kcal — the floor for your
+        # estimated expenditure" -- so following a sentence about the daily
+        # BURN it reads as though the burn was raised, when it is the calorie
+        # target that moved. `clamp_measured_tdee`'s sentence does name its own
+        # subject ("kcal a day burned"), and TargetsResult joins the two with a
+        # space, so this lead-in has to be true whichever fired and cannot claim
+        # which. Found in a real model summary repeating the ambiguity back.
+        detail += f" Capped for safety: {facts.clamped_reason}"
 
     return ReviewCheck(
         key="targets",
