@@ -97,63 +97,71 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ## 📸 Screenshots
 
-Every screen at both widths — the desktop layout on the left, the same screen on a phone on the right.
+Every screen at both widths. Each image is the **whole page**, not the part that happens to fit above the fold.
 
-### Dashboard — rings, quick log, and the daily trackers
+### Dashboard
 
-<p align="left">
-  <img src="screenshots/desktop/dashboard.png" alt="Dashboard on a desktop browser" width="640">
-  <img src="screenshots/mobile/dashboard.png" alt="Dashboard on a phone" width="208">
-</p>
+Rings against your goals, one-tap quick log, the three daily trackers, today's meals, and the seven-day trend.
 
-### AI meal analysis — photo, voice, or text → an estimate with uncertainty
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/dashboard.png" alt="Dashboard in a desktop browser" width="620"> | <img src="screenshots/mobile/dashboard.png" alt="Dashboard on a phone" width="190"> |
 
-<p align="left">
-  <img src="screenshots/desktop/ai-analysis.png" alt="AI meal analysis on a desktop browser" width="640">
-  <img src="screenshots/mobile/ai-analysis.png" alt="AI meal analysis on a phone" width="208">
-</p>
+### AI meal analysis
 
-### The estimate prefills the meal editor, for review before saving
+Describe it, speak it or photograph it. The estimate comes back as a range with a confidence badge, per-ingredient confidence dots, and every assumption listed and editable.
 
-<p align="left">
-  <img src="screenshots/desktop/ai-applied.png" alt="AI results applied to the meal editor, desktop" width="640">
-  <img src="screenshots/mobile/ai-applied.png" alt="AI results applied to the meal editor, phone" width="208">
-</p>
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/ai-analysis.png" alt="AI meal analysis in a desktop browser" width="620"> | <img src="screenshots/mobile/ai-analysis.png" alt="AI meal analysis on a phone" width="190"> |
 
-### Log a meal — your food library fills in the macros
+### The estimate fills the meal editor
 
-<p align="left">
-  <img src="screenshots/desktop/log-meal.png" alt="Logging a meal on a desktop browser" width="640">
-  <img src="screenshots/mobile/log-meal.png" alt="Logging a meal on a phone" width="208">
-</p>
+Nothing is saved until you have looked at it. Ingredients arrive as ordinary rows you can correct first.
 
-### Weight — the trend, not the daily noise
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/ai-applied.png" alt="The estimate fills the meal editor in a desktop browser" width="620"> | <img src="screenshots/mobile/ai-applied.png" alt="The estimate fills the meal editor on a phone" width="190"> |
 
-<p align="left">
-  <img src="screenshots/desktop/weight.png" alt="Weight log and trend chart, desktop" width="640">
-  <img src="screenshots/mobile/weight.png" alt="Weight log and trend chart, phone" width="208">
-</p>
+### Log a meal
 
-### Weekly review — computed, and it says what each number came from
+Type an ingredient and your food library fills in the macros, with an Open Food Facts lookup behind it for anything you have not logged before.
 
-<p align="left">
-  <img src="screenshots/desktop/review.png" alt="Weekly review on a desktop browser" width="640">
-  <img src="screenshots/mobile/review.png" alt="Weekly review on a phone" width="208">
-</p>
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/log-meal.png" alt="Log a meal in a desktop browser" width="620"> | <img src="screenshots/mobile/log-meal.png" alt="Log a meal on a phone" width="190"> |
 
-### Analytics — any date range
+### Weight
 
-<p align="left">
-  <img src="screenshots/desktop/analytics.png" alt="Analytics on a desktop browser" width="640">
-  <img src="screenshots/mobile/analytics.png" alt="Analytics on a phone" width="208">
-</p>
+The trend line rather than the daily noise, with the weekly rate fitted over 28 days.
 
-### Settings — five tabs, each with its own address
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/weight.png" alt="Weight in a desktop browser" width="620"> | <img src="screenshots/mobile/weight.png" alt="Weight on a phone" width="190"> |
 
-<p align="left">
-  <img src="screenshots/desktop/settings.png" alt="Settings on a desktop browser" width="640">
-  <img src="screenshots/mobile/settings.png" alt="Settings on a phone" width="208">
-</p>
+### Weekly review
+
+Eight computed checks. Each one names the number, what it is compared with, and how many days it was worked out from.
+
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/review.png" alt="Weekly review in a desktop browser" width="620"> | <img src="screenshots/mobile/review.png" alt="Weekly review on a phone" width="190"> |
+
+### Analytics
+
+Any date range: totals, per-day averages over the days you actually logged, and a chart per macro.
+
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/analytics.png" alt="Analytics in a desktop browser" width="620"> | <img src="screenshots/mobile/analytics.png" alt="Analytics on a phone" width="190"> |
+
+### Settings
+
+Five tabs, each with its own address, and a save bar that follows you between them.
+
+| Desktop | Phone |
+|:--:|:--:|
+| <img src="screenshots/desktop/settings.png" alt="Settings in a desktop browser" width="620"> | <img src="screenshots/mobile/settings.png" alt="Settings on a phone" width="190"> |
 
 ---
 
