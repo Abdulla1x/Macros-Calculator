@@ -86,14 +86,13 @@ if (!outDir) {
   process.exit(2)
 }
 
+// The width sets the layout breakpoint; the height is only a starting point,
+// because captureWholePage grows the viewport to the page height before
+// shooting. ⚠ A clipped screenshot cut the dashboard off above the meal list
+// and the 7-day sparkline, which is most of what the page is for; a README
+// screenshot has to show the whole screen or it misrepresents it.
 const DESKTOP = { width: 1280, height: 832 }
 const MOBILE = { width: 390, height: 844 }
-
-// The AI panel is a description box, a photo/voice row, the analyze controls
-// and the estimate card stacked -- about 1,100px on desktop. At the standard
-// height the shot has to choose between the input and the result, so the two
-// AI captures get a taller window instead.
-const TALL = { desktop: { width: 1280, height: 1180 }, mobile: { width: 390, height: 1180 } }
 
 // ---------------------------------------------------------------------------
 // API
@@ -430,7 +429,6 @@ const SHOTS = [
       await runAnalysis(page)
       await page.waitForTimeout(600)
     },
-    tall: true,
     // ⚠ The applied capture has to come from the SAME analysis, which is why
     // it hangs off this one rather than being a shot of its own. Two runs of
     // the model give two different estimates -- 612 kcal and 650 kcal on the
@@ -452,13 +450,43 @@ const SHOTS = [
   { key: 'settings', route: '/settings/goals' },
 ]
 
-async function capture(context, dir, kind, base) {
+
+/** Capture the whole page by GROWING THE VIEWPORT to the page height, rather
+ *  than with `fullPage: true`.
+ *
+ *  ⚠ They are not equivalent here, and the difference is not cosmetic.
+ *  `fullPage` stitches beyond the viewport but still resolves viewport-relative
+ *  CSS against the ORIGINAL one, so on this app it produced two broken images:
+ *  the mobile tab bar (`fixed inset-x-0 bottom-0`) landed a screen-height down
+ *  the page, floating over the middle of the meal form and hiding a field, and
+ *  the desktop sidebar (`md:h-screen`) stopped partway with empty space under
+ *  it. Growing the viewport instead makes both resolve against the full height,
+ *  which is what someone on a very tall screen would actually see.
+ *
+ *  The height is re-measured after the resize because the reflow can change it
+ *  -- a narrower scrollbar, a chart that re-lays-out -- and settles in one or
+ *  two passes. */
+async function captureWholePage(page, path) {
+  const viewport = page.viewportSize()
+  let height = 0
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const measured = await page.evaluate(() => document.documentElement.scrollHeight)
+    if (measured === height) break
+    height = measured
+    await page.setViewportSize({ width: viewport.width, height })
+    // recharts re-measures on resize and animates into the new size.
+    await page.waitForTimeout(1200)
+  }
+  await page.screenshot({ path })
+  await page.setViewportSize(viewport)
+}
+
+async function capture(context, dir, kind) {
   await mkdir(dir, { recursive: true })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(`${kind}: ${error}`))
   for (const shot of SHOTS) {
-    await page.setViewportSize(shot.tall ? TALL[kind] : base)
     if (shot.before) {
       await page.goto(`${BASE_URL}${shot.route}`, { waitUntil: 'domcontentloaded' })
       await shot.before(page)
@@ -466,11 +494,11 @@ async function capture(context, dir, kind, base) {
     await page.goto(`${BASE_URL}${shot.route}`, { waitUntil: 'domcontentloaded' })
     await settle(page)
     if (shot.prep) await shot.prep(page)
-    await page.screenshot({ path: join(dir, `${shot.key}.png`) })
+    await captureWholePage(page, join(dir, `${shot.key}.png`))
     console.log(`  ${kind}/${shot.key}.png`)
     if (shot.then) {
       await shot.then.prep(page)
-      await page.screenshot({ path: join(dir, `${shot.then.key}.png`) })
+      await captureWholePage(page, join(dir, `${shot.then.key}.png`))
       console.log(`  ${kind}/${shot.then.key}.png`)
     }
   }
@@ -515,11 +543,11 @@ const chromium = await loadChromium()
 const browser = await chromium.launch({ executablePath: findExecutable() })
 
 const desktop = await newContext(browser, token, seenIds, DESKTOP, standIn)
-const desktopErrors = await capture(desktop, join(outDir, 'desktop'), 'desktop', DESKTOP)
+const desktopErrors = await capture(desktop, join(outDir, 'desktop'), 'desktop')
 await desktop.close()
 
 const mobile = await newContext(browser, token, seenIds, MOBILE, standIn)
-const mobileErrors = await capture(mobile, join(outDir, 'mobile'), 'mobile', MOBILE)
+const mobileErrors = await capture(mobile, join(outDir, 'mobile'), 'mobile')
 await mobile.close()
 
 await browser.close()
