@@ -61,8 +61,14 @@ services:
       # twice what typing it does.
       - key: AI_TRANSCRIBE_DAILY_LIMIT
         value: "40"
-      # Ceiling across all users and both call kinds. The per-user caps bound
-      # one account; this bounds the app, so mass signups can't drain the free
+      # Plain-English readings of the weekly review get their own allowance for
+      # the same reason: one costs about a tenth of an analysis, and a week's
+      # worth of readings should not eat the allowance for logging meals.
+      - key: AI_REVIEW_DAILY_LIMIT
+        value: "3"
+      # Ceiling across all users and every call kind -- analyses, voice notes,
+      # status probes and review summaries alike. The per-user caps bound one
+      # account; this bounds the app, so mass signups can't drain the free
       # quota. Keep below the provider's daily allowance (~1500/day free tier).
       - key: AI_GLOBAL_DAILY_LIMIT
         value: "500"
