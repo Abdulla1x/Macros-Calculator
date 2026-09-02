@@ -343,17 +343,35 @@ async function seed(token) {
  *  Renumbering them in document order is stable between runs while still
  *  showing up if the count of them genuinely changes.
  *
+ *  recharts has a counter of its own, and the same problem. Its clip paths are
+ *  named `recharts<n>-clip` from a module-level counter that advances on every
+ *  chart instance EVER mounted in the tab, so it depends on how many times a
+ *  chart mounted on the pages visited earlier -- which varies with when each
+ *  page's fetch resolved. Measured: two runs of identical code, minutes apart,
+ *  gave `recharts5-clip` and `recharts13-clip` on /analytics. That was a false
+ *  diff on this file in EVERY comparison the harness has ever been used for,
+ *  and a harness that always reports one change nobody made is a harness whose
+ *  output stops being read.
+ *
  *  Vite's dev server appends `?t=<epoch-ms>` to the module script tag after any
  *  file it serves changes, so every snapshot taken after an edit differs from
  *  every snapshot taken before one -- in all twelve files, for a reason that has
  *  nothing to do with the app. */
 function normalise(html) {
-  const seen = new Map()
-  return html
-    .replace(/_r_[0-9a-z]+_/g, (match) => {
-      if (!seen.has(match)) seen.set(match, `_r_${seen.size}_`)
+  // One counter per id scheme, each numbering in document order. Separate maps
+  // so a change in how many of one kind exist cannot renumber the other.
+  const renumber = (format) => {
+    const seen = new Map()
+    return (match) => {
+      if (!seen.has(match)) seen.set(match, format(seen.size))
       return seen.get(match)
-    })
+    }
+  }
+  return html
+    .replace(/_r_[0-9a-z]+_/g, renumber((n) => `_r_${n}_`))
+    // Matches both the `id` and the `clip-path="url(#...)"` that references it,
+    // which is why this renumbers the prefix rather than the whole id.
+    .replace(/recharts\d+/g, renumber((n) => `recharts${n}`))
     .replace(/(\.tsx)\?t=\d+/g, '$1')
 }
 
