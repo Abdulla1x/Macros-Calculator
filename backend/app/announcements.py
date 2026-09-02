@@ -29,6 +29,34 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-02-save-ai-ingredients",
+        date="2026-09-02",
+        title="Save an ingredient straight from an AI estimate",
+        body=(
+            "**Every ingredient in an AI estimate now has a \u201csave to my food "
+            "library\u201d link under it.** Describe a dip, a sauce or anything "
+            "else the app has never seen, and you can keep that one ingredient "
+            "without logging the meal it came in and without paying for the "
+            "same estimate again next week. It then autocompletes like any "
+            "other saved food.\n\n"
+            "**The numbers are shown before they are stored, and they are worth "
+            "reading.** The estimate describes what was on the plate \u2014 "
+            "\u201cgrilled chicken breast\u201d \u2014 where a library stores an "
+            "ingredient, so the name is usually the thing to fix. Macros are "
+            "saved **per 100 g**, converted from whatever portion the estimate "
+            "assumed, so the food works at any weight next time.\n\n"
+            "**If you already have a food by that name, saving replaces its "
+            "numbers.** That is said in the form, before you press the button, "
+            "because there is no undo \u2014 rename the new one to keep both.\n\n"
+            "**Settings \u203a Library is reachable again.** Both lists there now "
+            "show the first few entries with a \u201cShow all\u201d button, and "
+            "**\u201c+ Add a food\u201d has moved above the list** instead of "
+            "below it. On a library of any size that button was somewhere past "
+            "the bottom of the page, which made entering a food by hand look "
+            "like something the app could not do. It always could."
+        ),
+    ),
+    Announcement(
         id="2026-08-28-weekly-review",
         date="2026-08-28",
         title="A weekly review, adding up what the app already knew",
