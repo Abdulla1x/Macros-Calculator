@@ -1,4 +1,4 @@
-import type { AnalyzedItem, Food } from '../types'
+import type { AnalyzedItem, Food, FoodCreate } from '../types'
 
 /**
  * Matching an AI item to one of the user's saved foods, and the conversion that
@@ -105,5 +105,50 @@ export function rowFieldsFromMatch(item: AnalyzedItem, food: Food) {
     protein: food.protein,
     carbs: fill(food.carbs, item.carbs),
     fat: fill(food.fat, item.fat),
+  }
+}
+
+/**
+ * An AI-estimated item as a library food, per `servingSize` grams.
+ *
+ * The third direction this module converts in, and the only one whose result
+ * outlives the meal. An AnalyzedItem's macros are for the portion the model
+ * estimated -- 141 kcal of dip because it judged 47 g were on the plate -- while
+ * a Food's are per its own serving size. Storing the portion *as* the serving is
+ * arithmetically correct and practically useless: it leaves a library row reading
+ * "141 kcal / 47 g", a serving nobody will ever weigh again. 100 g is what the
+ * library already defaults to and what Open Food Facts reports against, so that
+ * is what a saved estimate becomes.
+ *
+ * Rounded to one decimal because the only caller is a form the user is about to
+ * read. Handing an input `300.00000000000006` invites them to "fix" a number that
+ * was never wrong, and one decimal is already finer than the estimate it came
+ * from.
+ *
+ * carbs and fat stay null when the model returned null. On a foods row null means
+ * "not recorded", which is not zero -- see lib/limits.ts and lib/parse.ts.
+ *
+ * `source` is 'user'. foods.source is CHECK-constrained to 'user' or
+ * 'openfoodfacts', so there is no honest third badge to set without a migration,
+ * and 'openfoodfacts' would be a lie. What makes 'user' true is the form: these
+ * numbers are shown for review and become the user's on save.
+ *
+ * Call this only for an item with a positive `portion_grams`. It is the divisor,
+ * and AnalyzedItem carries no numeric bounds at all -- Gemini rejects them in a
+ * structured-output schema, which backend/app/schemas.py explains at length -- so
+ * zero and negatives are expressible. matchItem makes the same check above, for
+ * the same reason.
+ */
+export function foodFromAnalyzedItem(item: AnalyzedItem, servingSize = 100): FoodCreate {
+  const factor = servingSize / item.portion_grams
+  const round = (value: number) => Math.round(value * factor * 10) / 10
+  return {
+    name: item.name,
+    serving_size: servingSize,
+    calories: round(item.calories),
+    protein: round(item.protein),
+    carbs: item.carbs === null ? null : round(item.carbs),
+    fat: item.fat === null ? null : round(item.fat),
+    source: 'user',
   }
 }

@@ -7,6 +7,7 @@ import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
+import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
  *
@@ -67,6 +68,7 @@ export default function FoodLibrarySection({
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('')
+  const [expanded, setExpanded] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -93,6 +95,25 @@ export default function FoodLibrarySection({
     if (needle === '') return items
     return items.filter((food) => food.name.toLowerCase().includes(needle))
   }, [items, filter])
+
+  // Capped *after* filtering, not before: a filter that already narrows 62 foods
+  // to three has answered the question the expander asks, and offering to expand
+  // three rows would be noise.
+  //
+  // The row being edited is kept on screen whatever it sorts to. Expand the
+  // list, correct a food near the bottom, then collapse, and without this its
+  // half-typed form is unmounted while `editing` still points at it -- the edit
+  // is not lost, it is just somewhere the user cannot see, which is worse than
+  // either losing it or keeping it.
+  const visible = useMemo(() => {
+    if (expanded) return shown
+    const head = shown.slice(0, COLLAPSED_ROWS)
+    if (typeof editing !== 'number' || head.some((food) => food.id === editing)) {
+      return head
+    }
+    const edited = shown.find((food) => food.id === editing)
+    return edited ? [...head, edited] : head
+  }, [shown, expanded, editing])
 
   // Opening or abandoning a form clears the last failure with it: a refusal
   // like "you already have a food called X" answers the attempt that caused it,
@@ -147,8 +168,15 @@ export default function FoodLibrarySection({
 
     setBusy(true)
     try {
-      if (editing === 'new') await api.saveFood(body)
-      else if (typeof editing === 'number') await api.updateFood(editing, body)
+      if (editing === 'new') {
+        await api.saveFood(body)
+        // load() re-sorts by name, so a food added while collapsed can land past
+        // COLLAPSED_ROWS and read as "nothing happened". Expanding is the only
+        // answer that is true whatever the new name sorts to.
+        setExpanded(true)
+      } else if (typeof editing === 'number') {
+        await api.updateFood(editing, body)
+      }
       setEditing(null)
       setError('')
       load()
@@ -182,9 +210,10 @@ export default function FoodLibrarySection({
         <strong className="text-slate-300">
           every Open Food Facts result you pick is saved here automatically
         </strong>
-        , along with anything you ticked “save to library” on. This is where you
-        correct one that is wrong. Changes here save straight away — nothing on
-        this tab waits for a Save.
+        , along with anything you ticked “save to library” on and any ingredient
+        you saved from an AI estimate. You can also add one yourself with the
+        button below. This is where you correct one that is wrong. Changes here
+        save straight away — nothing on this tab waits for a Save.
       </p>
       <p className="mb-4 text-sm text-slate-400">
         Editing a food changes what gets filled in{' '}
@@ -206,24 +235,47 @@ export default function FoodLibrarySection({
           />
           <span className="text-xs text-slate-400">
             {items.length} food{items.length === 1 ? '' : 's'}
-            {filter.trim() !== '' && ` · ${shown.length} shown`}
+            {filter.trim() !== '' && ` · ${shown.length} matching`}
           </span>
         </div>
+      )}
+
+      {/* Above the list, not below it. On a library of any size a control
+          rendered after every row is a control nobody finds. */}
+      {editing === 'new' ? (
+        <div className="mb-3 rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2">
+          <FoodForm
+            draft={draft}
+            setDraft={setDraft}
+            onSave={save}
+            onCancel={cancelEdit}
+            busy={busy}
+          />
+        </div>
+      ) : (
+        <button
+          onClick={startAdd}
+          disabled={busy}
+          className="mb-3 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40"
+        >
+          + Add a food
+        </button>
       )}
 
       {loading ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-slate-400">
-          Nothing saved yet. Pick a food from Open Food Facts while logging a
-          meal, or tick “save to library” on one you typed yourself, and it will
-          show up here.
+          Nothing saved yet. Use <strong className="text-slate-300">+ Add a food</strong>{' '}
+          above to enter one yourself. Foods also arrive here on their own: pick
+          one from Open Food Facts while logging a meal, save an ingredient from
+          an AI estimate, or tick “save to library” on one you typed.
         </p>
       ) : shown.length === 0 ? (
         <p className="text-sm text-slate-400">Nothing matches “{filter.trim()}”.</p>
       ) : (
         <ul className="mb-3 space-y-2">
-          {shown.map((food) => (
+          {visible.map((food) => (
             <li
               key={food.id}
               className="rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2"
@@ -309,25 +361,20 @@ export default function FoodLibrarySection({
         </ul>
       )}
 
-      {editing === 'new' ? (
-        <div className="rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2">
-          <FoodForm
-            draft={draft}
-            setDraft={setDraft}
-            onSave={save}
-            onCancel={cancelEdit}
-            busy={busy}
-          />
-        </div>
-      ) : (
-        <button
-          onClick={startAdd}
-          disabled={busy}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-40"
-        >
-          + Add a food
-        </button>
-      )}
+      <ShowAllToggle
+        total={shown.length}
+        cap={COLLAPSED_ROWS}
+        expanded={expanded}
+        onToggle={() => {
+          setExpanded((current) => !current)
+          // An armed "Delete for good" must not survive out of sight. A row
+          // scrolled away still holding its confirmation would come back armed
+          // on the next expand, one tap from deleting something the user had
+          // already moved on from.
+          setConfirmDelete(null)
+        }}
+        noun="food"
+      />
 
       {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
     </Card>

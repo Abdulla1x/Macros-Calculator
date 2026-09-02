@@ -7,6 +7,7 @@ import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, Food, MealAnalysisResponse, Settings } from '../types'
 import Card from './ui/Card'
 import LibraryFoodPicker from './LibraryFoodPicker'
+import SaveIngredientToLibrary from './SaveIngredientToLibrary'
 import TextInput from './ui/TextInput'
 import Button from './ui/Button'
 
@@ -61,6 +62,17 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [library, setLibrary] = useState<Food[]>([])
   const [attached, setAttached] = useState<Food[]>([])
+  // What each saved item was stored as, keyed by the name the model gave it.
+  // The value is the name it went in under, which is not always the same one --
+  // renaming before saving is the point of the form.
+  //
+  // Kept here and NOT folded into `library`: that array is what onApply hands to
+  // LogMeal as `libraryFoods`, which is what drives the per-row "use your saved
+  // numbers" offer. Adding a food saved from this panel would make the page
+  // offer the estimate back to itself a moment later, dressed up as an
+  // independent source -- exactly the false provenance the library's own source
+  // badge exists to prevent.
+  const [savedToLibrary, setSavedToLibrary] = useState<Record<string, string>>({})
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const libraryRequested = useRef(false)
 
@@ -211,6 +223,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form))
+      // The items are all new, so the "saved ✓" marks against the old ones no
+      // longer describe anything on screen. Refining in particular re-portions
+      // and often renames, so even a name that survives is a different estimate.
+      setSavedToLibrary({})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {
@@ -465,7 +481,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             </div>
           )}
 
-          <ul className="mt-3 space-y-1">
+          <ul className="mt-3 space-y-2">
             {analysis.items.map((item) => {
               // Matched against the attached foods only. The rest of the library
               // is deliberately not consulted here: an item nobody attached is
@@ -478,31 +494,44 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
               // ingredient.
               const macros = matched ? perPortion(item, matched) : item
               return (
-                <li
-                  key={item.name}
-                  className="flex items-center justify-between gap-2 text-sm text-slate-300"
-                >
-                  <span>
-                    {item.name}{' '}
-                    <span className="text-xs text-ink-faint">
-                      ({round(item.portion_grams)} g)
-                    </span>
-                    {matched && (
-                      <span className="ml-1.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
-                        your library
+                <li key={item.name} className="text-sm text-slate-300">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      {item.name}{' '}
+                      <span className="text-xs text-ink-faint">
+                        ({round(item.portion_grams)} g)
                       </span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-xs text-slate-400">
-                    {round(macros.calories)} kcal ·{' '}
-                    {Math.round(macros.protein * 10) / 10} g P{' '}
-                    <span
-                      title={`${item.confidence} confidence`}
-                      className={confidenceBadge[item.confidence].split(' ')[1]}
-                    >
-                      {confidenceDots[item.confidence]}
+                      {matched && (
+                        <span className="ml-1.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
+                          your library
+                        </span>
+                      )}
                     </span>
-                  </span>
+                    <span className="shrink-0 text-xs text-slate-400">
+                      {round(macros.calories)} kcal ·{' '}
+                      {Math.round(macros.protein * 10) / 10} g P{' '}
+                      <span
+                        title={`${item.confidence} confidence`}
+                        className={confidenceBadge[item.confidence].split(' ')[1]}
+                      >
+                        {confidenceDots[item.confidence]}
+                      </span>
+                    </span>
+                  </div>
+                  {/* Only for items the model estimated. A matched item is a
+                      library food already -- it is where these numbers came
+                      from -- so offering to save it would be offering to
+                      overwrite it with itself. */}
+                  {!matched && (
+                    <SaveIngredientToLibrary
+                      item={item}
+                      library={library}
+                      savedAs={savedToLibrary[item.name] ?? null}
+                      onSaved={(name) =>
+                        setSavedToLibrary((current) => ({ ...current, [item.name]: name }))
+                      }
+                    />
+                  )}
                 </li>
               )
             })}
