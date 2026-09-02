@@ -68,6 +68,7 @@
 //                                       under ~/.cache/ms-playwright)
 //   SEED_DAYS     days of data to seed (default 14)
 //   SEED_TEMPLATES saved meals to seed  (default 8)
+//   SEED_FOODS    library foods to seed (default 8)
 //
 // ---------------------------------------------------------------------------
 // Why each determinism measure below exists -- every one of them is a real
@@ -108,6 +109,12 @@ const SEED_DAYS = Number(process.env.SEED_DAYS ?? 14)
 // snapshot covers the collapsed grid AND the control that expands it. Eight is
 // the smallest number that does both.
 const SEED_TEMPLATES = Number(process.env.SEED_TEMPLATES ?? 8)
+// ⚠ Before this the food library was seeded with NOTHING, so Settings -> Library
+// rendered its empty state and the entire section -- every row, both source
+// badges, the filter, the inline edit form, the add form -- had never once been
+// compared. The fourth hole of this exact shape in this file. Eight is more than
+// COLLAPSED_ROWS, so the rows and the control that expands them are both covered.
+const SEED_FOODS = Number(process.env.SEED_FOODS ?? 8)
 
 const outDir = process.argv[2]
 if (!outDir) {
@@ -241,6 +248,24 @@ const isoDaysAgo = (days) => {
  *  section inert, it makes it unwatched.** */
 async function seed(token) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+  for (let n = 0; n < SEED_FOODS; n += 1) {
+    await apiJson('/api/foods', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: `Snapshot food ${n}`,
+        serving_size: 100,
+        calories: 120 + n * 15,
+        protein: 8 + n,
+        // Alternated so both provenance badges are in the snapshot. The server
+        // takes `source` as given on POST -- it only overrides it on PUT -- so
+        // this is the one place a snapshot can produce an openfoodfacts row.
+        carbs: n % 2 === 0 ? 14 + n : null,
+        fat: n % 2 === 0 ? 3 + n : null,
+        source: n % 2 === 0 ? 'user' : 'openfoodfacts',
+      }),
+    })
+  }
   for (let n = 0; n < SEED_TEMPLATES; n += 1) {
     await apiJson('/api/meal-templates', {
       method: 'POST',
@@ -375,8 +400,21 @@ const fileNameFor = (route) => `${route === '/' ? 'index' : route.slice(1).repla
 // before this harness seeded them: an empty or collapsed state does not make a
 // section inert, it makes it unwatched. Check what a default state hides before
 // trusting this script's coverage.
+//
+// A route may name several, applied in order -- /settings/food stacks two capped
+// lists and an add form, and one selector cannot reach all three.
 const EXPAND_ON = {
   '/log': 'button:has-text("Estimate macros with AI")',
+  // Both lists render their first COLLAPSED_ROWS entries and hide the rest, and
+  // "+ Add a food" opens a form that is otherwise never in the DOM -- the same
+  // form this route exists to make findable. Matched on the plural nouns rather
+  // than the full label, which carries a count that moves with SEED_FOODS.
+  // "+ Add a food" is singular, so it cannot collide with "...foods".
+  '/settings/food': [
+    'button:has-text("foods")',
+    'button:has-text("meals")',
+    'button:has-text("Add a food")',
+  ],
 }
 
 async function capture(context, routes, label) {
@@ -388,11 +426,16 @@ async function capture(context, routes, label) {
     // content; networkidle then covers the data each page fetches for itself.
     await page.waitForSelector('h1, h2', { timeout: 15_000 })
     await page.waitForLoadState('networkidle')
-    const expander = EXPAND_ON[route]
-    if (expander && (await page.locator(expander).count()) > 0) {
+    const expanders = [EXPAND_ON[route] ?? []].flat()
+    for (const expander of expanders) {
+      // Guarded rather than asserted: a route legitimately has no expander
+      // before its data is seeded, and a hard failure there would make the
+      // harness unusable on a fresh account.
+      if ((await page.locator(expander).count()) === 0) continue
       await page.locator(expander).click()
-      // The panel fetches the food library when it opens, so wait for that to
-      // land or the snapshot races an empty picker.
+      // /log's panel fetches the food library when it opens, so wait for that to
+      // land or the snapshot races an empty picker. The settings expanders fetch
+      // nothing and this resolves immediately for them.
       await page.waitForLoadState('networkidle')
     }
     await writeFile(join(outDir, fileNameFor(route)), await stableSnapshot(page), 'utf8')
@@ -410,7 +453,8 @@ if (fresh) {
   await seed(token)
   console.log(
     `seeded ${SEED_DAYS} days of meals, weigh-ins, water and steps, ` +
-      `${SEED_TEMPLATES} templates, and a complete body profile`,
+      `${SEED_TEMPLATES} templates, ${SEED_FOODS} library foods, ` +
+      `and a complete body profile`,
   )
 }
 
