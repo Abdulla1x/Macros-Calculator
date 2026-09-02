@@ -4,6 +4,7 @@ import ShareCodePanel from '../ShareCodePanel'
 import type { MealTemplate } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
+import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
 
 /** The saved meals behind Quick log: see them, share one, remove one.
  *
@@ -26,6 +27,7 @@ export default function SavedMealsSection() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -50,6 +52,11 @@ export default function SavedMealsSection() {
     if (needle === '') return items
     return items.filter((meal) => meal.name.toLowerCase().includes(needle))
   }, [items, filter])
+
+  // Capped after filtering, the same way FoodLibrarySection does it next door.
+  // This section stacks under that one, so an uncapped list here would put the
+  // page's own footer back out of reach even once the library above is short.
+  const visible = expanded ? shown : shown.slice(0, COLLAPSED_ROWS)
 
   const remove = async (id: number) => {
     setBusy(true)
@@ -111,7 +118,7 @@ export default function SavedMealsSection() {
           />
           <span className="text-xs text-slate-400">
             {items.length} meal{items.length === 1 ? '' : 's'}
-            {filter.trim() !== '' && ` · ${shown.length} shown`}
+            {filter.trim() !== '' && ` · ${shown.length} matching`}
           </span>
         </div>
       )}
@@ -127,7 +134,7 @@ export default function SavedMealsSection() {
         <p className="text-sm text-slate-400">Nothing matches “{filter.trim()}”.</p>
       ) : (
         <ul className="mb-3 space-y-2">
-          {shown.map((meal) => (
+          {visible.map((meal) => (
             <li
               key={meal.id}
               className="rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2"
@@ -185,6 +192,19 @@ export default function SavedMealsSection() {
           ))}
         </ul>
       )}
+
+      <ShowAllToggle
+        total={shown.length}
+        cap={COLLAPSED_ROWS}
+        expanded={expanded}
+        onToggle={() => {
+          setExpanded((current) => !current)
+          // As in the food library above: a confirmation does not survive being
+          // hidden.
+          setConfirmDelete(null)
+        }}
+        noun="meal"
+      />
 
       {shareCode && (
         <ShareCodePanel
