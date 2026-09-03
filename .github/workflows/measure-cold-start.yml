@@ -1,0 +1,176 @@
+# Measures how long the free Render instance actually takes to wake up.
+#
+# The number this produces is the input to the wake-up progress bar on the
+# logged-out pages: a bar calibrated to a guess is worse than no bar, because a
+# bar that reaches the end while the user is still waiting turns "slow" into
+# "broken" -- which is the exact impression WakingNotice.tsx exists to prevent.
+#
+# Manual only. This is a calibration tool, not monitoring, and it is expensive
+# in wall-clock time for a reason that cannot be engineered away:
+#
+#  1. There is no way to ask Render to spin a free service down. The only way to
+#     reach a cold instance is to leave it completely alone for 15 minutes. So a
+#     sample costs ~16 minutes of sleeping and one request, and eight samples is
+#     about two and a quarter hours. Nothing here is slow by accident.
+#
+#  2. ANY inbound traffic resets that timer -- a phone with the PWA open, a
+#     browser tab left on the login page (which pings /api/health by itself, via
+#     useWarmup), another device, the keep-warm schedule. The app has to be
+#     untouched for the whole run or the samples are measuring nothing.
+#
+#  3. A sample that comes back quickly was therefore NOT a cold start; something
+#     had already woken the server. Those are reported and excluded rather than
+#     averaged in, because including them drags the figure toward zero and the
+#     bar would then finish early on every real cold start.
+#
+#  4. Run it overnight, local time. Three reasons that happen to agree: the app
+#     is genuinely idle; it is when real cold starts will happen, since the
+#     keep-warm window covers the day; and local night is the US working day,
+#     when Render's own fleet is busiest -- so it measures the slow case rather
+#     than the flattering one. Daytime samples read optimistically.
+#
+# Expect a range, not a constant: 52.5, 52.6, 52.7 and 64.0 seconds have all
+# been recorded on this service. Report the median and the spread.
+
+name: Measure cold start
+
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: "How many cold starts to measure"
+        default: "8"
+        required: true
+      idle_minutes:
+        description: "Minutes of silence before each sample (spin-down is 15)"
+        default: "16"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    # Generous: the step validates that the requested run actually fits, and
+    # says so up front rather than being cut off two hours in.
+    timeout-minutes: 350
+    steps:
+      - name: Sample cold starts
+        env:
+          SAMPLES: ${{ inputs.samples }}
+          IDLE_MINUTES: ${{ inputs.idle_minutes }}
+          TZ_RAW: ${{ vars.KEEP_WARM_TZ }}
+          START_RAW: ${{ vars.KEEP_WARM_START }}
+          API_RAW: ${{ vars.KEEP_WARM_API_BASE }}
+        run: |
+          set -euo pipefail
+
+          DEFAULT_TZ="Asia/Dubai"
+          DEFAULT_START=5
+          DEFAULT_API="https://macros-calculator-api-us.onrender.com"
+          # Under this, the server was already awake and the sample is not a
+          # cold start. A waking instance holds the connection open for tens of
+          # seconds; a warm one answers in well under one.
+          COLD_FLOOR_S=5
+
+          tz="${TZ_RAW:-$DEFAULT_TZ}"
+          [ -f "/usr/share/zoneinfo/$tz" ] || tz="$DEFAULT_TZ"
+          api="${API_RAW:-$DEFAULT_API}"
+          api="${api%/}"
+          start_hour="${START_RAW:-$DEFAULT_START}"
+          [[ "$start_hour" =~ ^[0-9]{1,2}$ ]] && start_hour=$((10#$start_hour)) || start_hour=$DEFAULT_START
+
+          if [[ ! "$SAMPLES" =~ ^[0-9]{1,2}$ ]] || (( 10#$SAMPLES < 1 )); then
+            echo "::error::samples must be a whole number of at least 1." >&2
+            exit 1
+          fi
+          if [[ ! "$IDLE_MINUTES" =~ ^[0-9]{1,3}$ ]] || (( 10#$IDLE_MINUTES < 16 )); then
+            echo "::error::idle_minutes must be at least 16. Render spins down after 15 minutes of silence, and a shorter wait measures a server that never slept." >&2
+            exit 1
+          fi
+          samples=$((10#$SAMPLES))
+          idle=$((10#$IDLE_MINUTES))
+
+          total=$(( samples * (idle + 2) ))
+          if (( total > 340 )); then
+            echo "::error::$samples samples at $idle minutes needs about $total minutes, past the job limit. Ask for fewer samples." >&2
+            exit 1
+          fi
+
+          # The keep-warm schedule would start pinging partway through a run
+          # that overlaps it, and every sample after that point would measure a
+          # server that was never allowed to sleep.
+          finish_hour=$(TZ="$tz" date -d "+$total minutes" +%-H)
+          now_hour=$(TZ="$tz" date +%-H)
+          if (( now_hour < start_hour && finish_hour >= start_hour )) || (( finish_hour < now_hour )); then
+            echo "::warning::This run finishes around $(TZ="$tz" date -d "+$total minutes" '+%H:%M') $tz, at or past the ${start_hour}:00 keep-warm window. Samples taken after that will not be cold. Start earlier or ask for fewer."
+          fi
+
+          echo "Measuring $samples cold starts against $api, $idle minutes of silence each (~$total minutes total)."
+          echo "Do not open the app until this finishes."
+
+          cold=()
+          {
+            echo "### Cold start samples"
+            echo ""
+            echo "| # | Taken (UTC) | Seconds | HTTP | Cold? |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for (( i = 1; i <= samples; i++ )); do
+            echo "Sample $i/$samples: sleeping ${idle}m so the instance spins down…"
+            sleep $(( idle * 60 ))
+
+            taken=$(date -u '+%H:%M:%S')
+            out=$(
+              curl -sS -o /dev/null -w '%{http_code} %{time_total}' \
+                --max-time 180 "$api/api/health"
+            ) && rc=0 || rc=$?
+            read -r code seconds <<<"${out:-000 0}"
+
+            if [ "$rc" -ne 0 ]; then
+              echo "::warning::Sample $i failed (curl exit $rc)."
+              echo "| $i | $taken | — | curl $rc | no |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            if awk -v s="$seconds" -v f="$COLD_FLOOR_S" 'BEGIN { exit !(s < f) }'; then
+              echo "Sample $i: ${seconds}s — too fast to be a cold start, something else woke the server. Excluded."
+              echo "| $i | $taken | $seconds | $code | **no** |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            echo "Sample $i: ${seconds}s (HTTP $code)"
+            echo "| $i | $taken | $seconds | $code | yes |" >> "$GITHUB_STEP_SUMMARY"
+            cold+=("$seconds")
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if (( ${#cold[@]} == 0 )); then
+            echo "::error::No sample was a genuine cold start. Something kept the server awake for the whole run -- close every tab and device using the app, check the keep-warm schedule, and try again overnight." >&2
+            echo "**No cold samples.** Something kept the server awake for the whole run." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          readarray -t sorted < <(printf '%s\n' "${cold[@]}" | sort -g)
+          n=${#sorted[@]}
+          if (( n % 2 == 1 )); then
+            median=${sorted[$(( n / 2 ))]}
+          else
+            median=$(awk -v a="${sorted[$(( n / 2 - 1 ))]}" -v b="${sorted[$(( n / 2 ))]}" \
+              'BEGIN { printf "%.3f", (a + b) / 2 }')
+          fi
+
+          {
+            echo "**$n cold sample(s) of $samples**"
+            echo ""
+            echo "- Median: **${median}s**"
+            echo "- Fastest: ${sorted[0]}s"
+            echo "- Slowest: ${sorted[$(( n - 1 ))]}s"
+            echo ""
+            echo "Use the median for the progress bar, and the slowest to sanity-check the client timeout in \`frontend/src/api/client.ts\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Median ${median}s over $n cold samples (${sorted[0]}s – ${sorted[$(( n - 1 ))]}s)."

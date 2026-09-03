@@ -528,8 +528,21 @@ origin — the CSP there names an exact host, and the browser silently refuses e
 to anything else. That failure looks like a network error and never reaches the server, so
 `curl` against the API will happily report everything healthy.
 
-> Free-tier note: Render spins down after idle (~30 s cold start) and Neon autosuspends
-> (~1 s resume). The login page mentions this so first-time users don't bounce.
+> Free-tier note: Render stops the service after 15 minutes without traffic, and the next
+> request pays for the boot — measured between 52 s and 64 s. Neon autosuspends too, but
+> resumes in about a second. The login page says so, so first-time users don't bounce.
+>
+> [`.github/workflows/keep-warm.yml`](.github/workflows/keep-warm.yml) removes that wait
+> across a configurable daily window (05:00–21:00 `Asia/Dubai` by default) by pinging
+> `/api/health` every 10 minutes. **Outside the window the cold start is still there** —
+> the window exists because Render allows 750 instance-hours per workspace per month and a
+> 24/7 ping would spend all but six of them. Change the hours with the `KEEP_WARM_*`
+> repository variables; no commit or redeploy needed.
+>
+> The ping targets `/api/health` and must keep doing so: it is the one route that never
+> touches Postgres. Pointing it at anything that queries the database would hold Neon awake
+> ~16 hours a day, over its 100 CU-hour monthly allowance, and suspend the database until
+> the next billing period.
 
 ---
 
