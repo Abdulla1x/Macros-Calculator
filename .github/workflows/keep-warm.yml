@@ -1,0 +1,240 @@
+# Keeps the free Render instance awake across the owner's waking hours.
+#
+# Render's free plan stops a web service after 15 minutes with no inbound
+# traffic, and the next visitor then waits for a full boot -- measured between
+# 52.5 s and 64.0 s over 2026. This sends one request every 10 minutes so that
+# timer never expires, but only inside a window: warmth at 03:00 helps nobody,
+# and the free plan does not have the hours to give away.
+#
+# Five things that are true and worth knowing before changing anything here:
+#
+#  1. It pings /api/health and NOTHING else, ever. That endpoint returns a
+#     static dict and never touches Postgres. Neon's free plan allows 100
+#     CU-hours a month (~400 hours of awake database) and suspends the compute
+#     when they run out -- open connections dropped, new ones refused, until the
+#     next billing period. Pinging any endpoint that queried the database would
+#     hold Neon awake 16 hours a day: ~486 hours a month, ~122 CU-hours, over
+#     the limit with zero users, and a multi-day outage caused by the monitoring
+#     itself. A "deeper" health check that proves the database is reachable is
+#     the obvious next idea and it is the one that breaks the app.
+#
+#  2. Render allows 750 instance hours per WORKSPACE per calendar month -- not
+#     per service -- and suspends every free web service until the 1st when they
+#     run out. A 16-hour window costs ~496 hours in a 31-day month, leaving
+#     ~254 in hand. That margin is what a second free service would need. A 24/7
+#     window costs ~744 and leaves six. Widen the window with that in mind.
+#
+#  3. Every 10 minutes, not every 15. Scheduled workflows are best-effort and
+#     routinely run late, so a cadence equal to the 15-minute spin-down would
+#     let the server die on any run GitHub delayed. This survives one lost run.
+#
+#  4. GitHub disables scheduled workflows in a public repository after 60 days
+#     with no activity. The pings would stop and nothing would announce it --
+#     the same trap backup.yml carries. workflow_dispatch is the manual restart.
+#
+#  5. The schedule below is a SUPERSET of the window, in UTC; the window itself
+#     is checked inside the job. That is what lets the hours change from a
+#     repository variable with no commit and no deploy. Set a window outside the
+#     superset and the job says so in its log -- a cron that never fires cannot
+#     report anything itself, so the check has to live on the runs that do.
+#
+# Configuration -- repository variables, all optional
+# (Settings -> Secrets and variables -> Actions -> Variables):
+#
+#   KEEP_WARM_START     first hour to ping, local, 0-23      default 5
+#   KEEP_WARM_END       first hour NOT to ping, local        default 21
+#   KEEP_WARM_TZ        IANA zone those hours are in         default Asia/Dubai
+#   KEEP_WARM_API_BASE  API origin                           default the live service
+#
+# Variables rather than a value committed here on purpose: they are reachable
+# from a phone, from any browser, and -- the point that decided it -- while the
+# app itself is down. A control that governs whether the service is up must not
+# live inside the service.
+
+name: Keep warm
+
+on:
+  schedule:
+    # Every 10 minutes across 00:00-18:59 UTC, which is 04:00-22:59 in
+    # Asia/Dubai (UTC+4, and Dubai does not observe DST, so this never shifts).
+    # Minutes offset off the hour for the reason backup.yml gives: :00 is where
+    # every cron in the world queues up.
+    #
+    # Keep CRON_UTC_FIRST/CRON_UTC_LAST in the script below in sync with this.
+    - cron: "3,13,23,33,43,53 0-18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A queue of late pings is pointless: only the most recent one can still
+  # affect whether the server is awake right now.
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API if we are inside the waking window
+        env:
+          START_RAW: ${{ vars.KEEP_WARM_START }}
+          END_RAW: ${{ vars.KEEP_WARM_END }}
+          TZ_RAW: ${{ vars.KEEP_WARM_TZ }}
+          API_RAW: ${{ vars.KEEP_WARM_API_BASE }}
+        run: |
+          set -euo pipefail
+
+          DEFAULT_START=5
+          DEFAULT_END=21
+          DEFAULT_TZ="Asia/Dubai"
+          DEFAULT_API="https://macros-calculator-api-us.onrender.com"
+
+          # Must match the cron line above.
+          CRON_UTC_FIRST=0
+          CRON_UTC_LAST=18
+
+          # A repository variable holds exactly what was typed into the box.
+          # "05" is a perfectly natural way to write 5am, and bash arithmetic
+          # reads a leading zero as octal -- where 08 and 09 are not numbers at
+          # all but syntax errors. Everything goes through 10# and a range check
+          # before it is trusted, and anything unusable falls back rather than
+          # failing: a broken variable must not decide the server stays awake
+          # 24 hours a day, nor that it is never warmed again.
+          hour_value() {
+            local raw="$1" fallback="$2" name="$3"
+            if [ -z "$raw" ]; then
+              printf '%s' "$fallback"
+              return
+            fi
+            if [[ ! "$raw" =~ ^[0-9]{1,2}$ ]]; then
+              echo "::warning::$name is '$raw', which is not a whole hour; using $fallback instead." >&2
+              printf '%s' "$fallback"
+              return
+            fi
+            local n=$((10#$raw))
+            if (( n > 23 )); then
+              echo "::warning::$name is $n, outside 0-23; using $fallback instead." >&2
+              printf '%s' "$fallback"
+              return
+            fi
+            printf '%s' "$n"
+          }
+
+          start=$(hour_value "${START_RAW:-}" "$DEFAULT_START" KEEP_WARM_START)
+          end=$(hour_value "${END_RAW:-}" "$DEFAULT_END" KEEP_WARM_END)
+          tz="${TZ_RAW:-$DEFAULT_TZ}"
+          api="${API_RAW:-$DEFAULT_API}"
+          api="${api%/}"
+
+          # A window that wraps past midnight (22 -> 6) is not supported, and
+          # that is deliberate. It is nearly every way this pair gets typed
+          # wrongly and nearly none of the ways it gets meant, so it reads as a
+          # mistake and is treated as one.
+          if (( start >= end )); then
+            echo "::warning::KEEP_WARM_START ($start) is not before KEEP_WARM_END ($end); a window cannot wrap past midnight. Using ${DEFAULT_START}-${DEFAULT_END}."
+            start=$DEFAULT_START
+            end=$DEFAULT_END
+          fi
+
+          # An unknown zone is worse than an error here: TZ falls back to UTC
+          # without a word, and the window would quietly run four hours early.
+          if [ ! -f "/usr/share/zoneinfo/$tz" ]; then
+            echo "::warning::KEEP_WARM_TZ '$tz' is not a zone on this runner. TZ would silently fall back to UTC, so using $DEFAULT_TZ instead."
+            tz="$DEFAULT_TZ"
+          fi
+
+          case "$api" in
+            https://*) ;;
+            *)
+              echo "::error::KEEP_WARM_API_BASE must start with https:// -- got '$api'." >&2
+              exit 1
+              ;;
+          esac
+
+          local_hour=$(TZ="$tz" date +%-H)
+          utc_hour=$(date -u +%-H)
+
+          # Does the schedule above actually fire during every hour of the
+          # window? Worked out from whole hours only: a zone on :30 or :45 lands
+          # in the neighbouring hour, which is close enough for a warning and
+          # avoids doing date arithmetic in bash. The window check itself, below,
+          # is exact regardless of offset -- it just asks the clock.
+          offset=$(( (local_hour - utc_hour + 24) % 24 ))
+          uncovered=()
+          for (( h = start; h < end; h++ )); do
+            u=$(( (h - offset + 24) % 24 ))
+            if (( u < CRON_UTC_FIRST || u > CRON_UTC_LAST )); then
+              uncovered+=("$(printf '%02d:00' "$h")")
+            fi
+          done
+          if (( ${#uncovered[@]} > 0 )); then
+            echo "::warning::The schedule never fires during ${uncovered[*]} $tz, so those hours cannot be warmed. Widen the cron range in this file to cover them."
+          fi
+
+          window="$(printf '%02d:00-%02d:00 %s' "$start" "$end" "$tz")"
+          now="$(TZ="$tz" date '+%H:%M')"
+
+          if (( local_hour < start || local_hour >= end )); then
+            echo "Outside the window: it is $now in $tz and pings run $window. Nothing to do."
+            echo "- Skipped at **$now** $tz — outside $window" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "Inside the window ($window); pinging $api/api/health at $now."
+
+          # -f is deliberately absent: the HTTP status is wanted, not swallowed
+          # into a generic exit 22. Retries absorb a single bad minute without
+          # letting a real outage look healthy.
+          # Assigned from a command substitution rather than read from a
+          # process substitution: `read < <(curl ...)` reports read's exit
+          # status, so a curl that failed outright would be indistinguishable
+          # from one that succeeded.
+          out=$(
+            curl -sS -o /dev/null -w '%{http_code} %{time_total}' \
+              --max-time 120 --retry 2 --retry-delay 20 --retry-all-errors \
+              "$api/api/health"
+          ) && rc=0 || rc=$?
+          read -r code seconds <<<"${out:-000 0}"
+
+          # Split on purpose. A wrong host or a wrong path is a mistake only a
+          # person can fix, and would otherwise warm nothing at all, forever, in
+          # silence -- so it fails loudly. A timeout or a 5xx is Render having a
+          # bad few minutes, and failing 96 times a day through an outage would
+          # bury the one alert that matters, the nightly backup's.
+          if [ "$rc" -ne 0 ]; then
+            case "$rc" in
+              3|6)
+                echo "::error::Could not resolve or parse '$api' (curl exit $rc). Check KEEP_WARM_API_BASE." >&2
+                exit 1
+                ;;
+              *)
+                echo "::warning::Ping failed with curl exit $rc; treating it as a transient provider problem. The next run is in 10 minutes."
+                echo "- Ping failed at **$now** $tz (curl exit $rc)" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+            esac
+          fi
+
+          if [ "$code" = "404" ]; then
+            echo "::error::$api/api/health returned 404. The service exists but that path does not -- check KEEP_WARM_API_BASE points at the API, not the frontend." >&2
+            exit 1
+          fi
+
+          if [ "$code" != "200" ]; then
+            echo "::warning::Ping returned HTTP $code after ${seconds}s; treating it as transient."
+            echo "- Ping returned **$code** at $now $tz" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # A warm instance answers this in well under a second. Anything near a
+          # minute means the server had already gone to sleep, so the previous
+          # ping never landed -- which is the symptom of GitHub having quietly
+          # stopped running the schedule.
+          if awk -v s="$seconds" 'BEGIN { exit !(s > 20) }'; then
+            echo "::warning::That ping took ${seconds}s, so the server was asleep when it arrived. The previous ping did not land -- check the schedule is still running."
+          fi
+
+          echo "Awake: HTTP $code in ${seconds}s."
+          echo "- Pinged at **$now** $tz — HTTP $code in ${seconds}s (window $window)" >> "$GITHUB_STEP_SUMMARY"
