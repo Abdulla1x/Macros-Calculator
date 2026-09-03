@@ -54,19 +54,32 @@ export class ApiError extends Error {
 
 // fetch has no default timeout, so a request the server accepts and never
 // answers leaves the spinner up forever — which reads as "the app is broken"
-// rather than "try again". Generous, because a cold free-tier instance takes
-// ~30s to wake.
-const DEFAULT_TIMEOUT_MS = 60_000
+// rather than "try again".
+//
+// Every budget below has to clear a COLD START, because the free instance stops
+// after 15 minutes without traffic and the next request pays for the whole boot.
+// Measured on the live service: 52.5s, 52.6s, 52.7s and 64.0s across 2026 —
+// call the ceiling ~65s. This was 60s, which is *inside* that range: a returning
+// user with a stored token never sees the login page, so the warm-up ping in
+// useWarmup never fires, and their first request — Layout's settings fetch —
+// was being aborted by this constant on a server that was working perfectly.
+// The keep-warm schedule removes that during the day, not outside it.
+const DEFAULT_TIMEOUT_MS = 90_000
 // The AI endpoints get their own budgets, which must EXCEED the backend's worst
 // case, or the client aborts requests that were about to succeed. The server
 // retries a busy provider for up to its deadline (60s analyze, 25s transcribe)
 // and the final attempt can still run its full per-request timeout on top
 // (30s / 12s), so the real ceilings are ~90s and ~37s — plus the upload.
-const ANALYZE_TIMEOUT_MS = 150_000
-const TRANSCRIBE_TIMEOUT_MS = 60_000
+//
+// Plus a cold start on top of each, which is not paranoia: these are never a
+// session's first request, but a tab left open for fifteen minutes gets a
+// spun-down server on the next one, and composing a meal takes longer than that
+// far more often than not.
+const ANALYZE_TIMEOUT_MS = 180_000
+const TRANSCRIBE_TIMEOUT_MS = 120_000
 // Same arithmetic for the review summary: a 30s server deadline plus a final
 // 15s attempt on top is a ~45s ceiling, and a cold instance adds to it.
-const REVIEW_TIMEOUT_MS = 90_000
+const REVIEW_TIMEOUT_MS = 120_000
 
 async function request<T>(
   path: string,
