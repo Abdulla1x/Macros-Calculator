@@ -1,10 +1,18 @@
-# Keeps the free Render instance awake across the owner's waking hours.
+# Wakes the free Render instance on demand, and records how the automatic
+# warming works and why it does not run from here.
 #
 # Render's free plan stops a web service after 15 minutes with no inbound
-# traffic, and the next visitor then waits for a full boot -- measured between
-# 52.5 s and 64.0 s over 2026. This sends one request every 10 minutes so that
-# timer never expires, but only inside a window: warmth at 03:00 helps nobody,
-# and the free plan does not have the hours to give away.
+# traffic, and the next visitor then waits for a full boot -- 52.30 s median
+# over ten consecutive cold starts on 2026-09-03, eight of them inside a
+# 0.22 s band and two about 10 s slower. One request every 10 minutes keeps
+# that timer from expiring, but only inside a window: warmth at 03:00 helps
+# nobody, and the free plan does not have the hours to give away.
+#
+# THE PINGS DO NOT COME FROM THIS FILE. They come from cron-job.org, because
+# GitHub's scheduler will not run them -- point 4. This workflow stays for two
+# jobs: the button that wakes the server by hand, and the written record of
+# every constraint the pinging has to respect, which belongs in the repository
+# and not in a third party's dashboard.
 #
 # Five things that are true and worth knowing before changing anything here:
 #
@@ -24,19 +32,33 @@
 #     ~254 in hand. That margin is what a second free service would need. A 24/7
 #     window costs ~744 and leaves six. Widen the window with that in mind.
 #
-#  3. Every 10 minutes, not every 15. Scheduled workflows are best-effort and
-#     routinely run late, so a cadence equal to the 15-minute spin-down would
-#     let the server die on any run GitHub delayed. This survives one lost run.
+#  3. Every 10 minutes, not every 15, wherever the pings run from. A cadence
+#     equal to the 15-minute spin-down is a coin flip on every tick; 10 minutes
+#     leaves five minutes of slack and survives one lost ping. cron-job.org
+#     abandons a request after 30 seconds, so the first ping of the day is
+#     recorded as a failure -- and still starts the boot, which Render finishes
+#     whether or not anyone is listening. Measured 2026-09-04: a request
+#     abandoned at 30 s against a sleeping server, then a second request 60 s
+#     later answered HTTP 200 in 0.89 s.
 #
-#  4. GitHub disables scheduled workflows in a public repository after 60 days
-#     with no activity. The pings would stop and nothing would announce it --
-#     the same trap backup.yml carries. workflow_dispatch is the manual restart.
+#  4. GitHub's cron does not work on this repository, which is why the schedule
+#     below is commented out. Measured 2026-09-03/04: of the 114 runs a day this
+#     asked for, 3 were delivered. backup.yml, at once a day, has started 4.5 to
+#     12 hours late on eight consecutive days, with created_at equal to
+#     run_started_at -- so that is a real delay and not a queueing artefact.
+#     Scheduled workflows on free public repositories are best-effort and get
+#     dropped, and no cadence survives that when the requirement is one ping
+#     every 15 minutes. (GitHub also disables schedules outright after 60 days
+#     of repository inactivity, the trap backup.yml carries. That is a second
+#     way this can fail, and not what happened here.)
 #
-#  5. The schedule below is a SUPERSET of the window, in UTC; the window itself
-#     is checked inside the job. That is what lets the hours change from a
-#     repository variable with no commit and no deploy. Set a window outside the
-#     superset and the job says so in its log -- a cron that never fires cannot
-#     report anything itself, so the check has to live on the runs that do.
+#  5. The window logic below is dormant, not dead, and is left intact because it
+#     is exactly what a restored schedule would need: the commented cron is a
+#     SUPERSET of the window in UTC, the window itself is checked inside the job,
+#     and that pairing is what let the hours move from a repository variable with
+#     no commit and no deploy. A manual run skips the check -- pressing the
+#     button means "wake it now", and a button that refuses at midnight is
+#     useless on the one night anybody needs it.
 #
 # Configuration -- repository variables, all optional
 # (Settings -> Secrets and variables -> Actions -> Variables):
@@ -50,18 +72,28 @@
 # from a phone, from any browser, and -- the point that decided it -- while the
 # app itself is down. A control that governs whether the service is up must not
 # live inside the service.
+#
+# While the schedule is commented out, START/END/TZ govern nothing in practice.
+# The live window is the cron-job.org job's own schedule -- 05:03 to 20:53
+# Asia/Dubai, every 10 minutes -- and that is where to change it.
+# KEEP_WARM_API_BASE still applies to every manual run.
 
 name: Keep warm
 
 on:
-  schedule:
-    # Every 10 minutes across 00:00-18:59 UTC, which is 04:00-22:59 in
-    # Asia/Dubai (UTC+4, and Dubai does not observe DST, so this never shifts).
-    # Minutes offset off the hour for the reason backup.yml gives: :00 is where
-    # every cron in the world queues up.
-    #
-    # Keep CRON_UTC_FIRST/CRON_UTC_LAST in the script below in sync with this.
-    - cron: "3,13,23,33,43,53 0-18 * * *"
+  # Commented out 2026-09-04, not deleted: restoring it is one uncomment if the
+  # external scheduler ever goes away, and leaving it visible shows what was
+  # tried. GitHub delivered 3 of the 114 runs a day it asks for -- point 4.
+  #
+  # Every 10 minutes across 00:00-18:59 UTC, which is 04:00-22:59 in Asia/Dubai
+  # (UTC+4, and Dubai does not observe DST, so this never shifts). Minutes
+  # offset off the hour for the reason backup.yml gives: :00 is where every cron
+  # in the world queues up.
+  #
+  # Keep CRON_UTC_FIRST/CRON_UTC_LAST in the script below in sync with this.
+  #
+  # schedule:
+  #   - cron: "3,13,23,33,43,53 0-18 * * *"
   workflow_dispatch:
 
 permissions:
@@ -83,6 +115,7 @@ jobs:
           END_RAW: ${{ vars.KEEP_WARM_END }}
           TZ_RAW: ${{ vars.KEEP_WARM_TZ }}
           API_RAW: ${{ vars.KEEP_WARM_API_BASE }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
@@ -176,13 +209,22 @@ jobs:
           window="$(printf '%02d:00-%02d:00 %s' "$start" "$end" "$tz")"
           now="$(TZ="$tz" date '+%H:%M')"
 
-          if (( local_hour < start || local_hour >= end )); then
+          # A manual run always pings. The window is there to stop a SCHEDULE
+          # burning instance hours overnight; the button is an explicit "wake it
+          # now", and refusing that at 02:00 -- the one hour the server is
+          # certainly asleep and someone certainly wants it up -- would make the
+          # button useless precisely when it is reached for.
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if (( local_hour < start || local_hour >= end )); then
+              echo "Manual run at $now $tz, outside $window. Pinging anyway."
+            fi
+          elif (( local_hour < start || local_hour >= end )); then
             echo "Outside the window: it is $now in $tz and pings run $window. Nothing to do."
             echo "- Skipped at **$now** $tz — outside $window" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          echo "Inside the window ($window); pinging $api/api/health at $now."
+          echo "Pinging $api/api/health at $now $tz (window $window)."
 
           # -f is deliberately absent: the HTTP status is wanted, not swallowed
           # into a generic exit 22. Retries absorb a single bad minute without
@@ -229,11 +271,10 @@ jobs:
           fi
 
           # A warm instance answers this in well under a second. Anything near a
-          # minute means the server had already gone to sleep, so the previous
-          # ping never landed -- which is the symptom of GitHub having quietly
-          # stopped running the schedule.
+          # minute means the server had already gone to sleep, so the last
+          # automatic ping never landed.
           if awk -v s="$seconds" 'BEGIN { exit !(s > 20) }'; then
-            echo "::warning::That ping took ${seconds}s, so the server was asleep when it arrived. The previous ping did not land -- check the schedule is still running."
+            echo "::warning::That ping took ${seconds}s, so the server was asleep when it arrived. The external schedule is not landing -- check the cron-job.org job is enabled and its history is not all failures."
           fi
 
           echo "Awake: HTTP $code in ${seconds}s."

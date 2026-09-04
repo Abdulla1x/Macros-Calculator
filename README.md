@@ -529,15 +529,20 @@ to anything else. That failure looks like a network error and never reaches the 
 `curl` against the API will happily report everything healthy.
 
 > Free-tier note: Render stops the service after 15 minutes without traffic, and the next
-> request pays for the boot — measured between 52 s and 64 s. Neon autosuspends too, but
-> resumes in about a second. The login page says so, so first-time users don't bounce.
+> request pays for the boot — a 52.3 s median over ten consecutive cold starts, and about
+> 62 s on the slow one run in five. Neon autosuspends too, but resumes in about a second.
+> The login page says so, so first-time users don't bounce.
 >
-> [`.github/workflows/keep-warm.yml`](.github/workflows/keep-warm.yml) removes that wait
-> across a configurable daily window (05:00–21:00 `Asia/Dubai` by default) by pinging
-> `/api/health` every 10 minutes. **Outside the window the cold start is still there** —
-> the window exists because Render allows 750 instance-hours per workspace per month and a
-> 24/7 ping would spend all but six of them. Change the hours with the `KEEP_WARM_*`
-> repository variables; no commit or redeploy needed.
+> That wait is removed across a daily window — 05:03 to 20:53 `Asia/Dubai`, one ping every
+> 10 minutes — by a scheduler at [cron-job.org](https://cron-job.org), not by GitHub
+> Actions. GitHub's cron cannot hold a 15-minute deadline on a free public repository: it
+> delivered 3 of the 114 runs a day this needs, and `backup.yml` has started 4.5 to 12
+> hours late on eight consecutive days.
+> [`.github/workflows/keep-warm.yml`](.github/workflows/keep-warm.yml) carries the whole
+> record of why, and remains a one-click button for waking the server by hand.
+> **Outside the window the cold start is still there** — the window exists because Render
+> allows 750 instance-hours per workspace per month and a 24/7 ping would spend all but six
+> of them.
 >
 > The ping targets `/api/health` and must keep doing so: it is the one route that never
 > touches Postgres. Pointing it at anything that queries the database would hold Neon awake
