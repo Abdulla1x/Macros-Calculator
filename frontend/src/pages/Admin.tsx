@@ -87,7 +87,7 @@ function verdictCopy(status: KeepWarmStatus): { dot: string; text: string } {
     case 'warm':
       return {
         dot: 'text-emerald-500',
-        text: `Awake for longer than the ${spinDown} spin-down, with health checks still arriving. The scheduler is landing.`,
+        text: `Awake for longer than the ${spinDown} spin-down, with marked pings still arriving. The scheduler is landing.`,
       }
     case 'warming':
       return {
@@ -104,10 +104,18 @@ function verdictCopy(status: KeepWarmStatus): { dot: string; text: string } {
         dot: 'text-amber-500',
         text: 'This process started moments ago. Either the server was asleep and opening this page is what woke it — in which case the pings are not landing, so check the cron-job.org job is enabled and its history is not all failures — or it has just been redeployed.',
       }
+    case 'awaiting_marked_pings':
+      // Almost always the rollout gap rather than a fault: this code can ship
+      // before anyone edits the cron-job.org URL. Calling that "the scheduler
+      // stopped" would be a guaranteed false alarm on its own deploy.
+      return {
+        dot: 'text-amber-500',
+        text: 'No ping carrying ?src=keepwarm has arrived since boot. If the cron-job.org job has not been pointed at that URL yet, that is why — until it is, only uptime here means anything.',
+      }
     case 'pings_missing':
       return {
         dot: 'text-rose-400',
-        text: `Awake, but no health check has arrived in the last ${spinDownMins} minutes. Something else is keeping this up — ordinary traffic, most likely — and it will sleep as soon as that stops.`,
+        text: `Marked pings were arriving and have not for ${spinDownMins} minutes. Something else is keeping this up — ordinary traffic, most likely — and it will sleep as soon as that stops.`,
       }
     case 'outside_window':
       return {
@@ -176,25 +184,25 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
           note={`since ${clockTime(status.booted_at, status.window_tz)}`}
         />
         <KeepWarmFact
-          label="Health checks"
-          value={status.health_checks.toLocaleString()}
+          label="Scheduler pings"
+          value={status.scheduler_pings.toLocaleString()}
           note={
-            status.seconds_since_last_check === null
+            status.seconds_since_scheduler_ping === null
               ? 'none since boot'
-              : status.seconds_since_last_check < 10
+              : status.seconds_since_scheduler_ping < 10
                 ? // "last 0s ago" is technically correct and reads like a bug.
                   'seconds ago'
-                : `${duration(status.seconds_since_last_check)} ago`
+                : `${duration(status.seconds_since_scheduler_ping)} ago`
           }
         />
         <KeepWarmFact
           label="Longest gap"
           value={
-            status.longest_gap_seconds === null
+            status.longest_scheduler_gap_seconds === null
               ? '—'
-              : duration(status.longest_gap_seconds)
+              : duration(status.longest_scheduler_gap_seconds)
           }
-          note={`between checks · sleeps after ${Math.round(status.spin_down_seconds / 60)}m`}
+          note={`between scheduler pings · sleeps after ${Math.round(status.spin_down_seconds / 60)}m`}
         />
         <KeepWarmFact
           label="Window"
@@ -203,6 +211,17 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
         />
       </dl>
       <p className="mt-3 text-xs text-ink-faint">
+        Only pings to{' '}
+        <code className="text-ink-muted">/api/health?src=keepwarm</code> are
+        counted above. Render&apos;s own monitor hits the bare route roughly
+        every four seconds and has done so{' '}
+        <span data-live="total checks">
+          {status.health_checks.toLocaleString()}
+        </span>{' '}
+        times since boot — counting those as scheduler pings is what made this
+        panel&apos;s first version unable to detect anything at all.
+      </p>
+      <p className="mt-2 text-xs text-ink-faint">
         The window above is what this repository records. The schedule
         itself lives at cron-job.org and is the thing to edit — pings run
         every 10 minutes and its 30-second timeout means the first one

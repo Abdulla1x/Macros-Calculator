@@ -700,14 +700,18 @@ export interface ReviewSummary {
 export interface KeepWarmStatus {
   booted_at: string
   uptime_seconds: number
-  /** Every /api/health request, the logged-out pages' warm-up ping included —
-   * not only the scheduler's. */
+  /** EVERY request to /api/health, and mostly not the scheduler's: Render's
+   * platform monitor hits this route about every 4 seconds. Context only —
+   * never derive anything about the scheduler from it. */
   health_checks: number
-  last_health_check_at: string | null
-  seconds_since_last_check: number | null
-  /** null until two checks have arrived; 0 would read as "perfect" rather than
-   * "nothing to say yet". */
-  longest_gap_seconds: number | null
+  /** The subset carrying ?src=keepwarm, which only cron-job.org sends. This is
+   * the number the verdict is computed from. */
+  scheduler_pings: number
+  last_scheduler_ping_at: string | null
+  seconds_since_scheduler_ping: number | null
+  /** null until two scheduler pings have arrived; 0 would read as "perfect"
+   * rather than "nothing to say yet". */
+  longest_scheduler_gap_seconds: number | null
   window_start_hour: number
   window_end_hour: number
   window_tz: string
@@ -715,5 +719,11 @@ export interface KeepWarmStatus {
   window_local_time: string
   in_window: boolean
   spin_down_seconds: number
-  verdict: 'outside_window' | 'cold' | 'warming' | 'pings_missing' | 'warm'
+  verdict:
+    | 'outside_window'
+    | 'cold'
+    | 'warming'
+    | 'awaiting_marked_pings'
+    | 'pings_missing'
+    | 'warm'
 }
