@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useAnnouncements } from '../hooks/useAnnouncements'
@@ -32,12 +32,19 @@ export default function Layout() {
   // authenticated request of the session, so if it is slow, everything is.
   const { loading: settingsLoading } = useSettings()
   const [coldStart, setColdStart] = useState(false)
+  // When the wait actually began, which is not when the notice appears. The
+  // notice is held back COLD_START_NOTICE_AFTER_MS, so a progress bar started
+  // at its mount would run three seconds behind the fetch it describes — and
+  // three seconds is most of the difference between the two measured boot
+  // clusters. Passed to WakingNotice below.
+  const waitStartedAt = useRef(Date.now())
 
   useEffect(() => {
     if (!settingsLoading) {
       setColdStart(false)
       return
     }
+    waitStartedAt.current = Date.now()
     const timer = setTimeout(() => setColdStart(true), COLD_START_NOTICE_AFTER_MS)
     return () => clearTimeout(timer)
   }, [settingsLoading])
@@ -141,7 +148,10 @@ export default function Layout() {
               nothing at all unless the reminder has been switched on. */}
           <WeighInNudge />
           {coldStart && (
-            <WakingNotice className="mb-4 rounded-control bg-surface px-3 py-2 text-center text-xs text-ink-muted" />
+            <WakingNotice
+              startedAt={waitStartedAt.current}
+              className="mb-4 rounded-control bg-surface px-3 py-2 text-center text-xs text-ink-muted"
+            />
           )}
           <Outlet />
         </div>
