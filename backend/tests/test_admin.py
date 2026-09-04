@@ -473,34 +473,71 @@ def test_keep_warm_reports_the_window_and_a_verdict(client, monkeypatch):
     assert body["window_local_time"][2] == ":"
 
 
-def test_keep_warm_counts_health_checks(client, monkeypatch):
-    """Uptime alone cannot tell the pinger apart from ordinary user traffic."""
+MARKED_HEALTH = f"/api/health?src={keep_warm.SCHEDULER_MARKER}"
+
+
+def test_only_marked_requests_count_as_scheduler_pings(client, monkeypatch):
+    """The bug this split fixes, asserted directly.
+
+    Render points healthCheckPath at /api/health and hits it about every four
+    seconds, so an unmarked request is far more likely to be the platform
+    monitor than the scheduler. Production measured 2,714 requests in 3h12m
+    where cron-job.org could account for 19. Counting them together made the
+    number meaningless and made pings_missing unreachable.
+    """
     make_admin(client, monkeypatch)
-    before = client.get("/api/admin/keep-warm").json()
-    assert before["last_health_check_at"] is None or before["health_checks"] > 0
+    keep_warm.mark_boot()
 
-    for _ in range(3):
+    for _ in range(5):
         assert client.get("/api/health").status_code == 200
+    for _ in range(2):
+        assert client.get(MARKED_HEALTH).status_code == 200
 
-    after = client.get("/api/admin/keep-warm").json()
-    assert after["health_checks"] == before["health_checks"] + 3
-    assert after["last_health_check_at"] is not None
-    assert after["seconds_since_last_check"] is not None
-    # Two checks have now arrived, so a gap exists to report.
-    assert after["longest_gap_seconds"] is not None
+    body = client.get("/api/admin/keep-warm").json()
+    assert body["health_checks"] == 7, "every request counts toward the total"
+    assert body["scheduler_pings"] == 2, "only marked ones are scheduler pings"
+    assert body["last_scheduler_ping_at"] is not None
+    assert body["seconds_since_scheduler_ping"] is not None
 
 
-def test_longest_gap_is_none_until_two_checks_have_arrived(client, monkeypatch):
+def test_an_unrecognised_src_is_not_a_scheduler_ping(client, monkeypatch):
+    """A health check must never fail on its query string, so `src` is
+    unvalidated -- which means a wrong value has to degrade to "not the
+    scheduler" rather than to an error or, worse, to a match."""
+    make_admin(client, monkeypatch)
+    keep_warm.mark_boot()
+
+    for path in ("/api/health?src=", "/api/health?src=KEEPWARM",
+                 "/api/health?src=keepwarm2", "/api/health?other=keepwarm"):
+        assert client.get(path).status_code == 200, path
+
+    body = client.get("/api/admin/keep-warm").json()
+    assert body["health_checks"] == 4
+    assert body["scheduler_pings"] == 0
+
+
+def test_longest_gap_is_none_until_two_scheduler_pings_have_arrived(
+    client, monkeypatch
+):
     """None rather than 0. There is no gap before the second ping, and 0 would
     read as "the pings are perfect" rather than "nothing to say yet"."""
     make_admin(client, monkeypatch)
     keep_warm.mark_boot()  # clears the counters, as a real spin-down would
 
-    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is None
-    client.get("/api/health")
-    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is None
-    client.get("/api/health")
-    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is not None
+    def longest():
+        return client.get("/api/admin/keep-warm").json()[
+            "longest_scheduler_gap_seconds"
+        ]
+
+    assert longest() is None
+    # Unmarked traffic must not open a gap, however much of it there is.
+    for _ in range(5):
+        client.get("/api/health")
+    assert longest() is None
+    client.get(MARKED_HEALTH)
+    assert longest() is None
+    client.get(MARKED_HEALTH)
+    assert longest() is not None
 
 
 def test_window_is_half_open(client):
@@ -515,8 +552,8 @@ def test_window_is_half_open(client):
     assert at(keep_warm.WINDOW_END_HOUR, 0) is False
 
 
-def test_verdict_reads_uptime_and_pings_together():
-    """The five states, as a pure function -- no clock, no module state.
+def test_verdict_reads_uptime_and_scheduler_pings_together():
+    """The six states, as a pure function -- no clock, no module state.
 
     "Up 10 hours at 3 PM proves the pings work; up 40 seconds proves they do
     not" is the whole panel, and this is where that sentence lives in code.
@@ -526,26 +563,33 @@ def test_verdict_reads_uptime_and_pings_together():
 
     # Outside the window the server is *supposed* to be asleep, so nothing
     # about uptime is evidence of anything.
-    assert verdict(10 * hour, 60, in_window=False) == "outside_window"
-    assert verdict(5, None, in_window=False) == "outside_window"
+    assert verdict(10 * hour, 60, 60, in_window=False) == "outside_window"
+    assert verdict(5, 0, None, in_window=False) == "outside_window"
 
-    # The page load was itself the cold start.
-    assert verdict(40, None, in_window=True) == "cold"
+    # The page load was itself the cold start -- or a deploy just restarted the
+    # process, which this cannot see and the copy therefore names too.
+    assert verdict(40, 0, None, in_window=True) == "cold"
 
     # Awake, but not yet past the spin-down interval: nothing is proven either
     # way, and saying so beats guessing.
-    assert verdict(keep_warm.COLD_START_SUSPECT_S + 1, 30, in_window=True) == "warming"
-
-    # Survived a spin-down interval, but no ping arrived in it -- something
-    # else is keeping this alive and it will sleep the moment that stops.
-    assert verdict(10 * hour, None, in_window=True) == "pings_missing"
     assert (
-        verdict(10 * hour, keep_warm.SPIN_DOWN_S + 1, in_window=True)
-        == "pings_missing"
+        verdict(keep_warm.COLD_START_SUSPECT_S + 1, 3, 30, in_window=True)
+        == "warming"
+    )
+
+    # Up long enough to judge, but no marked ping has EVER arrived. Almost
+    # always a cron-job.org URL that has not been given ?src=keepwarm yet, so it
+    # must not be reported as a scheduler that stopped.
+    assert verdict(10 * hour, 0, None, in_window=True) == "awaiting_marked_pings"
+
+    # Marked pings were arriving and then stopped. This is the real alarm, and
+    # it is only reachable because Render's own health checks are excluded.
+    assert verdict(10 * hour, 40, keep_warm.SPIN_DOWN_S + 1, in_window=True) == (
+        "pings_missing"
     )
 
     # The only state that actually proves the scheduler is landing.
-    assert verdict(10 * hour, 4 * 60, in_window=True) == "warm"
+    assert verdict(10 * hour, 40, 4 * 60, in_window=True) == "warm"
 
 
 def test_health_check_touches_no_database(anon_client):

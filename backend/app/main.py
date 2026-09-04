@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from .auth import router as auth_router
 from .auth.security import get_jwt_secret, token_lifetime
 from .db import get_engine
-from .keep_warm import mark_boot, record_health_check
+from .keep_warm import SCHEDULER_MARKER, mark_boot, record_health_check
 from .models import Base
 from .rate_limit import limiter
 from .routers import (
@@ -145,7 +145,7 @@ app.include_router(admin.router)
 
 
 @app.get("/api/health")
-def health():
+def health(src: str | None = None):
     """Liveness, and the one route that must never touch the database.
 
     The keep-warm scheduler hits this every 10 minutes across a 16-hour window.
@@ -153,6 +153,14 @@ def health():
     a 100 CU-hour free allowance -- and suspend the database until the next
     billing period. See app/keep_warm.py. The counter below is a lock and an
     integer; it adds nothing this endpoint has to wait for.
+
+    `src` is how the scheduler identifies itself: it calls
+    /api/health?src=keepwarm, and only those requests count as scheduler pings.
+    Render's own platform monitor hits the bare path about every 4 seconds --
+    render.yaml points healthCheckPath here -- so without the marker the two are
+    indistinguishable and the count means nothing. Optional and unvalidated on
+    purpose: an unrecognised value is simply not a scheduler ping, and a health
+    check must never be able to fail on its query string.
     """
-    record_health_check()
+    record_health_check(from_scheduler=src == SCHEDULER_MARKER)
     return {"status": "ok"}

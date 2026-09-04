@@ -18,7 +18,16 @@
 #
 #  1. It pings /api/health and NOTHING else, ever. That endpoint increments an
 #     in-memory counter -- which /admin reads back to say whether these pings
-#     are landing -- and never touches Postgres. Neon's free plan allows 100
+#     are landing -- and never touches Postgres.
+#
+#     THE SCHEDULED JOB MUST CALL /api/health?src=keepwarm, NOT THE BARE PATH.
+#     Render's own platform monitor hits this same route about every 4 seconds,
+#     because healthCheckPath in render.yaml points at it: 2,714 requests in
+#     3h12m of uptime, measured in production 2026-09-04, against the 19 that
+#     cron-job.org can account for. Without the marker the panel cannot tell the
+#     scheduler from the platform, and its "is the ping landing" answer is
+#     meaningless. The manual button below deliberately does NOT send the
+#     marker -- a person pressing it is not the schedule working. Neon's free plan allows 100
 #     CU-hours a month (~400 hours of awake database) and suspends the compute
 #     when they run out -- open connections dropped, new ones refused, until the
 #     next billing period. Pinging any endpoint that queried the database would
@@ -76,7 +85,8 @@
 #
 # While the schedule is commented out, START/END/TZ govern nothing in practice.
 # The live window is the cron-job.org job's own schedule -- 05:03 to 20:53
-# Asia/Dubai, every 10 minutes -- and that is where to change it.
+# Asia/Dubai, every 10 minutes, calling /api/health?src=keepwarm -- and that is
+# where to change it.
 # KEEP_WARM_API_BASE still applies to every manual run.
 
 name: Keep warm
