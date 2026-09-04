@@ -544,6 +544,13 @@ to anything else. That failure looks like a network error and never reaches the 
 > allows 750 instance-hours per workspace per month and a 24/7 ping would spend all but six
 > of them.
 >
+> **While a cold start is happening you get a progress bar, not just a spinner.** It is
+> calibrated on those measurements — a straight line to 90% across the 52.3 s that eight
+> of ten boots take, then a creep toward 99% covering the ~10 s extra step the other two
+> pay. It never fills on a timer; only the request completing ends the wait. `/admin`
+> shows the same thing from the operator's side: uptime, how many health pings have
+> arrived since boot, and whether that adds up to the scheduler actually landing.
+>
 > The ping targets `/api/health` and must keep doing so: it is the one route that never
 > touches Postgres. Pointing it at anything that queries the database would hold Neon awake
 > ~16 hours a day, over its 100 CU-hour monthly allowance, and suspend the database until
@@ -553,7 +560,7 @@ to anything else. That failure looks like a network error and never reaches the 
 
 ## 🔌 API overview
 
-50 paths. All of them require an `Authorization: Bearer <token>` header and operate
+51 paths. All of them require an `Authorization: Bearer <token>` header and operate
 only on the caller's data, except these public ones: `/api/health`,
 `/api/announcements`, `/api/auth/signup|login`, and
 `/api/auth/forgot-password|reset-password`.
@@ -632,6 +639,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | GET | `/api/health` | Liveness check (public) |
 | GET | `/api/admin/stats` | Usage metrics, behind the `ADMIN_EMAILS` allowlist |
 | GET | `/api/admin/users` | Per-account counts and AI consumption; never meal or weight content |
+| GET | `/api/admin/keep-warm` | Uptime, health-ping counts and the ping window; in-memory, wiped at spin-down |
 
 ---
 

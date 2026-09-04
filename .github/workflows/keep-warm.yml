@@ -16,8 +16,9 @@
 #
 # Five things that are true and worth knowing before changing anything here:
 #
-#  1. It pings /api/health and NOTHING else, ever. That endpoint returns a
-#     static dict and never touches Postgres. Neon's free plan allows 100
+#  1. It pings /api/health and NOTHING else, ever. That endpoint increments an
+#     in-memory counter -- which /admin reads back to say whether these pings
+#     are landing -- and never touches Postgres. Neon's free plan allows 100
 #     CU-hours a month (~400 hours of awake database) and suspends the compute
 #     when they run out -- open connections dropped, new ones refused, until the
 #     next billing period. Pinging any endpoint that queried the database would
