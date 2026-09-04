@@ -551,6 +551,11 @@ to anything else. That failure looks like a network error and never reaches the 
 > shows the same thing from the operator's side: uptime, how many health pings have
 > arrived since boot, and whether that adds up to the scheduler actually landing.
 >
+> The scheduled job calls `/api/health?src=keepwarm`, and the marker matters: Render's own
+> platform monitor hits the bare route every few seconds, so without a way to tell the two
+> apart the "are the pings landing" answer on `/admin` counts the platform's traffic as the
+> scheduler's and can never report a problem.
+>
 > The ping targets `/api/health` and must keep doing so: it is the one route that never
 > touches Postgres. Pointing it at anything that queries the database would hold Neon awake
 > ~16 hours a day, over its 100 CU-hour monthly allowance, and suspend the database until
@@ -636,10 +641,10 @@ only on the caller's data, except these public ones: `/api/health`,
 | POST | `/api/data/import` | Restore meals from CSV, with duplicate detection |
 | GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 | GET | `/api/announcements` | Committed release notes + the status banner (public) |
-| GET | `/api/health` | Liveness check (public) |
+| GET | `/api/health` | Liveness check (public). `?src=keepwarm` marks a request as the keep-warm scheduler's |
 | GET | `/api/admin/stats` | Usage metrics, behind the `ADMIN_EMAILS` allowlist |
 | GET | `/api/admin/users` | Per-account counts and AI consumption; never meal or weight content |
-| GET | `/api/admin/keep-warm` | Uptime, health-ping counts and the ping window; in-memory, wiped at spin-down |
+| GET | `/api/admin/keep-warm` | Uptime, scheduler-ping counts and the ping window; in-memory, wiped at spin-down |
 
 ---
 
