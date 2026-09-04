@@ -1229,16 +1229,22 @@ class KeepWarmStatus(BaseModel):
 
     booted_at: datetime
     uptime_seconds: int
-    # Every /api/health request, not only the scheduler's: the logged-out pages
-    # ping it too via useWarmup. Named for what it counts rather than for what
-    # usually causes it, because a count that quietly means something narrower
-    # than its name is how a metric starts lying.
+    # EVERY request to /api/health, and overwhelmingly not the scheduler's:
+    # Render's platform monitor hits this route about every 4 seconds because
+    # render.yaml points healthCheckPath at it. Measured in production
+    # 2026-09-04: 2,714 requests in 3 h 12 m where the scheduler can account for
+    # 19. Reported only so the panel can say that out loud -- it is context, and
+    # deriving anything about the scheduler from it is the bug this field's
+    # first version shipped with.
     health_checks: int
-    last_health_check_at: datetime | None = None
-    seconds_since_last_check: int | None = None
-    # None until two checks have arrived -- there is no gap before then, and
-    # reporting 0 would read as "the pings are perfect" rather than "unknown".
-    longest_gap_seconds: int | None = None
+    # The subset carrying ?src=keepwarm, which only the cron-job.org job sends.
+    # This is the number the verdict is computed from.
+    scheduler_pings: int
+    last_scheduler_ping_at: datetime | None = None
+    seconds_since_scheduler_ping: int | None = None
+    # None until two scheduler pings have arrived -- there is no gap before then,
+    # and 0 would read as "perfect" rather than "nothing to say yet".
+    longest_scheduler_gap_seconds: int | None = None
     window_start_hour: int
     window_end_hour: int
     window_tz: str
@@ -1255,6 +1261,11 @@ class KeepWarmStatus(BaseModel):
         "outside_window",
         "cold",
         "warming",
+        # No marked ping seen since boot. Distinct from pings_missing because
+        # "never seen one" and "stopped seeing them" have different causes --
+        # the first is usually just a cron-job.org URL not yet carrying the
+        # marker. See verdict_for in app/keep_warm.py.
+        "awaiting_marked_pings",
         "pings_missing",
         "warm",
     ]
