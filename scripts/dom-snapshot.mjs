@@ -356,7 +356,17 @@ async function seed(token) {
  *  Vite's dev server appends `?t=<epoch-ms>` to the module script tag after any
  *  file it serves changes, so every snapshot taken after an edit differs from
  *  every snapshot taken before one -- in all twelve files, for a reason that has
- *  nothing to do with the app. */
+ *  nothing to do with the app.
+ *
+ *  /admin's keep-warm card reports live server state -- uptime, boot time, how
+ *  many health checks have arrived, what time it is in the window's zone. Every
+ *  one of those changes between two runs of identical code, which would make
+ *  admin.html differ forever. The elements carry `data-live`, so their text is
+ *  blanked here while the elements themselves, and the count of them, are still
+ *  compared: a fact that stops rendering still shows up as a diff. Marking them
+ *  at the source rather than pattern-matching the values is deliberate -- a
+ *  regex for "things that look like a duration" would eventually blank a real
+ *  change. */
 function normalise(html) {
   // One counter per id scheme, each numbering in document order. Separate maps
   // so a change in how many of one kind exist cannot renumber the other.
@@ -373,6 +383,11 @@ function normalise(html) {
     // which is why this renumbers the prefix rather than the whole id.
     .replace(/recharts\d+/g, renumber((n) => `recharts${n}`))
     .replace(/(\.tsx)\?t=\d+/g, '$1')
+    // Text inside a data-live element, which is server state that moves on its
+    // own. Bounded by a negated class rather than a lazy quantifier, so it stops
+    // dead at the first `<` and can only ever eat one element's own text node;
+    // these are leaves by construction.
+    .replace(/(<[^>]*\sdata-live="[^"]*"[^>]*>)[^<]*/g, '$1LIVE')
 }
 
 /** Read the body with every `class` attribute removed, one tag per line so the

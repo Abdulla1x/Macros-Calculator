@@ -691,3 +691,29 @@ export interface WeeklyReview {
 export interface ReviewSummary {
   summary: string
 }
+
+/** Whether the keep-warm pinger is landing, as far as the server can tell.
+ *
+ * Mirrors KeepWarmStatus in backend/app/schemas.py. Every counter is in-memory
+ * on the API process and resets at spin-down — which is not a defect: a process
+ * that has been up long enough to have history is itself the answer. */
+export interface KeepWarmStatus {
+  booted_at: string
+  uptime_seconds: number
+  /** Every /api/health request, the logged-out pages' warm-up ping included —
+   * not only the scheduler's. */
+  health_checks: number
+  last_health_check_at: string | null
+  seconds_since_last_check: number | null
+  /** null until two checks have arrived; 0 would read as "perfect" rather than
+   * "nothing to say yet". */
+  longest_gap_seconds: number | null
+  window_start_hour: number
+  window_end_hour: number
+  window_tz: string
+  /** What the server itself thinks the local clock says, as HH:MM. */
+  window_local_time: string
+  in_window: boolean
+  spin_down_seconds: number
+  verdict: 'outside_window' | 'cold' | 'warming' | 'pings_missing' | 'warm'
+}
