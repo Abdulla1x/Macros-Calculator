@@ -12,6 +12,7 @@ import type {
   Food,
   FoodCreate,
   HealthStatus,
+  KeepWarmStatus,
   ImportResult,
   Meal,
   MealAnalysisResponse,
@@ -480,4 +481,5 @@ export const api = {
     request<AdminUserRow[]>(
       `/api/admin/users${limit ? `?limit=${limit}` : ''}`,
     ),
+  getKeepWarm: () => request<KeepWarmStatus>('/api/admin/keep-warm'),
 }

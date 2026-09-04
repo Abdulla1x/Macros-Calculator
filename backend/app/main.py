@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from .auth import router as auth_router
 from .auth.security import get_jwt_secret, token_lifetime
 from .db import get_engine
+from .keep_warm import mark_boot, record_health_check
 from .models import Base
 from .rate_limit import limiter
 from .routers import (
@@ -59,6 +60,10 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     if engine.dialect.name == "sqlite":
         Base.metadata.create_all(engine)
+    # Last, so uptime measures how long this process has been able to SERVE --
+    # which is what a keep-warm ping actually preserves. Counting the schema
+    # work above as uptime would overstate it by however long boot took.
+    mark_boot()
     yield
 
 
@@ -141,4 +146,13 @@ app.include_router(admin.router)
 
 @app.get("/api/health")
 def health():
+    """Liveness, and the one route that must never touch the database.
+
+    The keep-warm scheduler hits this every 10 minutes across a 16-hour window.
+    Any query here would hold Neon awake for all of it -- ~122 CU-hours against
+    a 100 CU-hour free allowance -- and suspend the database until the next
+    billing period. See app/keep_warm.py. The counter below is a lock and an
+    integer; it adds nothing this endpoint has to wait for.
+    """
+    record_health_check()
     return {"status": "ok"}

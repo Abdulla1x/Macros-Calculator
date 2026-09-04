@@ -1211,3 +1211,50 @@ class AdminUserRow(BaseModel):
     # Never an event_date -- see the privacy note on the router. A date is the
     # disclosive part: it says this person has something on the 5th.
     calorie_plan_days: int = 0
+
+
+class KeepWarmStatus(BaseModel):
+    """Whether the keep-warm pinger is landing, as far as this process can tell.
+
+    Every counter here is in-memory and resets at spin-down -- see the module
+    docstring of app/keep_warm.py for why writing them to the database is the
+    change that suspends Neon. That the numbers are short-lived is not a defect
+    to be fixed later: a process that has been up long enough to have history
+    is, by itself, the answer.
+
+    Deliberately not per-account, so this stays inside the metrics-only boundary
+    that routers/admin.py's docstring defines. It describes the server, not a
+    person.
+    """
+
+    booted_at: datetime
+    uptime_seconds: int
+    # Every /api/health request, not only the scheduler's: the logged-out pages
+    # ping it too via useWarmup. Named for what it counts rather than for what
+    # usually causes it, because a count that quietly means something narrower
+    # than its name is how a metric starts lying.
+    health_checks: int
+    last_health_check_at: datetime | None = None
+    seconds_since_last_check: int | None = None
+    # None until two checks have arrived -- there is no gap before then, and
+    # reporting 0 would read as "the pings are perfect" rather than "unknown".
+    longest_gap_seconds: int | None = None
+    window_start_hour: int
+    window_end_hour: int
+    window_tz: str
+    # What the server itself thinks the local clock says. Cheap, and the first
+    # thing to check when a window looks like it is firing at the wrong time --
+    # the region lesson from the Gemini EEA incident, one layer down.
+    window_local_time: str
+    in_window: bool
+    # Sent rather than hardcoded in the client, so the copy that says "longer
+    # than the 15-minute spin-down" cannot drift from the number the verdict
+    # was computed against.
+    spin_down_seconds: int
+    verdict: Literal[
+        "outside_window",
+        "cold",
+        "warming",
+        "pings_missing",
+        "warm",
+    ]

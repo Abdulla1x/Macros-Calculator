@@ -25,7 +25,7 @@ import {
   tooltipStyle,
   activeDot,
 } from '../lib/chartTheme'
-import type { AdminStats, AdminUserRow } from '../types'
+import type { AdminStats, AdminUserRow, KeepWarmStatus } from '../types'
 import Card from '../components/ui/Card'
 
 
@@ -42,9 +42,181 @@ function relativeDay(iso: string | null): string {
   return then.toISOString().slice(0, 10)
 }
 
+/** A duration an operator reads at a glance. Seconds below a minute, because
+ * "up 40 seconds" is the whole point of the cold verdict and "up 0m" hides it. */
+function duration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+}
+
+/** A wall-clock time on the window's own clock, so a boot time and the window
+ * it falls in can be compared without doing timezone arithmetic in your head.
+ *
+ * Falls back to the browser's zone if Intl rejects the name. The zone is a
+ * server-side constant so that should never happen — but this is the page you
+ * open to find out what is broken, and it must not be the page that throws. */
+function clockTime(iso: string, timeZone: string): string {
+  const at = new Date(iso)
+  try {
+    return at.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone,
+    })
+  } catch {
+    return at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  }
+}
+
+const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`
+
+/** The panel's whole argument, in one sentence.
+ *
+ * "Up 10 hours at 3 PM proves the pings work; up 40 seconds proves they do not,
+ * because the page load was itself the cold start." The server decides which of
+ * the five states holds; this only says what each one means. The spin-down
+ * figure comes from the response rather than being written in here, so the copy
+ * cannot drift from the number the verdict was computed against.
+ */
+function verdictCopy(status: KeepWarmStatus): { dot: string; text: string } {
+  const spinDownMins = Math.round(status.spin_down_seconds / 60)
+  const spinDown = `${spinDownMins}-minute`
+  switch (status.verdict) {
+    case 'warm':
+      return {
+        dot: 'text-emerald-500',
+        text: `Awake for longer than the ${spinDown} spin-down, with health checks still arriving. The scheduler is landing.`,
+      }
+    case 'warming':
+      return {
+        dot: 'text-amber-500',
+        text: `Awake, but not yet past the ${spinDown} spin-down, so this proves nothing either way. Reload in a few minutes.`,
+      }
+    case 'cold':
+      // Amber, not red, because this state has two causes and the panel cannot
+      // see which: a deploy restarts the process too, and reporting a fresh
+      // deploy as a broken scheduler would cry wolf after every single one.
+      // Naming both is the honest version — and the second explanation is one
+      // the operator can rule out instantly, which is what makes it useful.
+      return {
+        dot: 'text-amber-500',
+        text: 'This process started moments ago. Either the server was asleep and opening this page is what woke it — in which case the pings are not landing, so check the cron-job.org job is enabled and its history is not all failures — or it has just been redeployed.',
+      }
+    case 'pings_missing':
+      return {
+        dot: 'text-rose-400',
+        text: `Awake, but no health check has arrived in the last ${spinDownMins} minutes. Something else is keeping this up — ordinary traffic, most likely — and it will sleep as soon as that stops.`,
+      }
+    case 'outside_window':
+      return {
+        dot: 'text-ink-faint',
+        text: 'Outside the ping window, so sleeping is expected and a cold start here is the intended cost of the free plan.',
+      }
+  }
+}
+
+/** One label/value pair on the keep-warm card.
+ *
+ * `live` marks a value that changes on its own between page loads. It is read
+ * by scripts/dom-snapshot.mjs, which blanks these before comparing — without it
+ * /admin would report a difference on every single run, and a harness that
+ * always cries wolf stops being read. It doubles as a note to anyone reading
+ * this file about which figures here are not reproducible.
+ */
+function KeepWarmFact({
+  label,
+  value,
+  note,
+}: {
+  label: string
+  value: string
+  note?: string
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-400">{label}</dt>
+      <dd className="mt-0.5 text-sm font-semibold" data-live={label}>
+        {value}
+      </dd>
+      {note !== undefined && (
+        <dd className="text-xs text-ink-faint" data-live={`${label} note`}>
+          {note}
+        </dd>
+      )}
+    </div>
+  )
+}
+
+
+/** The operator half of the cold-start work: is the pinger actually landing.
+ *
+ * Its own component so the verdict is computed once rather than per element,
+ * and so Admin's already-long body is not carrying a fifth section inline.
+ */
+function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
+  const verdict = verdictCopy(status)
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">Keep-warm</h2>
+      <p className="mb-3 text-xs text-slate-400">
+        Whether the free instance is actually being kept awake. Held in
+        the API process's memory, so every figure here resets when it
+        sleeps — which is the point: a long uptime is itself the proof.
+      </p>
+      <p className="text-sm">
+        <span className={verdict.dot}>●</span>{' '}
+        <span data-live="verdict">{verdict.text}</span>
+      </p>
+      <dl className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KeepWarmFact
+          label="Up"
+          value={duration(status.uptime_seconds)}
+          note={`since ${clockTime(status.booted_at, status.window_tz)}`}
+        />
+        <KeepWarmFact
+          label="Health checks"
+          value={status.health_checks.toLocaleString()}
+          note={
+            status.seconds_since_last_check === null
+              ? 'none since boot'
+              : status.seconds_since_last_check < 10
+                ? // "last 0s ago" is technically correct and reads like a bug.
+                  'seconds ago'
+                : `${duration(status.seconds_since_last_check)} ago`
+          }
+        />
+        <KeepWarmFact
+          label="Longest gap"
+          value={
+            status.longest_gap_seconds === null
+              ? '—'
+              : duration(status.longest_gap_seconds)
+          }
+          note={`between checks · sleeps after ${Math.round(status.spin_down_seconds / 60)}m`}
+        />
+        <KeepWarmFact
+          label="Window"
+          value={`${hourLabel(status.window_start_hour)}–${hourLabel(status.window_end_hour)}`}
+          note={`${status.window_tz} · now ${status.window_local_time} there`}
+        />
+      </dl>
+      <p className="mt-3 text-xs text-ink-faint">
+        The window above is what this repository records. The schedule
+        itself lives at cron-job.org and is the thing to edit — pings run
+        every 10 minutes and its 30-second timeout means the first one
+        each morning is logged as a failure while still starting the
+        boot.
+      </p>
+    </Card>
+  )
+}
+
 export default function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUserRow[]>([])
+  const [keepWarm, setKeepWarm] = useState<KeepWarmStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -52,12 +224,14 @@ export default function Admin() {
     setError(null)
     setLoading(true)
     try {
-      const [nextStats, nextUsers] = await Promise.all([
+      const [nextStats, nextUsers, nextKeepWarm] = await Promise.all([
         api.getAdminStats(),
         api.getAdminUsers(),
+        api.getKeepWarm(),
       ])
       setStats(nextStats)
       setUsers(nextUsers)
+      setKeepWarm(nextKeepWarm)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load admin data')
     } finally {
@@ -123,6 +297,8 @@ export default function Admin() {
               </Card>
             ))}
           </section>
+
+          {keepWarm && <KeepWarmCard status={keepWarm} />}
 
           <Card as="section">
             <h2 className="text-sm font-semibold">Accounts per day</h2>

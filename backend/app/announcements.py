@@ -29,6 +29,29 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-04-wake-up-progress",
+        date="2026-09-04",
+        title="The wake-up wait now shows how far along it is",
+        body=(
+            "**The free server sleeps when nobody has used the app for 15 "
+            "minutes, and waking it takes about 52 seconds.** That wait now "
+            "has a progress bar instead of just a sentence, so you can tell "
+            "the difference between a wait that is nearly over and something "
+            "that has actually gone wrong.\n\n"
+            "**It is drawn from real measurements, not a guess.** Ten "
+            "consecutive cold starts were timed: eight took between 52.25 and "
+            "52.47 seconds, and two took about ten seconds longer. The bar "
+            "moves steadily to 90% across that first stretch, then slows down "
+            "to cover the longer case.\n\n"
+            "**It deliberately never reaches the end on its own.** A bar that "
+            "hits 100% while you are still waiting is worse than no bar, so "
+            "this one stops just short until the app is genuinely ready.\n\n"
+            "Most of the day you will not see it at all \u2014 the server is "
+            "pinged every ten minutes between 5am and 9pm, so it is usually "
+            "already awake. Late at night, it is there."
+        ),
+    ),
+    Announcement(
         id="2026-09-02-save-ai-ingredients",
         date="2026-09-02",
         title="Save an ingredient straight from an AI estimate",
