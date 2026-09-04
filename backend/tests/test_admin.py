@@ -1,14 +1,15 @@
 """Admin metrics: who may read them, and what they must never contain."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
+from app import keep_warm
 from app.db import get_engine
 from app.models import Meal, utcnow
 from conftest import utc_today
 
-ADMIN_ROUTES = ("/api/admin/stats", "/api/admin/users")
+ADMIN_ROUTES = ("/api/admin/stats", "/api/admin/users", "/api/admin/keep-warm")
 
 TODAY = utc_today()
 YESTERDAY = TODAY - timedelta(days=1)
@@ -442,3 +443,141 @@ def test_new_meals_get_a_created_at(client):
         # Naive UTC, matching every other timestamp in the schema.
         assert meal.created_at.tzinfo is None
         assert abs((utcnow() - meal.created_at).total_seconds()) < 60
+
+
+# --- Keep-warm panel ---------------------------------------------------------
+#
+# The panel answers one question -- is the cold start actually being kept away
+# -- and every number behind it is in-memory, so the tests below are about the
+# logic rather than about durable state. The most important one is the last:
+# /api/health must never reach Postgres, because a ping every 10 minutes for 16
+# hours a day would hold Neon awake past its free CU-hour allowance and suspend
+# the database. See app/keep_warm.py.
+
+
+def test_keep_warm_reports_the_window_and_a_verdict(client, monkeypatch):
+    make_admin(client, monkeypatch)
+    body = client.get("/api/admin/keep-warm").json()
+
+    assert body["window_start_hour"] == keep_warm.WINDOW_START_HOUR
+    assert body["window_end_hour"] == keep_warm.WINDOW_END_HOUR
+    assert body["window_tz"] == keep_warm.WINDOW_TZ
+    assert body["spin_down_seconds"] == keep_warm.SPIN_DOWN_S
+    assert body["uptime_seconds"] >= 0
+    # The process really did just start, so it is either mid-window and cold or
+    # outside the window entirely -- never one of the settled states.
+    assert body["verdict"] in {"cold", "outside_window"}
+    # HH:MM, and the server's own idea of the local clock rather than the
+    # test machine's.
+    assert len(body["window_local_time"]) == 5
+    assert body["window_local_time"][2] == ":"
+
+
+def test_keep_warm_counts_health_checks(client, monkeypatch):
+    """Uptime alone cannot tell the pinger apart from ordinary user traffic."""
+    make_admin(client, monkeypatch)
+    before = client.get("/api/admin/keep-warm").json()
+    assert before["last_health_check_at"] is None or before["health_checks"] > 0
+
+    for _ in range(3):
+        assert client.get("/api/health").status_code == 200
+
+    after = client.get("/api/admin/keep-warm").json()
+    assert after["health_checks"] == before["health_checks"] + 3
+    assert after["last_health_check_at"] is not None
+    assert after["seconds_since_last_check"] is not None
+    # Two checks have now arrived, so a gap exists to report.
+    assert after["longest_gap_seconds"] is not None
+
+
+def test_longest_gap_is_none_until_two_checks_have_arrived(client, monkeypatch):
+    """None rather than 0. There is no gap before the second ping, and 0 would
+    read as "the pings are perfect" rather than "nothing to say yet"."""
+    make_admin(client, monkeypatch)
+    keep_warm.mark_boot()  # clears the counters, as a real spin-down would
+
+    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is None
+    client.get("/api/health")
+    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is None
+    client.get("/api/health")
+    assert client.get("/api/admin/keep-warm").json()["longest_gap_seconds"] is not None
+
+
+def test_window_is_half_open(client):
+    """05:00 is inside, 21:00 is outside -- the same boundary keep-warm.yml
+    uses, so the panel and the scheduler cannot disagree about an edge hour."""
+    def at(hour: int, minute: int = 0) -> bool:
+        return keep_warm.in_window_at(datetime(2026, 9, 4, hour, minute))
+
+    assert at(keep_warm.WINDOW_START_HOUR - 1, 59) is False
+    assert at(keep_warm.WINDOW_START_HOUR, 0) is True
+    assert at(keep_warm.WINDOW_END_HOUR - 1, 59) is True
+    assert at(keep_warm.WINDOW_END_HOUR, 0) is False
+
+
+def test_verdict_reads_uptime_and_pings_together():
+    """The five states, as a pure function -- no clock, no module state.
+
+    "Up 10 hours at 3 PM proves the pings work; up 40 seconds proves they do
+    not" is the whole panel, and this is where that sentence lives in code.
+    """
+    hour = 60 * 60
+    verdict = keep_warm.verdict_for
+
+    # Outside the window the server is *supposed* to be asleep, so nothing
+    # about uptime is evidence of anything.
+    assert verdict(10 * hour, 60, in_window=False) == "outside_window"
+    assert verdict(5, None, in_window=False) == "outside_window"
+
+    # The page load was itself the cold start.
+    assert verdict(40, None, in_window=True) == "cold"
+
+    # Awake, but not yet past the spin-down interval: nothing is proven either
+    # way, and saying so beats guessing.
+    assert verdict(keep_warm.COLD_START_SUSPECT_S + 1, 30, in_window=True) == "warming"
+
+    # Survived a spin-down interval, but no ping arrived in it -- something
+    # else is keeping this alive and it will sleep the moment that stops.
+    assert verdict(10 * hour, None, in_window=True) == "pings_missing"
+    assert (
+        verdict(10 * hour, keep_warm.SPIN_DOWN_S + 1, in_window=True)
+        == "pings_missing"
+    )
+
+    # The only state that actually proves the scheduler is landing.
+    assert verdict(10 * hour, 4 * 60, in_window=True) == "warm"
+
+
+def test_health_check_touches_no_database(anon_client):
+    """The assertion that protects the entire Neon budget.
+
+    Recording pings in a table is the obvious implementation of this panel, and
+    it is the one that takes the database down: /api/health is hit every 10
+    minutes across a 16-hour window, which is ~122 CU-hours a month against a
+    100 CU-hour free allowance, and Neon suspends the compute until the next
+    billing period. A comment saying "don't do that" is not a defence; this is.
+
+    Watches connections as well as statements, because Neon's compute wakes on
+    a connection, not on a query.
+    """
+    engine = get_engine()
+    statements: list[str] = []
+    connections = 0
+
+    def on_execute(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    def on_connect(dbapi_connection, connection_record):
+        nonlocal connections
+        connections += 1
+
+    event.listen(engine, "before_cursor_execute", on_execute)
+    event.listen(engine, "connect", on_connect)
+    try:
+        assert anon_client.get("/api/health").status_code == 200
+    finally:
+        event.remove(engine, "before_cursor_execute", on_execute)
+        event.remove(engine, "connect", on_connect)
+
+    assert statements == [], f"/api/health ran SQL: {statements}"
+    assert connections == 0, "/api/health opened a database connection"

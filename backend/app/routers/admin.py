@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import require_admin
 from ..db import get_db
+from ..keep_warm import snapshot
 from ..models import (
     AIAnalysis,
     CaloriePlanDay,
@@ -49,7 +50,13 @@ from ..models import (
     WaterLog,
     WeightEntry,
 )
-from ..schemas import AdminDailyActivity, AdminDailyCount, AdminStats, AdminUserRow
+from ..schemas import (
+    AdminDailyActivity,
+    AdminDailyCount,
+    AdminStats,
+    AdminUserRow,
+    KeepWarmStatus,
+)
 from .ai import calls_today, global_daily_limit
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -329,3 +336,18 @@ def stats(
             for day in days
         ],
     )
+
+
+@router.get("/keep-warm", response_model=KeepWarmStatus)
+def keep_warm(admin: User = Depends(require_admin)):
+    """Is the cold start actually being kept away, and by what.
+
+    No `db` parameter: everything reported here lives in this process's memory,
+    and the only database touch in the whole request is require_admin resolving
+    the caller. That is not an optimisation -- see app/keep_warm.py for why the
+    persisted version of this panel is the one that takes Neon down.
+
+    Inside the metrics-only boundary this module's docstring defines. It
+    describes the server, not any account, so there is nothing here to scope.
+    """
+    return snapshot()
