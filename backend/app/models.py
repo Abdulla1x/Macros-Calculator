@@ -578,3 +578,23 @@ class AIAnalysis(Base):
     kind: Mapped[str] = mapped_column(
         String(20), default="analysis", server_default="analysis"
     )
+    # How long the provider took, in milliseconds, INCLUDING its retry budget.
+    #
+    # Named for what it times rather than for the row it sits on. It is not the
+    # wait the user experiences: the upload happens before the handler runs, and
+    # so does the free instance's cold start, so both are outside this number by
+    # construction. `server_uptime_s` below is what carries the second of those.
+    #
+    # NULL, never 0, when there is no measurement: rows written before migration
+    # 0015, and any call the provider refused before inference -- those have
+    # their row deleted to refund the quota slot, so this column describes calls
+    # that REACHED the model rather than calls that were attempted. A zero would
+    # be a measured zero and would quietly pull every median down.
+    provider_ms: Mapped[int | None] = mapped_column(Integer)
+    # Seconds this process had been serving when the call was made.
+    #
+    # The only record that a request paid for a cold start. Render's free tier
+    # spins down after 15 minutes, and the boot completes before the handler
+    # runs, so a slow first analysis of the evening is invisible in provider_ms
+    # and visible here as an uptime of a few seconds.
+    server_uptime_s: Mapped[int | None] = mapped_column(Integer)

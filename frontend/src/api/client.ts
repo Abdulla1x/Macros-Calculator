@@ -82,19 +82,102 @@ const TRANSCRIBE_TIMEOUT_MS = 120_000
 // 15s attempt on top is a ~45s ceiling, and a cold instance adds to it.
 const REVIEW_TIMEOUT_MS = 120_000
 
+/** The headers every request carries.
+ *
+ * `extra` may override Content-Type -- that is how a caller sends something
+ * other than JSON -- but never Authorization, which is applied last on purpose.
+ * A FormData body sets no Content-Type at all: the browser has to add its own
+ * multipart boundary, and naming the type here would destroy it.
+ */
+function authHeaders(
+  isFormData: boolean,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...extra,
+  }
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+/** An expired/invalid session on any data endpoint sends the user back to
+ * login. Auth endpoints surface their 401s as normal form errors instead. */
+function enforceAuth(path: string, status: number): void {
+  if (status === 401 && !path.startsWith('/api/auth/')) {
+    clearToken()
+    window.location.assign('/login')
+  }
+}
+
+/** Parsed JSON, or null when the body was not JSON at all. Both transports need
+ * this before they can look for a `detail`, and neither should throw here --
+ * an unreadable error body must still surface as the status code's error. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+}
+
+/** The error for a response that arrived and was not ok. */
+function errorFrom(status: number, body: unknown): ApiError {
+  let detail = `Request failed (${status})`
+  const reported = (body as { detail?: unknown } | null)?.detail
+  if (typeof reported === 'string') {
+    detail = reported
+  } else if (Array.isArray(reported)) {
+    // FastAPI reports validation failures as an *array* of errors, never a
+    // string, so the check above can never match a 422 — every one of them
+    // used to surface as the generic "Request failed (422)" while the
+    // server had already said exactly which field was wrong and why.
+    // Forms guard their own inputs first; this is what is left when
+    // something slips past one, and it has to name the field or the user
+    // is left hunting through the whole page for it.
+    const first = reported[0] as { msg?: unknown; loc?: unknown } | undefined
+    if (typeof first?.msg === 'string') {
+      const field = Array.isArray(first.loc) ? first.loc.at(-1) : undefined
+      detail = typeof field === 'string' ? `${field}: ${first.msg}` : first.msg
+    }
+  }
+  return new ApiError(detail, status)
+}
+
+/** The error for a request that never produced a response at all.
+ *
+ * A dead network, our own deadline, and a provider-level outage all land here.
+ * status 0 marks "no HTTP response happened" so callers can still tell it apart
+ * from a real 5xx.
+ *
+ * The third case is why this message must not blame the user's network. When
+ * the host's edge answers 502/503 the response carries no CORS headers, so the
+ * browser blocks it and the request fails before we ever see a status code — a
+ * total outage is indistinguishable here from an unplugged cable. Observed for
+ * real on 2026-08-20, when Render disabled spin-up for free services during a
+ * Google Cloud incident and every user was told to check a connection that was
+ * working perfectly.
+ */
+function transportError(timedOut: boolean): ApiError {
+  return new ApiError(
+    timedOut
+      ? 'That took too long — the server may be waking up. Try again.'
+      : 'Could not reach the server. It may be temporarily unavailable — ' +
+        'check your connection, or try again in a few minutes.',
+    0,
+  )
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    ...(options.body instanceof FormData
-      ? {}
-      : { 'Content-Type': 'application/json' }),
-    ...(options.headers as Record<string, string>),
-  }
-  const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
+  const headers = authHeaders(
+    options.body instanceof FormData,
+    options.headers as Record<string, string> | undefined,
+  )
 
   let response: Response
   try {
@@ -104,64 +187,103 @@ async function request<T>(
       signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
-    // A dead network, our own deadline, and a provider-level outage all land
-    // here. status 0 marks "no HTTP response happened" so callers can still
-    // tell it apart from a real 5xx.
-    //
-    // The third case is why this message must not blame the user's network.
-    // When the host's edge answers 502/503 the response carries no CORS
-    // headers, so the browser blocks it and `fetch` rejects before we ever see
-    // a status code — a total outage is indistinguishable here from an
-    // unplugged cable. Observed for real on 2026-08-20, when Render disabled
-    // spin-up for free services during a Google Cloud incident and every user
-    // was told to check a connection that was working perfectly.
-    const timedOut = err instanceof DOMException && err.name === 'TimeoutError'
-    throw new ApiError(
-      timedOut
-        ? 'That took too long — the server may be waking up. Try again.'
-        : 'Could not reach the server. It may be temporarily unavailable — ' +
-          'check your connection, or try again in a few minutes.',
-      0,
-    )
+    throw transportError(err instanceof DOMException && err.name === 'TimeoutError')
   }
 
   if (!response.ok) {
-    // An expired/invalid session on any data endpoint sends the user back to
-    // login. Auth endpoints surface their 401s as normal form errors instead.
-    if (response.status === 401 && !path.startsWith('/api/auth/')) {
-      clearToken()
-      window.location.assign('/login')
-    }
-    let detail = `Request failed (${response.status})`
-    try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') {
-        detail = body.detail
-      } else if (Array.isArray(body.detail)) {
-        // FastAPI reports validation failures as an *array* of errors, never a
-        // string, so the check above can never match a 422 — every one of them
-        // used to surface as the generic "Request failed (422)" while the
-        // server had already said exactly which field was wrong and why.
-        // Forms guard their own inputs first; this is what is left when
-        // something slips past one, and it has to name the field or the user
-        // is left hunting through the whole page for it.
-        const first = body.detail[0]
-        if (typeof first?.msg === 'string') {
-          const field = Array.isArray(first.loc) ? first.loc.at(-1) : undefined
-          detail = typeof field === 'string' ? `${field}: ${first.msg}` : first.msg
-        }
-      }
-    } catch {
-      /* keep generic message */
-    }
-    throw new ApiError(detail, response.status)
+    enforceAuth(path, response.status)
+    const body = await response.text()
+    throw errorFrom(response.status, parseJson(body))
   }
   if (response.status === 204) return undefined as T
   return response.json()
 }
 
+/** Hooks a caller uses to watch a body leave the browser. */
+export interface UploadHooks {
+  /** Fraction of the request body sent so far, in [0, 1]. Only fires when the
+   * browser can size the body, which for FormData it always can. */
+  onProgress?: (fraction: number) => void
+  /** The whole body has left the client.
+   *
+   * NOT "the server has it". These bytes are in the socket; the server may
+   * still be reading them, or queueing, or asleep and booting. Anything shown
+   * from here on has to stop claiming to know how far along the request is. */
+  onSent?: () => void
+}
+
+/** POST a body and report how much of it has been uploaded.
+ *
+ * This exists because `fetch` cannot do it: there is no upload-progress event
+ * on the fetch API, and `XMLHttpRequest.upload` is still the only way to get
+ * one. Everything that is not the progress reporting is shared with `request`
+ * above, so the two cannot drift on auth, on the 401 rule, or on how a FastAPI
+ * error body becomes a sentence.
+ */
+function upload<T>(
+  path: string,
+  form: FormData,
+  timeoutMs: number,
+  hooks: UploadHooks = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE}${path}`)
+    for (const [name, value] of Object.entries(authHeaders(true))) {
+      xhr.setRequestHeader(name, value)
+    }
+    // XHR's own timeout covers send-to-complete, which is the same span
+    // AbortSignal.timeout covers on the fetch path.
+    xhr.timeout = timeoutMs
+
+    if (hooks.onProgress) {
+      const report = hooks.onProgress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) report(event.loaded / event.total)
+      }
+    }
+    if (hooks.onSent) xhr.upload.onload = hooks.onSent
+
+    xhr.onload = () => {
+      // A blocked cross-origin response reaches `load` with status 0 and an
+      // empty body. Without this guard it would fall through to errorFrom(0)
+      // and produce "Request failed (0)" — a sentence this app has never shown
+      // anyone — instead of the outage wording that fits what actually
+      // happened. Same reasoning as the fetch path's status-0 comment.
+      if (xhr.status === 0) {
+        reject(transportError(false))
+        return
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        enforceAuth(path, xhr.status)
+        reject(errorFrom(xhr.status, parseJson(xhr.responseText)))
+        return
+      }
+      if (xhr.status === 204 || xhr.responseText === '') {
+        resolve(undefined as T)
+        return
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as T)
+      } catch {
+        // A 2xx whose body we cannot read is not a transport failure — the
+        // server answered — so it keeps its real status rather than 0.
+        reject(new ApiError('The server sent a reply we could not read.', xhr.status))
+      }
+    }
+    xhr.onerror = () => reject(transportError(false))
+    xhr.ontimeout = () => reject(transportError(true))
+    xhr.send(form)
+  })
+}
+
 export const api = {
-  health: () => request<HealthStatus>('/api/health'),
+  // `timeoutMs` is for callers that use this as a liveness probe rather than a
+  // warm-up ping: useAnalysisProgress needs a fast no from a sleeping server,
+  // where the 90s default would simply hang alongside the request it is trying
+  // to explain.
+  health: (timeoutMs?: number) =>
+    request<HealthStatus>('/api/health', {}, timeoutMs),
   // Public: no auth header needed, so the status banner also works logged out.
   getAnnouncements: () => request<Announcements>('/api/announcements'),
 
@@ -405,12 +527,13 @@ export const api = {
       REVIEW_TIMEOUT_MS,
     ),
 
-  analyzeMeal: (form: FormData) =>
-    request<MealAnalysisResponse>(
-      '/api/ai/analyze',
-      { method: 'POST', body: form },
-      ANALYZE_TIMEOUT_MS,
-    ),
+  // Routed through `upload` rather than `request` even when nobody is watching
+  // the progress, so there is one transport for this endpoint instead of two
+  // that can drift. `hooks` is what MealAnalyzer uses to tell an upload apart
+  // from a wait on the model — the only part of this wait we can actually
+  // measure. See useAnalysisProgress.
+  analyzeMeal: (form: FormData, hooks?: UploadHooks) =>
+    upload<MealAnalysisResponse>('/api/ai/analyze', form, ANALYZE_TIMEOUT_MS, hooks),
   transcribeVoiceNote: (form: FormData) =>
     request<Transcription>(
       '/api/ai/transcribe',

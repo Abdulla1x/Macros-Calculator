@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
 from ..calibration import CalibrationSummary, Pair, parse_estimate, summarise
+from .. import keep_warm
 from ..db import get_db
 from ..env import env_int
 from ..models import AIAnalysis, Food as FoodRow, Meal, User
@@ -276,6 +277,25 @@ def calls_today(
     return db.scalar(query)
 
 
+def _record_timing(record: AIAnalysis, started: float) -> None:
+    """Stamp how long the provider took, and what the server had been up.
+
+    Timed around the provider call ALONE, never the whole handler. The handler
+    also reads the uploaded media, and Starlette streams the request body -- so
+    on a slow phone part of the *upload* is still arriving while it runs.
+    Folding that in would put the user's uplink inside a number meant to
+    describe Gemini, which is the exact conflation the progress bar on the other
+    side of this request exists to end. It also includes _reserve_call's locking
+    write, which can stall on a cold Neon and would be blamed on the provider.
+
+    The retry budget IS included, deliberately: one user action reserves one
+    quota slot and produces one wait, so a figure that excluded retries would be
+    one nobody ever experienced.
+    """
+    record.provider_ms = int((time_module.monotonic() - started) * 1000)
+    record.server_uptime_s = int(keep_warm.uptime_s())
+
+
 def _reserve_call(
     db: Session,
     user: User,
@@ -497,6 +517,7 @@ async def analyze(
         user_text=text,
     )
 
+    started = time_module.monotonic()
     try:
         analysis = await meal_ai.analyze_meal(
             loaded_images, text, prior,
@@ -507,6 +528,12 @@ async def analyze(
         # The model ran and burned tokens; only its output was unusable, so the
         # slot stays spent. Refunding here would make "send input that reliably
         # produces garbage" an uncapped free path to the provider.
+        #
+        # The row survives, so its timing does too: the provider really was
+        # occupied for that long, and a p95 that dropped these would describe a
+        # faster service than the one people are waiting on.
+        _record_timing(record, started)
+        db.commit()
         raise _provider_http_error(exc)
     except Exception as exc:
         # Refused (4xx) or unreachable (5xx) — rejected before inference, so
@@ -516,6 +543,7 @@ async def analyze(
         db.commit()
         raise _provider_http_error(exc)
 
+    _record_timing(record, started)
     record.analysis_json = analysis.model_dump_json()
     db.commit()
 
@@ -552,12 +580,16 @@ async def transcribe(
         noun="voice note",
     )
 
+    started = time_module.monotonic()
     try:
         transcript = await meal_ai.transcribe_audio(audio_bytes, audio_mime)
     except meal_ai.MealAIBadResponse as exc:
         # Silence, or speech the model couldn't make out. It listened either
         # way, so the slot stays spent — otherwise uploading silence on a loop
-        # would be an unmetered way to keep calling the provider.
+        # would be an unmetered way to keep calling the provider. It listened
+        # for real, so the timing is kept alongside the slot.
+        _record_timing(record, started)
+        db.commit()
         raise HTTPException(
             status_code=422,
             detail=(
@@ -573,6 +605,7 @@ async def transcribe(
 
     # Kept for the same reason analyses are: a record of what the user actually
     # said, to compare against the estimate it produced. The audio is discarded.
+    _record_timing(record, started)
     record.user_text = transcript
     db.commit()
 

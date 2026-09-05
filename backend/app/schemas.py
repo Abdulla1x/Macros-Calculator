@@ -1161,6 +1161,26 @@ class AdminDailyActivity(BaseModel):
     meals: int
 
 
+class AILatency(BaseModel):
+    """How long the provider took, over one group of calls.
+
+    `calls` and `count` are both here on purpose and are not the same number.
+    `calls` is every row of that kind in the window; `count` is the subset that
+    carries a timing. They diverge for rows written before migration 0015 and
+    for calls refunded before inference, which delete their row and so leave
+    nothing to time. Reporting only `count` would let a p95 over four samples
+    look authoritative.
+
+    Percentiles are nearest-rank, so every figure is a duration that actually
+    occurred rather than an interpolation between two that did.
+    """
+
+    calls: int
+    count: int
+    p50_ms: int
+    p95_ms: int
+
+
 class AdminStats(BaseModel):
     """App-wide usage: how many accounts exist, and how much they are used."""
 
@@ -1176,6 +1196,17 @@ class AdminStats(BaseModel):
     ai_calls_today: int
     ai_global_daily_limit: int
     ai_calls_30d_by_kind: dict[str, int] = {}
+    # Keyed by the same kinds. A kind with no timed rows is omitted entirely
+    # rather than sent as zeros, because a p50 of 0ms is a claim and an absent
+    # key is not.
+    ai_latency_30d_by_kind: dict[str, AILatency] = {}
+    # Timed calls served by a process that had only just booted.
+    #
+    # The cold start CANNOT appear in provider_ms -- the boot finishes before
+    # the handler runs -- so this is the only place it is visible. A high number
+    # here means the wait people complain about is the free instance waking up,
+    # not the model, and the fix is the ping schedule rather than the prompt.
+    ai_calls_30d_on_cold_server: int = 0
     # The window the series below cover, so the client never has to assume it.
     window_days: int
     signups: list[AdminDailyCount] = []

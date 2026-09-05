@@ -122,6 +122,22 @@ def mark_boot() -> None:
         _longest_scheduler_gap_s = None
 
 
+def uptime_s() -> float:
+    """How long this process has been able to serve requests.
+
+    Zero if mark_boot() has somehow not run yet -- the same choice snapshot()
+    makes, and for the same reason: the callers of this are a diagnostic panel
+    and a timing column, neither of which should be able to raise.
+
+    snapshot() deliberately does NOT call this -- it reads every figure it
+    reports under a single lock so they cannot disagree with each other, and it
+    has a local of the same name for the value it takes there.
+    """
+    with _lock:
+        booted = _booted_monotonic
+    return 0.0 if booted is None else time.monotonic() - booted
+
+
 def record_health_check(from_scheduler: bool = False) -> None:
     """One more /api/health request. The whole write path of this module.
 

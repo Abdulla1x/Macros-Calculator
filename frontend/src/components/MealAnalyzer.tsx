@@ -3,8 +3,10 @@ import { api } from '../api/client'
 import { readNoteDraft, writeNoteDraft } from '../lib/draft'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { matchItem, perPortion } from '../lib/libraryMatch'
+import { useAnalysisProgress } from '../hooks/useAnalysisProgress'
 import { useAudioRecorder, voiceNoteFilename } from '../hooks/useAudioRecorder'
 import type { Confidence, Food, MealAnalysisResponse, Settings } from '../types'
+import AnalysisProgress from './AnalysisProgress'
 import Card from './ui/Card'
 import LibraryFoodPicker from './LibraryFoodPicker'
 import SaveIngredientToLibrary from './SaveIngredientToLibrary'
@@ -33,10 +35,6 @@ const confidenceDots: Record<Confidence, string> = {
 
 const round = (value: number) => Math.round(value)
 
-// Long enough that a healthy analysis never shows the notice, short enough that
-// a stuck-looking spinner gets explained before the user gives up on it.
-const RETRY_NOTICE_AFTER_MS = 5_000
-
 // Mirrors MAX_IMAGES in backend/app/routers/ai.py, which is the real limit —
 // this copy exists only so the UI can stop you before a round trip does. If the
 // two ever disagree the server still wins, and it answers 422.
@@ -58,7 +56,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [analysis, setAnalysis] = useState<MealAnalysisResponse | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
-  const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [library, setLibrary] = useState<Food[]>([])
   const [attached, setAttached] = useState<Food[]>([])
@@ -76,20 +73,13 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const libraryRequested = useRef(false)
 
+  // Owns everything about the wait: how much of the body has been sent, whether
+  // the server turned out to be asleep, and when it is fair to say the model is
+  // slow. MealAnalyzer only says when a wait starts and when it ends.
+  const progress = useAnalysisProgress()
+
   const audio = useAudioRecorder()
   const { blob: recording, durationMs, clear: clearRecording } = audio
-
-  // A normal analysis answers in a few seconds. Past that the server is almost
-  // certainly retrying a busy provider, which can legitimately take up to a
-  // minute — so say so, or a long wait reads as the app having hung.
-  useEffect(() => {
-    if (!analyzing) {
-      setRetrying(false)
-      return
-    }
-    const timer = setTimeout(() => setRetrying(true), RETRY_NOTICE_AFTER_MS)
-    return () => clearTimeout(timer)
-  }, [analyzing])
 
   // Fetched when the panel is opened rather than on mount: /log should not pay
   // for a request until the AI is actually in use. Once per mount, guarded by a
@@ -213,6 +203,9 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     }
     setAnalyzing(true)
     setError(null)
+    // Photos are what make a body worth showing a bar for. A note-only analysis
+    // uploads a few hundred bytes and goes straight to waiting on the model.
+    const hooks = progress.start(files.length > 0)
     try {
       const form = new FormData()
       // Repeated under one field name — the backend reads `image` as a list.
@@ -222,7 +215,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       attached.forEach((food) => form.append('food_id', String(food.id)))
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
-      setAnalysis(await api.analyzeMeal(form))
+      setAnalysis(await api.analyzeMeal(form, hooks))
       // The items are all new, so the "saved ✓" marks against the old ones no
       // longer describe anything on screen. Refining in particular re-portions
       // and often renames, so even a name that survives is a different estimate.
@@ -231,6 +224,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {
       setAnalyzing(false)
+      progress.finish()
     }
   }
 
@@ -403,11 +397,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         Your photo, voice note, and description are sent to Google Gemini for analysis.
       </p>
 
-      {retrying && (
-        <p className="mt-3 text-sm text-amber-300">
-          The AI service is busy — still trying. This can take up to a minute.
-        </p>
-      )}
+      <AnalysisProgress state={progress} />
 
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 
