@@ -29,6 +29,25 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-05-analysis-progress",
+        date="2026-09-05",
+        title="You can see what an AI analysis is actually waiting on",
+        body=(
+            "**Analysing a meal used to be one silent wait.** It is really "
+            "two, and they have nothing to do with each other: sending your "
+            "photos, which depends on your connection, and waiting for the "
+            "model, which does not.\n\n"
+            "Now the photos get a real progress bar — an actual percentage of "
+            "the bytes sent, not an animation guessing at one — and the wait "
+            "for the estimate is shown separately. If the free server happens "
+            "to be asleep, the app checks and tells you that instead, rather "
+            "than leaving you watching a spinner.\n\n"
+            "The old \"the AI service is busy\" message could appear while "
+            "your phone was still uploading, blaming the service for your "
+            "own upload. It now waits until the photos have actually gone."
+        ),
+    ),
+    Announcement(
         id="2026-09-04-wake-up-progress",
         date="2026-09-04",
         title="The wake-up wait now shows how far along it is",
