@@ -82,19 +82,102 @@ const TRANSCRIBE_TIMEOUT_MS = 120_000
 // 15s attempt on top is a ~45s ceiling, and a cold instance adds to it.
 const REVIEW_TIMEOUT_MS = 120_000
 
+/** The headers every request carries.
+ *
+ * `extra` may override Content-Type -- that is how a caller sends something
+ * other than JSON -- but never Authorization, which is applied last on purpose.
+ * A FormData body sets no Content-Type at all: the browser has to add its own
+ * multipart boundary, and naming the type here would destroy it.
+ */
+function authHeaders(
+  isFormData: boolean,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...extra,
+  }
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+/** An expired/invalid session on any data endpoint sends the user back to
+ * login. Auth endpoints surface their 401s as normal form errors instead. */
+function enforceAuth(path: string, status: number): void {
+  if (status === 401 && !path.startsWith('/api/auth/')) {
+    clearToken()
+    window.location.assign('/login')
+  }
+}
+
+/** Parsed JSON, or null when the body was not JSON at all. Both transports need
+ * this before they can look for a `detail`, and neither should throw here --
+ * an unreadable error body must still surface as the status code's error. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+}
+
+/** The error for a response that arrived and was not ok. */
+function errorFrom(status: number, body: unknown): ApiError {
+  let detail = `Request failed (${status})`
+  const reported = (body as { detail?: unknown } | null)?.detail
+  if (typeof reported === 'string') {
+    detail = reported
+  } else if (Array.isArray(reported)) {
+    // FastAPI reports validation failures as an *array* of errors, never a
+    // string, so the check above can never match a 422 — every one of them
+    // used to surface as the generic "Request failed (422)" while the
+    // server had already said exactly which field was wrong and why.
+    // Forms guard their own inputs first; this is what is left when
+    // something slips past one, and it has to name the field or the user
+    // is left hunting through the whole page for it.
+    const first = reported[0] as { msg?: unknown; loc?: unknown } | undefined
+    if (typeof first?.msg === 'string') {
+      const field = Array.isArray(first.loc) ? first.loc.at(-1) : undefined
+      detail = typeof field === 'string' ? `${field}: ${first.msg}` : first.msg
+    }
+  }
+  return new ApiError(detail, status)
+}
+
+/** The error for a request that never produced a response at all.
+ *
+ * A dead network, our own deadline, and a provider-level outage all land here.
+ * status 0 marks "no HTTP response happened" so callers can still tell it apart
+ * from a real 5xx.
+ *
+ * The third case is why this message must not blame the user's network. When
+ * the host's edge answers 502/503 the response carries no CORS headers, so the
+ * browser blocks it and the request fails before we ever see a status code — a
+ * total outage is indistinguishable here from an unplugged cable. Observed for
+ * real on 2026-08-20, when Render disabled spin-up for free services during a
+ * Google Cloud incident and every user was told to check a connection that was
+ * working perfectly.
+ */
+function transportError(timedOut: boolean): ApiError {
+  return new ApiError(
+    timedOut
+      ? 'That took too long — the server may be waking up. Try again.'
+      : 'Could not reach the server. It may be temporarily unavailable — ' +
+        'check your connection, or try again in a few minutes.',
+    0,
+  )
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    ...(options.body instanceof FormData
-      ? {}
-      : { 'Content-Type': 'application/json' }),
-    ...(options.headers as Record<string, string>),
-  }
-  const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
+  const headers = authHeaders(
+    options.body instanceof FormData,
+    options.headers as Record<string, string> | undefined,
+  )
 
   let response: Response
   try {
@@ -104,57 +187,13 @@ async function request<T>(
       signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
-    // A dead network, our own deadline, and a provider-level outage all land
-    // here. status 0 marks "no HTTP response happened" so callers can still
-    // tell it apart from a real 5xx.
-    //
-    // The third case is why this message must not blame the user's network.
-    // When the host's edge answers 502/503 the response carries no CORS
-    // headers, so the browser blocks it and `fetch` rejects before we ever see
-    // a status code — a total outage is indistinguishable here from an
-    // unplugged cable. Observed for real on 2026-08-20, when Render disabled
-    // spin-up for free services during a Google Cloud incident and every user
-    // was told to check a connection that was working perfectly.
-    const timedOut = err instanceof DOMException && err.name === 'TimeoutError'
-    throw new ApiError(
-      timedOut
-        ? 'That took too long — the server may be waking up. Try again.'
-        : 'Could not reach the server. It may be temporarily unavailable — ' +
-          'check your connection, or try again in a few minutes.',
-      0,
-    )
+    throw transportError(err instanceof DOMException && err.name === 'TimeoutError')
   }
 
   if (!response.ok) {
-    // An expired/invalid session on any data endpoint sends the user back to
-    // login. Auth endpoints surface their 401s as normal form errors instead.
-    if (response.status === 401 && !path.startsWith('/api/auth/')) {
-      clearToken()
-      window.location.assign('/login')
-    }
-    let detail = `Request failed (${response.status})`
-    try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') {
-        detail = body.detail
-      } else if (Array.isArray(body.detail)) {
-        // FastAPI reports validation failures as an *array* of errors, never a
-        // string, so the check above can never match a 422 — every one of them
-        // used to surface as the generic "Request failed (422)" while the
-        // server had already said exactly which field was wrong and why.
-        // Forms guard their own inputs first; this is what is left when
-        // something slips past one, and it has to name the field or the user
-        // is left hunting through the whole page for it.
-        const first = body.detail[0]
-        if (typeof first?.msg === 'string') {
-          const field = Array.isArray(first.loc) ? first.loc.at(-1) : undefined
-          detail = typeof field === 'string' ? `${field}: ${first.msg}` : first.msg
-        }
-      }
-    } catch {
-      /* keep generic message */
-    }
-    throw new ApiError(detail, response.status)
+    enforceAuth(path, response.status)
+    const body = await response.text()
+    throw errorFrom(response.status, parseJson(body))
   }
   if (response.status === 204) return undefined as T
   return response.json()
