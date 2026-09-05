@@ -199,8 +199,91 @@ async function request<T>(
   return response.json()
 }
 
+/** Hooks a caller uses to watch a body leave the browser. */
+export interface UploadHooks {
+  /** Fraction of the request body sent so far, in [0, 1]. Only fires when the
+   * browser can size the body, which for FormData it always can. */
+  onProgress?: (fraction: number) => void
+  /** The whole body has left the client.
+   *
+   * NOT "the server has it". These bytes are in the socket; the server may
+   * still be reading them, or queueing, or asleep and booting. Anything shown
+   * from here on has to stop claiming to know how far along the request is. */
+  onSent?: () => void
+}
+
+/** POST a body and report how much of it has been uploaded.
+ *
+ * This exists because `fetch` cannot do it: there is no upload-progress event
+ * on the fetch API, and `XMLHttpRequest.upload` is still the only way to get
+ * one. Everything that is not the progress reporting is shared with `request`
+ * above, so the two cannot drift on auth, on the 401 rule, or on how a FastAPI
+ * error body becomes a sentence.
+ */
+function upload<T>(
+  path: string,
+  form: FormData,
+  timeoutMs: number,
+  hooks: UploadHooks = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE}${path}`)
+    for (const [name, value] of Object.entries(authHeaders(true))) {
+      xhr.setRequestHeader(name, value)
+    }
+    // XHR's own timeout covers send-to-complete, which is the same span
+    // AbortSignal.timeout covers on the fetch path.
+    xhr.timeout = timeoutMs
+
+    if (hooks.onProgress) {
+      const report = hooks.onProgress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) report(event.loaded / event.total)
+      }
+    }
+    if (hooks.onSent) xhr.upload.onload = hooks.onSent
+
+    xhr.onload = () => {
+      // A blocked cross-origin response reaches `load` with status 0 and an
+      // empty body. Without this guard it would fall through to errorFrom(0)
+      // and produce "Request failed (0)" — a sentence this app has never shown
+      // anyone — instead of the outage wording that fits what actually
+      // happened. Same reasoning as the fetch path's status-0 comment.
+      if (xhr.status === 0) {
+        reject(transportError(false))
+        return
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        enforceAuth(path, xhr.status)
+        reject(errorFrom(xhr.status, parseJson(xhr.responseText)))
+        return
+      }
+      if (xhr.status === 204 || xhr.responseText === '') {
+        resolve(undefined as T)
+        return
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as T)
+      } catch {
+        // A 2xx whose body we cannot read is not a transport failure — the
+        // server answered — so it keeps its real status rather than 0.
+        reject(new ApiError('The server sent a reply we could not read.', xhr.status))
+      }
+    }
+    xhr.onerror = () => reject(transportError(false))
+    xhr.ontimeout = () => reject(transportError(true))
+    xhr.send(form)
+  })
+}
+
 export const api = {
-  health: () => request<HealthStatus>('/api/health'),
+  // `timeoutMs` is for callers that use this as a liveness probe rather than a
+  // warm-up ping: useAnalysisProgress needs a fast no from a sleeping server,
+  // where the 90s default would simply hang alongside the request it is trying
+  // to explain.
+  health: (timeoutMs?: number) =>
+    request<HealthStatus>('/api/health', {}, timeoutMs),
   // Public: no auth header needed, so the status banner also works logged out.
   getAnnouncements: () => request<Announcements>('/api/announcements'),
 
@@ -444,12 +527,13 @@ export const api = {
       REVIEW_TIMEOUT_MS,
     ),
 
-  analyzeMeal: (form: FormData) =>
-    request<MealAnalysisResponse>(
-      '/api/ai/analyze',
-      { method: 'POST', body: form },
-      ANALYZE_TIMEOUT_MS,
-    ),
+  // Routed through `upload` rather than `request` even when nobody is watching
+  // the progress, so there is one transport for this endpoint instead of two
+  // that can drift. `hooks` is what MealAnalyzer uses to tell an upload apart
+  // from a wait on the model — the only part of this wait we can actually
+  // measure. See useAnalysisProgress.
+  analyzeMeal: (form: FormData, hooks?: UploadHooks) =>
+    upload<MealAnalysisResponse>('/api/ai/analyze', form, ANALYZE_TIMEOUT_MS, hooks),
   transcribeVoiceNote: (form: FormData) =>
     request<Transcription>(
       '/api/ai/transcribe',
