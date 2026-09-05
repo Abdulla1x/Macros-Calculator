@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app import keep_warm
 from app.db import get_engine
-from app.models import Meal, utcnow
+from app.models import AIAnalysis, Meal, utcnow
+from app.routers import admin as admin_router
+from app.routers.admin import CHART_DAYS
 from conftest import utc_today
 
 ADMIN_ROUTES = ("/api/admin/stats", "/api/admin/users", "/api/admin/keep-warm")
@@ -625,3 +627,118 @@ def test_health_check_touches_no_database(anon_client):
 
     assert statements == [], f"/api/health ran SQL: {statements}"
     assert connections == 0, "/api/health opened a database connection"
+
+
+# --- AI latency ---
+#
+# The panel that answers "when an analysis feels slow, is the model slow or is
+# the free instance waking up". provider_ms can only ever hold the first, which
+# is exactly why the cold-server count sits beside it.
+
+
+def seed_ai(rows):
+    """Insert AIAnalysis rows: (kind, provider_ms, server_uptime_s, days_ago)."""
+    with Session(get_engine()) as session:
+        for kind, provider_ms, server_uptime_s, days_ago in rows:
+            session.add(
+                AIAnalysis(
+                    user_id=1,
+                    user_text="",
+                    analysis_json="{}",
+                    kind=kind,
+                    provider_ms=provider_ms,
+                    server_uptime_s=server_uptime_s,
+                    created_at=utcnow() - timedelta(days=days_ago),
+                )
+            )
+        session.commit()
+
+
+def test_percentile_is_nearest_rank_and_never_interpolates():
+    """Every figure on this page has to be a duration that actually occurred.
+
+    statistics.quantiles would return 250 for the p50 below -- a wait nobody
+    ever had. Same rule useWakeProgress states when it takes the median of ten
+    cold starts and refuses the mean.
+    """
+    assert admin_router._percentile([], 0.5) == 0
+    assert admin_router._percentile([700], 0.95) == 700
+    assert admin_router._percentile([100, 200, 300, 400], 0.5) == 200
+    assert admin_router._percentile([100, 200, 300, 400], 0.95) == 400
+    assert admin_router._percentile([1, 2, 3, 4, 5], 0.5) == 3
+
+
+def test_ai_latency_is_reported_per_kind(client, monkeypatch):
+    make_admin(client, monkeypatch)
+    seed_ai(
+        [
+            ("analysis", 1000, 900, 1),
+            ("analysis", 3000, 900, 1),
+            ("analysis", 9000, 900, 1),
+            ("transcription", 500, 900, 1),
+        ]
+    )
+
+    latency = client.get("/api/admin/stats").json()["ai_latency_30d_by_kind"]
+
+    assert latency["analysis"]["p50_ms"] == 3000
+    assert latency["analysis"]["p95_ms"] == 9000
+    assert latency["analysis"]["count"] == 3
+    assert latency["transcription"]["p50_ms"] == 500
+
+
+def test_untimed_rows_count_as_calls_but_not_as_samples(client, monkeypatch):
+    """NULL means "never measured", which is not the same as fast.
+
+    This is the test that protects the nullable decision: a 0 default would be a
+    measured zero milliseconds and would quietly halve the median below.
+    """
+    make_admin(client, monkeypatch)
+    seed_ai([("analysis", None, None, 1), ("analysis", 4000, 900, 1)])
+
+    body = client.get("/api/admin/stats").json()
+    latency = body["ai_latency_30d_by_kind"]["analysis"]
+
+    assert body["ai_calls_30d_by_kind"]["analysis"] == 2
+    assert latency["calls"] == 2
+    assert latency["count"] == 1
+    assert latency["p50_ms"] == 4000
+
+
+def test_calls_served_by_a_freshly_booted_server_are_counted(client, monkeypatch):
+    """The only place a cold start is visible at all.
+
+    provider_ms cannot contain it -- the boot finishes before the handler runs --
+    so an evening analysis that felt slow shows up here and nowhere else.
+    """
+    make_admin(client, monkeypatch)
+    seed_ai(
+        [
+            ("analysis", 1000, 8, 1),
+            ("analysis", 1000, keep_warm.COLD_START_SUSPECT_S - 1, 1),
+            ("analysis", 1000, 9_000, 1),
+        ]
+    )
+
+    assert client.get("/api/admin/stats").json()["ai_calls_30d_on_cold_server"] == 2
+
+
+def test_a_call_outside_the_window_is_not_sampled(client, monkeypatch):
+    make_admin(client, monkeypatch)
+    seed_ai([("analysis", 5000, 900, CHART_DAYS + 5)])
+
+    assert client.get("/api/admin/stats").json()["ai_latency_30d_by_kind"] == {}
+
+
+def test_the_latency_panel_is_empty_rather_than_zero_when_nothing_is_timed(
+    client, monkeypatch
+):
+    """A p50 of 0ms is a claim; an absent key is not.
+
+    The operator has to be able to tell "shipped and idle" from "did not ship".
+    """
+    make_admin(client, monkeypatch)
+
+    body = client.get("/api/admin/stats").json()
+    assert body["ai_latency_30d_by_kind"] == {}
+    assert body["ai_calls_30d_on_cold_server"] == 0

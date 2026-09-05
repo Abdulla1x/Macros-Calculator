@@ -539,6 +539,20 @@ export interface AdminDailyActivity {
   meals: number
 }
 
+/** How long the provider took, over one group of calls.
+ *
+ * `calls` is every call of that kind in the window; `count` is the subset that
+ * carries a timing. They differ for rows written before the timing existed and
+ * for calls refunded before inference, which leave no row at all — so a p95 is
+ * only as trustworthy as `count` says. Percentiles are nearest-rank: every
+ * figure is a duration that actually occurred. */
+export interface AILatency {
+  calls: number
+  count: number
+  p50_ms: number
+  p95_ms: number
+}
+
 export interface AdminStats {
   total_users: number
   total_meals: number
@@ -550,6 +564,13 @@ export interface AdminStats {
   ai_calls_today: number
   ai_global_daily_limit: number
   ai_calls_30d_by_kind: Record<string, number>
+  /** Provider latency per kind. A kind with no timed calls is absent, not zero. */
+  ai_latency_30d_by_kind: Record<string, AILatency>
+  /** Timed calls served by a process that had only just booted.
+   *
+   * The cold start cannot appear in `provider_ms` — the boot finishes before the
+   * request handler runs — so this is the only place it shows up at all. */
+  ai_calls_30d_on_cold_server: number
   /** Width of the two series below, so the client never assumes it. */
   window_days: number
   signups: AdminDailyCount[]

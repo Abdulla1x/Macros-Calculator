@@ -51,6 +51,16 @@ function duration(seconds: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
+/** A provider duration, at the resolution this panel exists to show.
+ *
+ * Deliberately not `duration()` above: that takes seconds and floors them, so
+ * every analysis faster than a second would print "0s" and a four-second one
+ * would print "4s" — losing exactly the difference between a healthy call and a
+ * slow one, which is the whole question here. */
+function millis(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+}
+
 /** A wall-clock time on the window's own clock, so a boot time and the window
  * it falls in can be compared without doing timezone arithmetic in your head.
  *
@@ -133,7 +143,7 @@ function verdictCopy(status: KeepWarmStatus): { dot: string; text: string } {
  * always cries wolf stops being read. It doubles as a note to anyone reading
  * this file about which figures here are not reproducible.
  */
-function KeepWarmFact({
+function Fact({
   label,
   value,
   note,
@@ -178,12 +188,12 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
         <span data-live="verdict">{verdict.text}</span>
       </p>
       <dl className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KeepWarmFact
+        <Fact
           label="Up"
           value={duration(status.uptime_seconds)}
           note={`since ${clockTime(status.booted_at, status.window_tz)}`}
         />
-        <KeepWarmFact
+        <Fact
           label="Scheduler pings"
           value={status.scheduler_pings.toLocaleString()}
           note={
@@ -195,7 +205,7 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
                 : `${duration(status.seconds_since_scheduler_ping)} ago`
           }
         />
-        <KeepWarmFact
+        <Fact
           label="Longest gap"
           value={
             status.longest_scheduler_gap_seconds === null
@@ -204,7 +214,7 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
           }
           note={`between scheduler pings · sleeps after ${Math.round(status.spin_down_seconds / 60)}m`}
         />
-        <KeepWarmFact
+        <Fact
           label="Window"
           value={`${hourLabel(status.window_start_hour)}–${hourLabel(status.window_end_hour)}`}
           note={`${status.window_tz} · now ${status.window_local_time} there`}
@@ -227,6 +237,67 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
         every 10 minutes and its 30-second timeout means the first one
         each morning is logged as a failure while still starting the
         boot.
+      </p>
+    </Card>
+  )
+}
+
+/** What the provider actually costs in time, which nothing recorded until now.
+ *
+ * The panel that exists to answer one question: when an analysis feels slow, is
+ * the model slow, or is the free instance waking up? provider_ms can only ever
+ * contain the first — the boot finishes before the handler runs — so the
+ * cold-server count beside it is the other half of the answer.
+ *
+ * No verdict, unlike Keep-warm. That card compares a measured uptime against a
+ * known 15-minute spin-down; there is no established threshold here yet, and
+ * inventing one is the mistake this whole feature was designed to avoid.
+ */
+function AILatencyCard({ stats }: { stats: AdminStats }) {
+  // `?? {}` is not defensive programming for its own sake: the frontend ships
+  // from Vercel and the API from Render, independently, so for a minute after
+  // any release this page runs against a backend that predates the field. The
+  // types say it is always there and over a whole deploy it is; in the gap it
+  // is undefined, and Object.entries(undefined) throws hard enough to replace
+  // the entire admin page with the error boundary. Caught exactly that way.
+  const kinds = Object.entries(stats.ai_latency_30d_by_kind ?? {})
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">AI latency</h2>
+      <p className="mb-3 text-xs text-slate-400">
+        How long the provider took, over the last {stats.window_days} days.
+        Median and 95th percentile, nearest-rank — every figure is a call that
+        really happened, never an interpolation between two that did.
+      </p>
+      {kinds.length === 0 ? (
+        <p className="text-sm text-ink-muted" data-live="latency empty">
+          No timed calls yet — every provider call from this deploy onward
+          records one.
+        </p>
+      ) : (
+        <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {kinds.map(([kind, latency]) => (
+            <Fact
+              key={kind}
+              label={kind}
+              value={`${millis(latency.p50_ms)} / ${millis(latency.p95_ms)}`}
+              note={`p50 / p95 · ${latency.count} timed of ${latency.calls}`}
+            />
+          ))}
+          <Fact
+            label="On a cold server"
+            value={(stats.ai_calls_30d_on_cold_server ?? 0).toLocaleString()}
+            note="calls served within 2m of a boot"
+          />
+        </dl>
+      )}
+      <p className="mt-3 text-xs text-ink-faint">
+        These durations time the provider call and its retries, and nothing
+        else. They cannot contain the free instance&apos;s cold start, which
+        finishes before the request is handled, nor the upload, which arrives
+        before it — so if a wait felt far longer than the p95 above, the
+        difference is one of those two. The cold-server count is where the first
+        of them shows up.
       </p>
     </Card>
   )
@@ -318,6 +389,7 @@ export default function Admin() {
           </section>
 
           {keepWarm && <KeepWarmCard status={keepWarm} />}
+          <AILatencyCard stats={stats} />
 
           <Card as="section">
             <h2 className="text-sm font-semibold">Accounts per day</h2>

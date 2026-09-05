@@ -26,6 +26,7 @@ themselves flips — never an admin override. This is the kind of constraint tha
 erodes one convenient field at a time, which is why it is written down here
 rather than remembered.
 """
+import math
 from collections import defaultdict
 from datetime import date as date_type
 from datetime import datetime, time, timedelta, timezone
@@ -36,7 +37,7 @@ from sqlalchemy.orm import Session
 
 from ..auth.deps import require_admin
 from ..db import get_db
-from ..keep_warm import snapshot
+from ..keep_warm import COLD_START_SUSPECT_S, snapshot
 from ..models import (
     AIAnalysis,
     CaloriePlanDay,
@@ -54,6 +55,7 @@ from ..schemas import (
     AdminDailyActivity,
     AdminDailyCount,
     AdminStats,
+    AILatency,
     AdminUserRow,
     KeepWarmStatus,
 )
@@ -66,7 +68,26 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # a local-day window with a UTC-day counter on the same screen is how two
 # numbers that should agree stop agreeing.
 CHART_DAYS = 30
+# The global cap is 500 calls/day by default, so a 30-day window has a hard
+# ceiling around 15,000 rows. This bounds the fetch under that and degrades to
+# "the most recent N timed calls" rather than to a wrong answer.
+LATENCY_SAMPLE_LIMIT = 10_000
 ACTIVE_WINDOW_DAYS = 7
+
+
+def _percentile(sorted_values: list[int], q: float) -> int:
+    """Nearest-rank percentile -- always a value that actually occurred.
+
+    statistics.quantiles interpolates, which invents a duration nobody ever
+    waited, and with a handful of samples it does so most of the time. Every
+    figure on this page is meant to be something that happened. It is the same
+    rule useWakeProgress states when it takes the MEDIAN of ten cold starts and
+    refuses the mean, because no boot ever took the mean.
+    """
+    if not sorted_values:
+        return 0
+    rank = max(1, math.ceil(q * len(sorted_values)))
+    return sorted_values[min(rank, len(sorted_values)) - 1]
 
 # No rate limiting, per rate_limit.py's rule: only the auth endpoints are
 # limited, because everything else already requires a valid token — and this
@@ -307,6 +328,41 @@ def stats(
         .group_by(AIAnalysis.kind)
     ).all()
 
+    # Only rows that carry a timing; NULL means "never measured", which is not
+    # the same as fast and must not enter a percentile. Newest first so the
+    # limit above drops the oldest samples rather than an arbitrary slice.
+    timing_rows = db.execute(
+        select(AIAnalysis.kind, AIAnalysis.provider_ms, AIAnalysis.server_uptime_s)
+        .where(
+            AIAnalysis.created_at >= window_start,
+            AIAnalysis.provider_ms.is_not(None),
+        )
+        .order_by(AIAnalysis.created_at.desc())
+        .limit(LATENCY_SAMPLE_LIMIT)
+    ).all()
+
+    calls_by_kind = {kind: count for kind, count in ai_by_kind}
+    samples: dict[str, list[int]] = defaultdict(list)
+    cold_server_calls = 0
+    for kind, provider_ms, server_uptime_s in timing_rows:
+        samples[kind].append(provider_ms)
+        # Uptime shorter than the window a fresh boot occupies. Ambiguous in
+        # exactly the way the keep-warm verdict is -- a deploy also restarts the
+        # process -- which is why this is a count to compare against, not a
+        # verdict on its own.
+        if server_uptime_s is not None and server_uptime_s < COLD_START_SUSPECT_S:
+            cold_server_calls += 1
+
+    latency_by_kind = {}
+    for kind, values in samples.items():
+        values.sort()
+        latency_by_kind[kind] = AILatency(
+            calls=calls_by_kind.get(kind, len(values)),
+            count=len(values),
+            p50_ms=_percentile(values, 0.5),
+            p95_ms=_percentile(values, 0.95),
+        )
+
     return AdminStats(
         total_users=total_users,
         total_meals=total_meals,
@@ -317,7 +373,9 @@ def stats(
         meals_7d=sum(meals_per_day.get(day, 0) for day in recent),
         ai_calls_today=calls_today(db),
         ai_global_daily_limit=global_daily_limit(),
-        ai_calls_30d_by_kind={kind: count for kind, count in ai_by_kind},
+        ai_calls_30d_by_kind=calls_by_kind,
+        ai_latency_30d_by_kind=latency_by_kind,
+        ai_calls_30d_on_cold_server=cold_server_calls,
         window_days=CHART_DAYS,
         # Every day in the window is emitted, including empty ones. A series
         # that only carries days with data makes a chart draw a straight line
