@@ -1374,3 +1374,96 @@ def test_calibration_ignores_transcription_rows(client, monkeypatch):
     body = client.get("/api/ai/calibration").json()
     assert body["analyses"] == 0
     assert body["unreadable"] == 0
+
+
+# --- provider timing (migration 0015) ---
+#
+# Every test here drives the clock rather than reading it: a wall-clock
+# assertion would be a flake waiting for a slow CI box, and the thing worth
+# testing is the arithmetic and which paths keep the row, not that monotonic()
+# advances.
+
+
+def fixed_clock(monkeypatch, *readings):
+    """Make ai_router.time_module.monotonic return `readings` in order."""
+    monkeypatch.setattr(
+        ai_router, "time_module", SimpleNamespace(monotonic=iter(readings).__next__)
+    )
+
+
+def test_analyze_records_how_long_the_provider_took(client, monkeypatch):
+    configure(monkeypatch)
+    fixed_clock(monkeypatch, 0.0, 4.2)
+
+    body = client.post("/api/ai/analyze", data={"text": "chicken and rice"}).json()
+
+    with Session(get_engine()) as session:
+        row = session.get(AIAnalysis, body["analysis_id"])
+        assert row.provider_ms == 4200
+        assert row.server_uptime_s is not None
+
+
+def test_a_timing_is_kept_when_only_the_output_was_unusable(client, monkeypatch):
+    """The model ran, so the wait was real even though the answer was not.
+
+    The row already survives this path to keep the quota slot spent; dropping
+    its timing would make the p95 describe a faster service than the one people
+    are actually waiting on.
+    """
+
+    async def unusable(images, text, prior_analysis=None, **kwargs):
+        raise meal_ai.MealAIBadResponse("not JSON")
+
+    configure(monkeypatch, unusable)
+    fixed_clock(monkeypatch, 0.0, 7.5)
+
+    assert client.post("/api/ai/analyze", data={"text": "rice"}).status_code == 502
+
+    with Session(get_engine()) as session:
+        row = session.execute(select(AIAnalysis)).scalars().one()
+        assert row.provider_ms == 7500
+
+
+def test_a_refunded_analysis_leaves_no_timing_behind(client, monkeypatch):
+    """A call rejected before inference is deleted, so it cannot skew anything.
+
+    This is why provider_ms describes calls that REACHED the model rather than
+    calls that were attempted -- worth pinning, because a future "let's keep the
+    row for diagnostics" would silently change what every percentile means.
+    """
+
+    async def unreachable(images, text, prior_analysis=None, **kwargs):
+        raise meal_ai.MealAIUnavailable("boom")
+
+    configure(monkeypatch, unreachable)
+
+    assert client.post("/api/ai/analyze", data={"text": "rice"}).status_code == 503
+
+    with Session(get_engine()) as session:
+        assert session.execute(select(func.count()).select_from(AIAnalysis)).scalar() == 0
+
+
+def test_transcribe_records_how_long_the_provider_took(client, monkeypatch):
+    configure_transcribe(monkeypatch)
+    fixed_clock(monkeypatch, 0.0, 1.25)
+
+    assert post_voice_note(client).status_code == 200
+
+    with Session(get_engine()) as session:
+        row = session.execute(select(AIAnalysis)).scalars().one()
+        assert row.kind == "transcription"
+        assert row.provider_ms == 1250
+
+
+def test_a_row_written_before_the_column_existed_reads_as_none(client):
+    """Nullable on purpose: 0 would be a measured zero and drag medians down.
+
+    Guards the decision against a later "just default it to 0", which would look
+    tidier and quietly corrupt every figure on the admin panel.
+    """
+    with Session(get_engine()) as session:
+        session.add(AIAnalysis(user_id=1, user_text="old", analysis_json="{}"))
+        session.commit()
+        row = session.execute(select(AIAnalysis)).scalars().one()
+        assert row.provider_ms is None
+        assert row.server_uptime_s is None

@@ -14,6 +14,7 @@ the calibration line reuses rows that each already represent a billable call,
 and the optional rephrasing is a separate, explicitly-requested endpoint in
 `routers/ai.py`.
 """
+import time as time_module
 from datetime import date as date_type
 from datetime import timedelta
 
@@ -39,6 +40,7 @@ from ..targets import WEIGHT_LOOKBACK_DAYS, _latest_trend_weight, compute_target
 from .ai import (
     KIND_REVIEW,
     _provider_http_error,
+    _record_timing,
     _reserve_call,
     calibration_summary,
     review_daily_limit,
@@ -338,16 +340,23 @@ async def review_summary(
         per_user_limit=review_daily_limit(),
         noun="AI review summary",
     )
+    started = time_module.monotonic()
     try:
         summary = await meal_ai.phrase_review([fact for fact in facts if fact])
     except meal_ai.MealAIBadResponse as exc:
         # The model ran and burned tokens; only its output was unusable, so the
         # slot stays spent -- the same rule /analyze applies.
+        _record_timing(record, started)
+        db.commit()
         raise _provider_http_error(exc)
     except Exception as exc:
         db.delete(record)
         db.commit()
         raise _provider_http_error(exc)
 
+    # Timed for the same reason /analyze is: two kinds measured turns the panel
+    # from descriptive into diagnostic, because "is analysis slow, or is
+    # everything slow" is unanswerable with one.
+    _record_timing(record, started)
     db.commit()
     return ReviewSummary(summary=summary)
