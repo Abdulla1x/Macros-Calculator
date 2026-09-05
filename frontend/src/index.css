@@ -84,6 +84,25 @@
    * the app follows; the leftovers do not, which is the honest state of it. */
   --radius-card: 0.75rem;        /* was rounded-xl */
   --radius-control: 0.5rem;      /* was rounded-lg */
+
+  /* The only indeterminate animation in the app, used while the AI model is
+   * working and there is genuinely nothing to count. Registered here rather
+   * than written inline so it is `animate-indeterminate` like any other
+   * utility, and so `motion-reduce:` can switch it off the normal way.
+   *
+   * The segment is w-1/4 of its track, and translateX is a percentage of the
+   * SEGMENT, not the track -- so -100% parks it just off the left edge and
+   * 400% carries its leading edge just past the right one. */
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
 }
 
 /* Tells the browser to render built-in UI -- date pickers, select menus, time
