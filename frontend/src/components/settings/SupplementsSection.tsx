@@ -159,7 +159,7 @@ export default function SupplementsSection({
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">💊 Supplements</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">💊</span> Supplements</h2>
       <p className="mb-4 text-sm text-slate-400">
         What you take, and when. Each time you add becomes a box to tick on your
         dashboard. The card will tell you when a dose is overdue while the app

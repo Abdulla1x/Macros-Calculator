@@ -57,7 +57,10 @@ export default function DailyTrackerCard({
     <Card>
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">
-          <span className="mr-2">{icon}</span>
+          {/* Decorative. Each caller also renders this same glyph in its own
+              heading; both paths have to say so or the card announces
+              "droplet Water" on the dashboard and "Water" in settings. */}
+          <span className="mr-2" aria-hidden="true">{icon}</span>
           {label}
         </h2>
         <span className="text-sm text-slate-400">

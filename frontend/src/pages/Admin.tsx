@@ -515,18 +515,30 @@ export default function Admin() {
                           only, never contents — a supplement name can disclose
                           a prescription, and a plan's date discloses a
                           calendar, so these columns say how many and never
-                          which. */}
-                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Water logs">
-                        💧
+                          which.
+
+                          ⚠ The name is the sr-only span, not the `title` these
+                          carried before. A cell's CONTENTS are its accessible
+                          name whenever they are non-empty, so each of these
+                          announced as its emoji and the title was never read --
+                          and every data cell under them inherits that name once
+                          scope="col" is doing its job. axe cannot catch it: an
+                          emoji is a non-empty name. */}
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">💧</span>
+                        <span className="sr-only">Water logs</span>
                       </th>
-                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Days of steps logged">
-                        👟
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">👟</span>
+                        <span className="sr-only">Days of steps logged</span>
                       </th>
-                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
-                        💊
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">💊</span>
+                        <span className="sr-only">Supplement doses ticked</span>
                       </th>
-                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Days adjusted by a calorie plan">
-                        📅
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">📅</span>
+                        <span className="sr-only">Days adjusted by a calorie plan</span>
                       </th>
                       <th scope="col" className="pb-2 text-right font-medium">AI</th>
                     </tr>

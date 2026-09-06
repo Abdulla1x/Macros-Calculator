@@ -243,9 +243,11 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     return (
       <button
         onClick={() => setExpanded(true)}
+        aria-expanded={false}
         className="w-full rounded-xl border border-dashed border-slate-700 py-3 text-sm text-slate-400 hover:border-emerald-500 hover:text-emerald-300"
       >
-        ✨ Estimate macros with AI — describe it, speak it, or snap a photo
+        <span aria-hidden="true">✨</span> Estimate macros with AI — describe it,
+        speak it, or snap a photo
       </button>
     )
   }
@@ -254,8 +256,12 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     <Card as="section">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold">AI meal analysis</h2>
+        {/* The expand control and this one are never on screen together -- each
+            branch renders one of them -- so each hard-codes the state it is in,
+            the way SaveIngredientToLibrary's does. */}
         <button
           onClick={() => setExpanded(false)}
+          aria-expanded={true}
           className="text-xs text-ink-faint hover:text-slate-300"
         >
           Hide
@@ -362,7 +368,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
                 : 'border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300'
             }`}
           >
-            🎤 {audio.recording ? 'Stop recording' : 'Record a voice note'}
+            <span aria-hidden="true">🎤</span>{' '}
+            {audio.recording ? 'Stop recording' : 'Record a voice note'}
           </button>
           {transcribing && (
             <span className="text-xs text-slate-400">
@@ -450,7 +457,8 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
 
           {analysis.clarifying_question && (
             <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              🤔 {analysis.clarifying_question} — answer in the note and hit “Refine”.
+              <span aria-hidden="true">🤔</span> {analysis.clarifying_question} — answer in
+              the note and hit “Refine”.
             </p>
           )}
 
@@ -466,7 +474,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
                     onClick={() => correctAssumption(assumption)}
                     className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-amber-400 hover:text-amber-300"
                   >
-                    {assumption} ✎
+                    {assumption} <span aria-hidden="true">✎</span>
                   </button>
                 ))}
               </div>

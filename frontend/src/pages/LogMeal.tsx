@@ -817,7 +817,13 @@ export default function LogMeal() {
               title="Save these ingredients to re-log in one tap"
               className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
             >
-              {savingTemplate ? 'Saving…' : '☆ Save as template'}
+              {savingTemplate ? (
+                'Saving…'
+              ) : (
+                <>
+                  <span aria-hidden="true">☆</span> Save as template
+                </>
+              )}
             </button>
             <Button
               onClick={save}

@@ -60,7 +60,7 @@ export default function LibraryFoodPicker({
         aria-expanded={open}
         className="rounded-control border border-line-strong px-3 py-2 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300"
       >
-        🥣 Use foods from your library
+        <span aria-hidden="true">🥣</span> Use foods from your library
         {attached.length > 0 && ` (${attached.length})`} {open ? '▲' : '▼'}
       </button>
       <p className="mt-1 text-xs text-ink-faint">

@@ -282,6 +282,14 @@ export default function Weight() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-3">
+                    {/* ⚠ `title` is not a name here. A button's CONTENTS win the
+                        accessible-name computation whenever they are non-empty,
+                        so these two announced as "✎" and "✕" and the title was
+                        never read. And a name has to identify WHICH row: every
+                        entry in this list rendered the same pair, so "delete"
+                        on its own names one of thirty identical controls. axe
+                        cannot see either problem -- the glyph is a non-empty
+                        name, so the button passes. */}
                     <button
                       onClick={() => {
                         setDate(entry.date)
@@ -290,16 +298,16 @@ export default function Weight() {
                         window.scrollTo({ top: 0, behavior: 'smooth' })
                       }}
                       className="text-xs text-ink-faint hover:text-emerald-400"
-                      title="Edit this weigh-in"
+                      aria-label={`Edit the weigh-in from ${entry.date}`}
                     >
-                      ✎
+                      <span aria-hidden="true">✎</span>
                     </button>
                     <button
                       onClick={() => setConfirmDelete(entry.id)}
                       className="text-xs text-ink-faint hover:text-rose-400"
-                      title="Delete this weigh-in"
+                      aria-label={`Delete the weigh-in from ${entry.date}`}
                     >
-                      ✕
+                      <span aria-hidden="true">✕</span>
                     </button>
                   </span>
                 )}

@@ -92,7 +92,7 @@ export default function SavedMealsSection() {
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">🍽️ Saved meals</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">🍽️</span> Saved meals</h2>
       <p className="mb-4 text-sm text-slate-400">
         The one-tap entries in <strong className="text-slate-300">Quick log</strong> on
         your dashboard. They are saved when you tick “Save as template” while

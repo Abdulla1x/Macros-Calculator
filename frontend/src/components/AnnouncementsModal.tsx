@@ -75,7 +75,8 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
     <Modal label="What's new" onClose={close} panelClassName="max-h-[85vh] overflow-y-auto">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">
-          {view.kind === 'welcome' ? '✨ Welcome' : '✨ What’s new'}
+          <span aria-hidden="true">✨</span>{' '}
+          {view.kind === 'welcome' ? 'Welcome' : 'What’s new'}
         </h2>
         <button onClick={close} aria-label="Close" className="text-ink-faint hover:text-slate-300">
           ✕

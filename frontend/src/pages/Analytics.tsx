@@ -312,14 +312,26 @@ export default function Analytics() {
             disabled={exporting}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
-            {exporting ? 'Exporting…' : '⬇️ Export all meals (CSV)'}
+            {exporting ? (
+              'Exporting…'
+            ) : (
+              <>
+                <span aria-hidden="true">⬇️</span> Export all meals (CSV)
+              </>
+            )}
           </button>
           <button
             onClick={() => fileInput.current?.click()}
             disabled={importing}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
-            {importing ? 'Importing…' : '⬆️ Import meals (CSV)'}
+            {importing ? (
+              'Importing…'
+            ) : (
+              <>
+                <span aria-hidden="true">⬆️</span> Import meals (CSV)
+              </>
+            )}
           </button>
           <input
             ref={fileInput}

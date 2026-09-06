@@ -115,7 +115,7 @@ export default function SupplementsCard({ date }: Props) {
     return (
       <Card>
         <h2 className="font-semibold">
-          <span className="mr-2">💊</span>Supplements
+          <span className="mr-2" aria-hidden="true">💊</span>Supplements
         </h2>
         <p className="mt-3 text-xs text-ink-faint">{error}</p>
       </Card>

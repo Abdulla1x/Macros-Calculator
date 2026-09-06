@@ -205,7 +205,7 @@ export default function FoodLibrarySection({
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">🥫 Food library</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">🥫</span> Food library</h2>
       <p className="mb-4 text-sm text-slate-400">
         The foods autocomplete offers you when you log a meal. Things land here
         on their own:{' '}
