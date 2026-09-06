@@ -337,10 +337,12 @@ function TrendReadout({
             ? '—'
             : `${formatWeight(trend.latest_trend_kg, unit)} ${label}`}
         </dd>
-        <p className="mt-0.5 text-xs text-ink-faint">
+        {/* A second <dd>, not a <p>: a <div> inside a <dl> may hold only
+            <dt>/<dd>, and one term may have several descriptions. */}
+        <dd className="mt-0.5 text-xs text-ink-faint">
           Smoothed over {trend.point_count} weigh-in
           {trend.point_count === 1 ? '' : 's'}, weighted towards recent ones.
-        </p>
+        </dd>
       </div>
       <div>
         <dt className="text-xs text-slate-400">Weekly change</dt>
@@ -349,11 +351,11 @@ function TrendReadout({
             ? '—'
             : `${formatRate(trend.weekly_rate_kg, unit)} ${label}/week`}
         </dd>
-        <p className="mt-0.5 text-xs text-ink-faint">
+        <dd className="mt-0.5 text-xs text-ink-faint">
           {trend.weekly_rate_kg === null
             ? 'Needs at least 7 weigh-ins in the last 28 days.'
             : 'Fitted to the trend line over the last 28 days.'}
-        </p>
+        </dd>
       </div>
     </dl>
   )

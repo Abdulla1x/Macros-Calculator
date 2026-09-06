@@ -152,7 +152,11 @@ export default function BodyTargetsCard({
           <div key={row.label}>
             <dt className="text-xs text-slate-400">{row.label}</dt>
             <dd className="text-lg font-semibold">{row.value}</dd>
-            <p className="mt-0.5 text-xs text-ink-faint">{row.caption}</p>
+            {/* A second <dd>, not a <p>. A <div> inside a <dl> may hold only
+                <dt>/<dd>, and one term is allowed several descriptions -- so
+                this is both valid and the honest reading: the caption
+                describes the same term the value does. */}
+            <dd className="mt-0.5 text-xs text-ink-faint">{row.caption}</dd>
           </div>
         ))}
       </dl>
