@@ -8,11 +8,13 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [submitting, setSubmitting] = useState(false)
   const announcements = useAnnouncements()
 

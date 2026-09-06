@@ -9,6 +9,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -23,6 +24,7 @@ export default function ResetPassword() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [submitting, setSubmitting] = useState(false)
   const announcements = useAnnouncements()
 

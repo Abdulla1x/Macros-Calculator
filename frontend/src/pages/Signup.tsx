@@ -9,6 +9,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -16,6 +17,7 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   // Probed once per mount: the answer cannot change while the page is open.
   const [persistentSession] = useState(isSessionPersistent)
   const [submitting, setSubmitting] = useState(false)

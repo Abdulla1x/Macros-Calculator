@@ -10,6 +10,7 @@ import { trackerHues } from '../lib/chartTheme'
 import type { WaterDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 import Card from './ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   /** The day being viewed on the dashboard, not necessarily today. */
@@ -21,6 +22,7 @@ export default function WaterCard({ date }: Props) {
   const [day, setDay] = useState<WaterDay | null>(null)
   const [custom, setCustom] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {

@@ -6,6 +6,7 @@ import { num } from '../../lib/parse'
 import type { CaloriePlan, DaySurplus, PlanKind } from '../../types'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** Move calories between days without moving the week.
  *
@@ -57,6 +58,7 @@ export default function CaloriePlanSection({
   const [plans, setPlans] = useState<CaloriePlan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  useLiveMessage(error)
   const [mode, setMode] = useState<PlanKind | null>(null)
   // Today until a mode is opened, at which point `open` clamps the prefill to
   // that mode's range. There is no form on screen before then.

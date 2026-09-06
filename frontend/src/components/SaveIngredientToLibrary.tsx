@@ -7,6 +7,7 @@ import type { AnalyzedItem, Food } from '../types'
 import Button from './ui/Button'
 import Field from './ui/Field'
 import TextInput from './ui/TextInput'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** "Save this ingredient to my library", on one item of an AI estimate.
  *
@@ -78,6 +79,7 @@ export default function SaveIngredientToLibrary({
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  useLiveMessage(error)
 
   // portion_grams is the divisor in the conversion, and AnalyzedItem carries no
   // numeric bounds -- the provider rejects them in a structured-output schema --

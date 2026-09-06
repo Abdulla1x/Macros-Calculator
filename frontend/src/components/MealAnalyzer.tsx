@@ -12,6 +12,7 @@ import LibraryFoodPicker from './LibraryFoodPicker'
 import SaveIngredientToLibrary from './SaveIngredientToLibrary'
 import TextInput from './ui/TextInput'
 import Button from './ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   settings: Settings | null
@@ -57,6 +58,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [analyzing, setAnalyzing] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [library, setLibrary] = useState<Food[]>([])
   const [attached, setAttached] = useState<Food[]>([])
   // What each saved item was stored as, keyed by the name the model gave it.

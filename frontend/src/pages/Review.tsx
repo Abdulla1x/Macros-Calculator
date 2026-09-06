@@ -5,6 +5,7 @@ import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import type { ReviewCheck, WeeklyReview } from '../types'
 import Card from '../components/ui/Card'
 import { primaryButtonClass } from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** What each check is called on screen.
  *
@@ -86,11 +87,13 @@ const longDate = (iso: string) =>
 export default function Review() {
   const [data, setData] = useState<WeeklyReview | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
   const [summary, setSummary] = useState<string | null>(null)
   const [summarising, setSummarising] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
+  useLiveMessage(summaryError)
 
   async function putIntoWords() {
     setSummarising(true)

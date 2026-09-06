@@ -24,6 +24,7 @@ import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import { primaryButtonClass } from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 // What the caption under the calorie ring says, if anything.
 //
@@ -77,7 +78,9 @@ export default function Dashboard() {
     null,
   )
   const [shareError, setShareError] = useState<string | null>(null)
+  useLiveMessage(shareError)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [planDay, setPlanDay] = useState<PlanDay | null>(null)
   const [planFailed, setPlanFailed] = useState(false)
   const [viewedDate, setViewedDate] = useState(localIsoDate)

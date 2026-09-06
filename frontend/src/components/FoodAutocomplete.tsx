@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Food, FoodCreate, OFFProduct } from '../types'
 import TextInput, { inputSurfaceClass } from './ui/TextInput'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   value: string
@@ -20,6 +21,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
   const [offResults, setOffResults] = useState<OFFProduct[] | null>(null)
   const [offLoading, setOffLoading] = useState(false)
   const [offError, setOffError] = useState<string | null>(null)
+  useLiveMessage(offError)
   const containerRef = useRef<HTMLDivElement>(null)
   const skipNextSearch = useRef(false)
 

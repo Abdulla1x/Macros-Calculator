@@ -25,6 +25,7 @@ import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** One average tile, with its sample size when that is not the obvious one.
  *
@@ -75,11 +76,14 @@ export default function Analytics() {
   const [end, setEnd] = useState(localIsoDate())
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  useLiveMessage(loadError)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
+  useLiveMessage(importError)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  useLiveMessage(exportError)
   const fileInput = useRef<HTMLInputElement>(null)
 
   async function handleExport() {

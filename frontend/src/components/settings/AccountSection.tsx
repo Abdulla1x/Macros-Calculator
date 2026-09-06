@@ -6,6 +6,7 @@ import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -16,11 +17,15 @@ export default function AccountSection() {
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
   const [passwordError, setPasswordError] = useState('')
+  useLiveMessage(passwordError)
+  useLiveMessage(passwordStatus === 'saved' ? 'Password changed' : '')
   const [exportError, setExportError] = useState('')
+  useLiveMessage(exportError)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'error'>('idle')
   const [deleteError, setDeleteError] = useState('')
+  useLiveMessage(deleteError)
 
   const submitPassword = async (event: React.FormEvent) => {
     event.preventDefault()

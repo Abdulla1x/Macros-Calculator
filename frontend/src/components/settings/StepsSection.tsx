@@ -6,6 +6,7 @@ import type { ImportResult, Settings as SettingsType } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -27,6 +28,7 @@ export default function StepsSection({
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
+  useLiveMessage(importError)
 
   const importFile = async (file: File) => {
     setImporting(true)

@@ -5,6 +5,7 @@ import type { MealTemplate } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved meals behind Quick log: see them, share one, remove one.
  *
@@ -23,6 +24,7 @@ export default function SavedMealsSection() {
   const [items, setItems] = useState<MealTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  useLiveMessage(error)
   const [filter, setFilter] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)

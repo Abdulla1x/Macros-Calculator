@@ -27,6 +27,7 @@ import {
 } from '../lib/chartTheme'
 import type { AdminStats, AdminUserRow, KeepWarmStatus } from '../types'
 import Card from '../components/ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 
 const plural = (count: number, noun: string) =>
@@ -308,6 +309,7 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [keepWarm, setKeepWarm] = useState<KeepWarmStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {

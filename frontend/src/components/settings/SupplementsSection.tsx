@@ -10,6 +10,7 @@ import {
 import type { Supplement } from '../../types'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The supplement list: add, edit, pause, delete.
  *
@@ -31,6 +32,7 @@ export default function SupplementsSection({
   const [items, setItems] = useState<Supplement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  useLiveMessage(error)
   const [editing, setEditing] = useState<number | 'new' | null>(null)
   const [draft, setDraft] = useState({ name: '', dose: '', times: ['08:00'] })
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)

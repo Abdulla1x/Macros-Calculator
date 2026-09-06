@@ -7,6 +7,7 @@ import type { Settings as SettingsType } from '../types'
 import type { SettingsPanel } from './settings/panelContext'
 import { SETTINGS_TABS, settingsTabFor } from './settings/tabs'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** The Settings shell: one draft, one Save, five addresses.
  *
@@ -51,6 +52,11 @@ function settingsDiffer(a: SettingsType, b: SettingsType): boolean {
 
 export default function Settings() {
   const { settings: saved, error: loadError, updateSettings } = useSettings()
+  // Not one of this component's own messages -- it comes from the shared
+  // settings fetch and REPLACES the whole page below. Announced anyway,
+  // because the page transitions from "Loading…" to it without any other
+  // signal, and someone waiting is told nothing at all otherwise.
+  useLiveMessage(loadError)
   // A local working copy, so edits are not published to the rest of the app
   // until Save. Editing the shared object directly would make the dashboard
   // rings follow every keystroke in the goal fields, including half-typed
@@ -58,6 +64,11 @@ export default function Settings() {
   const [draft, setDraft] = useState<SettingsType | null>(null)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error, setError] = useState('')
+  useLiveMessage(error)
+  // The Save bar's ✓ has no text a screen reader can reach, and 'saved' on
+  // its own does not say what was saved. The error branch sets `error`, which
+  // the line above announces, so this covers only the success transition.
+  useLiveMessage(status === 'saved' ? 'Settings saved' : '')
   // Bumped after every successful save, so the targets card refetches. The
   // numbers it shows are derived from the row that was just written, and a
   // stale card beside a fresh form is how you end up trusting the wrong one.

@@ -8,6 +8,7 @@ import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
 import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
  *
@@ -63,6 +64,7 @@ export default function FoodLibrarySection({
   const [items, setItems] = useState<Food[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  useLiveMessage(error)
   const [editing, setEditing] = useState<number | 'new' | null>(null)
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)

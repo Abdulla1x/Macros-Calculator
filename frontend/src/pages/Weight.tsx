@@ -31,6 +31,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
@@ -45,6 +46,8 @@ export default function Weight() {
   const [weight, setWeight] = useState('')
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
+  useLiveMessage(status === 'saved' ? 'Weigh-in saved' : '')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   const unit = settings?.weight_unit ?? 'kg'

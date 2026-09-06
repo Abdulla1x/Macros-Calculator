@@ -22,6 +22,7 @@ import type {
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Row {
   key: number
@@ -266,6 +267,9 @@ export default function LogMeal() {
     { label: 'Yesterday', date: addDays(localIsoDate(), -1) },
   ]
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  // Both outcomes live in one state here, so one call covers the save
+  // confirmation and every validation refusal.
+  useLiveMessage(message?.text)
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
