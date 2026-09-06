@@ -478,7 +478,7 @@ export default function Dashboard() {
           {meals.length === 0 ? (
             !error && (
               <p className="py-6 text-center text-sm text-ink-faint">
-                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 hover:underline">log your first meal</Link>.
+                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 underline">log your first meal</Link>.
               </p>
             )
           ) : (

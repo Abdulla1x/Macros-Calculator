@@ -117,7 +117,7 @@ export default function ResetPassword() {
             <p className="text-center">
               <Link
                 to="/forgot-password"
-                className="text-emerald-400 hover:text-emerald-300"
+                className="text-emerald-400 underline hover:text-emerald-300"
               >
                 Request a new link
               </Link>

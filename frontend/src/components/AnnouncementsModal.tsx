@@ -86,7 +86,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
         <p className="text-sm text-slate-300">
           You’re all set — there’s nothing to catch up on. The {view.total} release notes
           written before you arrived are in{' '}
-          <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+          <Link to="/whats-new" className="text-emerald-400 underline hover:text-emerald-300">
             What’s new
           </Link>{' '}
           if you ever want the history.
@@ -113,7 +113,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
           {view.remaining > 0 && (
             <p className="mt-3 text-center text-xs text-ink-faint">
               and {view.remaining} older {view.remaining === 1 ? 'note' : 'notes'} in{' '}
-              <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+              <Link to="/whats-new" className="text-emerald-400 underline hover:text-emerald-300">
                 What’s new
               </Link>
             </p>
@@ -130,7 +130,7 @@ export default function AnnouncementsModal({ items }: { items: Announcement[] })
 
       <p className="mt-3 text-center text-xs text-ink-faint">
         Found a bug or want something?{' '}
-        <a href={`mailto:${CONTACT_EMAIL}`} className="text-emerald-400 hover:text-emerald-300">
+        <a href={`mailto:${CONTACT_EMAIL}`} className="text-emerald-400 underline hover:text-emerald-300">
           {CONTACT_EMAIL}
         </a>
       </p>

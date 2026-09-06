@@ -77,7 +77,7 @@ export default function AccountSection() {
             too, but it is dismissible and then gone -- an entry point that exists
             only inside a thing you just closed is not an entry point. */}
         <p className="mb-4 text-sm text-ink-faint">
-          <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+          <Link to="/whats-new" className="text-emerald-400 underline hover:text-emerald-300">
             What’s new
           </Link>{' '}
           — every release note, newest first.

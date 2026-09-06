@@ -50,6 +50,23 @@
 // panels that render nothing until clicked -- the AI analyzer, the capped
 // library lists, the add-a-food form. That hole has been found four times in
 // this project; check what a default state hides before trusting a count here.
+//
+// ⚠ AND THE FIFTH INSTANCE WAS THIS SCRIPT'S OWN FIRST RUN. It reported the
+// prose-link rule fixed at four links. A grep then found five more of exactly
+// the same defect that the run had never rendered:
+//
+//   * AnnouncementsModal -- the harness seeds macros_seen_announcements, so the
+//     modal never opens. That seeding is deliberate and correct (an unseeded
+//     account gets a full-screen overlay on every route), which is what makes
+//     this the hard case: the measure that keeps the harness honest is the same
+//     measure that hides a component from it.
+//   * The dashboard's "Nothing logged yet" line -- the harness seeds 14 days of
+//     meals, so the empty state is unreachable by construction.
+//   * ResetPassword's invalid-token branch, which needs a bad token in the URL.
+//
+// So a clean run means "clean in the states the harness renders", and the
+// states it renders are chosen for determinism, not for coverage. Grep for the
+// pattern as well when fixing a class of defect. The count is a floor.
 
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'

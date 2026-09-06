@@ -88,17 +88,31 @@ export default function Login() {
           >
             {submitting ? 'Logging in…' : 'Log in'}
           </Button>
+          {/* `underline` is not decoration, and the rule is PROSE, not sentences.
+              A link inside a sentence may not be distinguished by colour alone
+              (WCAG 1.4.1) unless it clears 3:1 against the surrounding text --
+              emerald-400 on slate-400 measures 1.35. That is what the audit
+              flagged, at four links.
+
+              The other two -- this one and "Back to log in" -- are each the only
+              thing in their paragraph, so strictly they are not in a text block
+              and the rule does not reach them. They are underlined anyway: they
+              are prose text sitting inches from links that now are, and a user
+              who has just learnt that underline means link should not meet one
+              that does not. Link-SHAPED CONTROLS are the ones left alone -- nav
+              items, card links, anything wearing a button -- because those are
+              not prose and never read as a sentence. */}
           <p className="text-center text-sm text-slate-400">
             <Link
               to="/forgot-password"
-              className="text-emerald-400 hover:text-emerald-300"
+              className="text-emerald-400 underline hover:text-emerald-300"
             >
               Forgot your password?
             </Link>
           </p>
           <p className="text-center text-sm text-slate-400">
             No account?{' '}
-            <Link to="/signup" className="text-emerald-400 hover:text-emerald-300">
+            <Link to="/signup" className="text-emerald-400 underline hover:text-emerald-300">
               Sign up
             </Link>
           </p>

@@ -61,7 +61,7 @@ export default function ForgotPassword() {
               minutes.
             </p>
             <p className="text-center text-slate-400">
-              <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
+              <Link to="/login" className="text-emerald-400 underline hover:text-emerald-300">
                 Back to log in
               </Link>
             </p>
@@ -93,7 +93,7 @@ export default function ForgotPassword() {
             </Button>
             <p className="text-center text-sm text-slate-400">
               Remembered it?{' '}
-              <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
+              <Link to="/login" className="text-emerald-400 underline hover:text-emerald-300">
                 Log in
               </Link>
             </p>
