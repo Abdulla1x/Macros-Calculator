@@ -15,7 +15,13 @@ import type { ComponentPropsWithRef } from 'react'
  * `block` is the one real variant: a full-width row whose text wraps under a
  * top-aligned box, used where the explanation runs to several lines
  * ("Work out my goals from my body profile"). The default is the inline pill
- * that sits in a flex-wrap row beside its siblings. */
+ * that sits in a flex-wrap row beside its siblings.
+ *
+ * ⚠ A CAPTION INSIDE A CHIP USES ink-muted, NOT ink-faint. bg-raised is lighter
+ * than the surface the caption token is tuned against, so ink-faint lands at
+ * 4.19:1 here and fails AA. The `block` variant is where this bites, because it
+ * is the variant that exists to carry an explanation. index.css states the
+ * general rule; this is the one place in the app that has hit it. */
 export default function OptionChip({
   block = false,
   className = '',

@@ -83,7 +83,11 @@ export default function GoalsPanel() {
           />
           <span>
             Work out my goals from my body profile
-            <span className="mt-1 block text-xs text-ink-faint">
+            {/* ink-MUTED, not ink-faint, and the difference is measured. An
+                OptionChip's ground is bg-raised (#1e293b), where ink-faint is
+                4.19:1 and fails AA -- this was the only such caption in the app
+                and axe found it. See the token's note in index.css. */}
+            <span className="mt-1 block text-xs text-ink-muted">
               Turning this on <strong>replaces</strong> the four goals below with
               calculated ones, and keeps updating them every time you log a
               weigh-in. Anything you typed here yourself is not kept — hit Save
