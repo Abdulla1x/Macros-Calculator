@@ -232,15 +232,26 @@ export default function Analytics() {
             </Card>
           ))}
 
-          <Card as="section" pad="none" className="overflow-x-auto">
+          {/* tabIndex + role + label because this scrolls. At 360px the table
+              is wider than the screen, and without a tab stop the columns past
+              the right edge are reachable by mouse only. The ring comes from
+              :focus-visible in index.css. */}
+          <Card
+            as="section"
+            pad="none"
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Daily totals, scrollable"
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-400">
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Calories</th>
-                  <th className="px-4 py-3">Protein (g)</th>
-                  {settings?.track_carbs && <th className="px-4 py-3">Carbs (g)</th>}
-                  {settings?.track_fat && <th className="px-4 py-3">Fat (g)</th>}
+                  <th scope="col" className="px-4 py-3">Date</th>
+                  <th scope="col" className="px-4 py-3">Calories</th>
+                  <th scope="col" className="px-4 py-3">Protein (g)</th>
+                  {settings?.track_carbs && <th scope="col" className="px-4 py-3">Carbs (g)</th>}
+                  {settings?.track_fat && <th scope="col" className="px-4 py-3">Fat (g)</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">

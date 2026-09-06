@@ -491,37 +491,42 @@ export default function Admin() {
                 No accounts yet.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Accounts, scrollable"
+              >
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs text-slate-400">
                     <tr>
-                      <th className="pb-2 pr-4 font-medium">Email</th>
-                      <th className="pb-2 pr-4 font-medium">Joined</th>
-                      <th className="pb-2 pr-4 font-medium">Last active</th>
-                      <th className="pb-2 pr-4 text-right font-medium">Meals</th>
-                      <th className="pb-2 pr-4 text-right font-medium">
+                      <th scope="col" className="pb-2 pr-4 font-medium">Email</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Joined</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Last active</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Meals</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
                         Weigh-ins
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium">Foods</th>
-                      <th className="pb-2 pr-4 text-right font-medium">Templates</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Foods</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Templates</th>
                       {/* The daily trackers, by their dashboard icons. Counts
                           only, never contents — a supplement name can disclose
                           a prescription, and a plan's date discloses a
                           calendar, so these columns say how many and never
                           which. */}
-                      <th className="pb-2 pr-4 text-right font-medium" title="Water logs">
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Water logs">
                         💧
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Days of steps logged">
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Days of steps logged">
                         👟
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
                         💊
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Days adjusted by a calorie plan">
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium" title="Days adjusted by a calorie plan">
                         📅
                       </th>
-                      <th className="pb-2 text-right font-medium">AI</th>
+                      <th scope="col" className="pb-2 text-right font-medium">AI</th>
                     </tr>
                   </thead>
                   <tbody>
