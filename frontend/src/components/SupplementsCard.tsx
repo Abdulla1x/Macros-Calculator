@@ -5,6 +5,7 @@ import { trackerHues } from '../lib/chartTheme'
 import type { SupplementDay, SupplementSlot } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 import Card from './ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   /** The day being viewed on the dashboard, not necessarily today. */
@@ -34,6 +35,7 @@ function clockTime(now: Date): string {
 export default function SupplementsCard({ date }: Props) {
   const [day, setDay] = useState<SupplementDay | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [now, setNow] = useState(() => new Date())
   // Which toggle is the most recent. Ticking several boxes quickly puts two
   // requests in flight, and each response carries the *whole* day as the server
@@ -113,7 +115,7 @@ export default function SupplementsCard({ date }: Props) {
     return (
       <Card>
         <h2 className="font-semibold">
-          <span className="mr-2">💊</span>Supplements
+          <span className="mr-2" aria-hidden="true">💊</span>Supplements
         </h2>
         <p className="mt-3 text-xs text-ink-faint">{error}</p>
       </Card>

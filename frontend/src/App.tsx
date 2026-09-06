@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import Announcer from './components/Announcer'
 import Layout from './components/Layout'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
@@ -24,74 +25,82 @@ import { SettingsProvider } from './settings/SettingsContext'
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route element={<RequireAuth />}>
-        {/* Inside RequireAuth, so the settings fetch only ever runs with a
-            token in hand; outside Layout's children, so all five pages read
-            one shared copy instead of fetching their own. */}
-        <Route
-          element={
-            <SettingsProvider>
-              <Layout />
-            </SettingsProvider>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="/log" element={<LogMeal />} />
-          <Route path="/weight" element={<Weight />} />
-          <Route path="/analytics" element={<Analytics />} />
-          {/* In the tab bar, unlike /whats-new below. It was kept out at first on
-              an ESTIMATE -- that a sixth cell would leave less room than the
-              word "Dashboard" needs -- and the estimate was wrong. Measured:
-              six cells are 60px at 360px and "Dashboard" renders at exactly
-              60px, so it fits, and the labels shrink to 10px below 360px where
-              they would not. The dashboard's seven-day card still links here
-              too, because it covers exactly this window. */}
-          <Route path="/review" element={<Review />} />
-          {/* Settings is a shell around five panels rather than one page. The
-              shell owns the draft and the Save bar; each panel is a real
-              address, so the dashboard's deep link into the calorie planner
-              lands somewhere specific and back/forward walk the sections.
+    <>
+      {/* Outside the router on purpose. A live region has to be in the document
+          BEFORE the text it announces, and it has to survive navigation -- one
+          mounted per route would be recreated on every route change, which is
+          the same silence it exists to prevent. sr-only takes it out of flow, so
+          it costs no layout here. */}
+      <Announcer />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route element={<RequireAuth />}>
+          {/* Inside RequireAuth, so the settings fetch only ever runs with a
+              token in hand; outside Layout's children, so all five pages read
+              one shared copy instead of fetching their own. */}
+          <Route
+            element={
+              <SettingsProvider>
+                <Layout />
+              </SettingsProvider>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="/log" element={<LogMeal />} />
+            <Route path="/weight" element={<Weight />} />
+            <Route path="/analytics" element={<Analytics />} />
+            {/* In the tab bar, unlike /whats-new below. It was kept out at first on
+                an ESTIMATE -- that a sixth cell would leave less room than the
+                word "Dashboard" needs -- and the estimate was wrong. Measured:
+                six cells are 60px at 360px and "Dashboard" renders at exactly
+                60px, so it fits, and the labels shrink to 10px below 360px where
+                they would not. The dashboard's seven-day card still links here
+                too, because it covers exactly this window. */}
+            <Route path="/review" element={<Review />} />
+            {/* Settings is a shell around five panels rather than one page. The
+                shell owns the draft and the Save bar; each panel is a real
+                address, so the dashboard's deep link into the calorie planner
+                lands somewhere specific and back/forward walk the sections.
 
-              Deliberately NOT React.lazy, however much a tab split invites it:
-              the service worker registers with autoUpdate, which implies
-              skipWaiting + clientsClaim, so a new worker can take control while
-              an old page is still open. There are no dynamic imports anywhere
-              in this app today, so there are no chunks to 404 -- lazy-loading
-              these tabs is exactly what would turn a stale session into a white
-              screen on a tab click. */}
-          <Route path="/settings" element={<Settings />}>
-            <Route index element={<Navigate to="/settings/goals" replace />} />
-            <Route path="goals" element={<GoalsPanel />} />
-            <Route path="body" element={<BodyPanel />} />
-            <Route path="trackers" element={<TrackersPanel />} />
-            <Route path="food" element={<LibraryPanel />} />
-            {/* Absent from the tab bar by design; see tabs.ts. */}
-            <Route path="account" element={<AccountPanel />} />
+                Deliberately NOT React.lazy, however much a tab split invites it:
+                the service worker registers with autoUpdate, which implies
+                skipWaiting + clientsClaim, so a new worker can take control while
+                an old page is still open. There are no dynamic imports anywhere
+                in this app today, so there are no chunks to 404 -- lazy-loading
+                these tabs is exactly what would turn a stale session into a white
+                screen on a tab click. */}
+            <Route path="/settings" element={<Settings />}>
+              <Route index element={<Navigate to="/settings/goals" replace />} />
+              <Route path="goals" element={<GoalsPanel />} />
+              <Route path="body" element={<BodyPanel />} />
+              <Route path="trackers" element={<TrackersPanel />} />
+              <Route path="food" element={<LibraryPanel />} />
+              {/* Absent from the tab bar by design; see tabs.ts. */}
+              <Route path="account" element={<AccountPanel />} />
+            </Route>
+            {/* Not in nav, same posture as /admin: it is somewhere you go when a
+                note points you there, not a fifth thing to choose between every
+                day. Reached from the What's new pop-up and from Settings ->
+                Account. */}
+            <Route path="/whats-new" element={<WhatsNew />} />
+            {/* Deliberately absent from Layout's nav: only the operator uses it.
+                This used to also cite the nav degrading to emoji-only below `sm`;
+                that is no longer true — the tab bar labels every item at every
+                width — so the operator-only reason is the whole reason now.
+                Reached by typing the URL; guarded here for display and by
+                require_admin on the server for real. */}
+            <Route element={<RequireAdmin />}>
+              <Route path="/admin" element={<Admin />} />
+            </Route>
+            {/* Last, so every real route above wins. Inside Layout so an
+                unmatched address still arrives with the nav to leave by. */}
+            <Route path="*" element={<NotFound />} />
           </Route>
-          {/* Not in nav, same posture as /admin: it is somewhere you go when a
-              note points you there, not a fifth thing to choose between every
-              day. Reached from the What's new pop-up and from Settings ->
-              Account. */}
-          <Route path="/whats-new" element={<WhatsNew />} />
-          {/* Deliberately absent from Layout's nav: only the operator uses it.
-              This used to also cite the nav degrading to emoji-only below `sm`;
-              that is no longer true — the tab bar labels every item at every
-              width — so the operator-only reason is the whole reason now.
-              Reached by typing the URL; guarded here for display and by
-              require_admin on the server for real. */}
-          <Route element={<RequireAdmin />}>
-            <Route path="/admin" element={<Admin />} />
-          </Route>
-          {/* Last, so every real route above wins. Inside Layout so an
-              unmatched address still arrives with the nav to leave by. */}
-          <Route path="*" element={<NotFound />} />
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }

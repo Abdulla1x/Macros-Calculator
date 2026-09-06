@@ -9,6 +9,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function Signup() {
   const { signup } = useAuth()
@@ -16,6 +17,7 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   // Probed once per mount: the answer cannot change while the page is open.
   const [persistentSession] = useState(isSessionPersistent)
   const [submitting, setSubmitting] = useState(false)
@@ -43,7 +45,7 @@ export default function Signup() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-3xl">🍽️</span>
+          <span className="text-3xl" aria-hidden="true">🍽️</span>
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
@@ -102,7 +104,7 @@ export default function Signup() {
           </Button>
           <p className="text-center text-sm text-slate-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
+            <Link to="/login" className="text-emerald-400 underline hover:text-emerald-300">
               Log in
             </Link>
           </p>

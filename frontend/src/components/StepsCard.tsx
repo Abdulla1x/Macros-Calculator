@@ -5,6 +5,7 @@ import { trackerHues } from '../lib/chartTheme'
 import type { StepDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
 import Card from './ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   /** The day being viewed on the dashboard, not necessarily today. */
@@ -15,6 +16,7 @@ export default function StepsCard({ date }: Props) {
   const [day, setDay] = useState<StepDay | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
@@ -86,7 +88,7 @@ export default function StepsCard({ date }: Props) {
     return (
       <Card>
         <h2 className="font-semibold">
-          <span className="mr-2">👟</span>Steps
+          <span className="mr-2" aria-hidden="true">👟</span>Steps
         </h2>
         <p className="mt-3 text-xs text-ink-faint">{error ?? 'Loading…'}</p>
       </Card>

@@ -24,6 +24,7 @@ import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import { primaryButtonClass } from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 // What the caption under the calorie ring says, if anything.
 //
@@ -77,7 +78,9 @@ export default function Dashboard() {
     null,
   )
   const [shareError, setShareError] = useState<string | null>(null)
+  useLiveMessage(shareError)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [planDay, setPlanDay] = useState<PlanDay | null>(null)
   const [planFailed, setPlanFailed] = useState(false)
   const [viewedDate, setViewedDate] = useState(localIsoDate)
@@ -478,7 +481,7 @@ export default function Dashboard() {
           {meals.length === 0 ? (
             !error && (
               <p className="py-6 text-center text-sm text-ink-faint">
-                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 hover:underline">log your first meal</Link>.
+                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 underline">log your first meal</Link>.
               </p>
             )
           ) : (
@@ -504,29 +507,34 @@ export default function Dashboard() {
                     </span>
                   ) : (
                     <span className="flex items-center gap-3">
+                      {/* Named by the meal, for the reason Weight's row pair is:
+                          a button's contents win the accessible name whenever
+                          they are non-empty, so `title` was never read and all
+                          three announced as their glyph -- once per meal on the
+                          list. */}
                       <button
                         onClick={() =>
                           showCode(meal.name, () => api.shareMeal(meal.id))
                         }
                         className="text-xs text-ink-faint hover:text-emerald-400"
-                        title="Copy this meal as a code"
+                        aria-label={`Copy ${meal.name} as a code`}
                       >
-                        📋
+                        <span aria-hidden="true">📋</span>
                       </button>
                       <Link
                         to="/log"
                         state={{ editMeal: meal }}
                         className="text-xs text-ink-faint hover:text-emerald-400"
-                        title="Edit meal"
+                        aria-label={`Edit ${meal.name}`}
                       >
-                        ✎
+                        <span aria-hidden="true">✎</span>
                       </Link>
                       <button
                         onClick={() => setConfirmDelete(meal.id)}
                         className="text-xs text-ink-faint hover:text-rose-400"
-                        title="Delete meal"
+                        aria-label={`Delete ${meal.name}`}
                       >
-                        ✕
+                        <span aria-hidden="true">✕</span>
                       </button>
                     </span>
                   )}

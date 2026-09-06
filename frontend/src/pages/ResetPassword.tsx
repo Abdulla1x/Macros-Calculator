@@ -9,6 +9,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -23,6 +24,7 @@ export default function ResetPassword() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [submitting, setSubmitting] = useState(false)
   const announcements = useAnnouncements()
 
@@ -69,7 +71,7 @@ export default function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-3xl">🍽️</span>
+          <span className="text-3xl" aria-hidden="true">🍽️</span>
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
@@ -117,7 +119,7 @@ export default function ResetPassword() {
             <p className="text-center">
               <Link
                 to="/forgot-password"
-                className="text-emerald-400 hover:text-emerald-300"
+                className="text-emerald-400 underline hover:text-emerald-300"
               >
                 Request a new link
               </Link>

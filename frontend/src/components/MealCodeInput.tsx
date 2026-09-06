@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { SharedMeal } from '../types'
 import Card from './ui/Card'
 import Button from './ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** Paste a meal code someone sent you, and get their meal in this form.
  *
@@ -27,6 +28,7 @@ export default function MealCodeInput({
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [loading, setLoading] = useState(false)
 
   const close = () => {

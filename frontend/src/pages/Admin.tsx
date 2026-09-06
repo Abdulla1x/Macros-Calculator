@@ -27,6 +27,7 @@ import {
 } from '../lib/chartTheme'
 import type { AdminStats, AdminUserRow, KeepWarmStatus } from '../types'
 import Card from '../components/ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 
 const plural = (count: number, noun: string) =>
@@ -308,6 +309,7 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [keepWarm, setKeepWarm] = useState<KeepWarmStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -491,37 +493,54 @@ export default function Admin() {
                 No accounts yet.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="region"
+                aria-label="Accounts, scrollable"
+              >
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs text-slate-400">
                     <tr>
-                      <th className="pb-2 pr-4 font-medium">Email</th>
-                      <th className="pb-2 pr-4 font-medium">Joined</th>
-                      <th className="pb-2 pr-4 font-medium">Last active</th>
-                      <th className="pb-2 pr-4 text-right font-medium">Meals</th>
-                      <th className="pb-2 pr-4 text-right font-medium">
+                      <th scope="col" className="pb-2 pr-4 font-medium">Email</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Joined</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Last active</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Meals</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
                         Weigh-ins
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium">Foods</th>
-                      <th className="pb-2 pr-4 text-right font-medium">Templates</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Foods</th>
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">Templates</th>
                       {/* The daily trackers, by their dashboard icons. Counts
                           only, never contents — a supplement name can disclose
                           a prescription, and a plan's date discloses a
                           calendar, so these columns say how many and never
-                          which. */}
-                      <th className="pb-2 pr-4 text-right font-medium" title="Water logs">
-                        💧
+                          which.
+
+                          ⚠ The name is the sr-only span, not the `title` these
+                          carried before. A cell's CONTENTS are its accessible
+                          name whenever they are non-empty, so each of these
+                          announced as its emoji and the title was never read --
+                          and every data cell under them inherits that name once
+                          scope="col" is doing its job. axe cannot catch it: an
+                          emoji is a non-empty name. */}
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">💧</span>
+                        <span className="sr-only">Water logs</span>
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Days of steps logged">
-                        👟
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">👟</span>
+                        <span className="sr-only">Days of steps logged</span>
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Supplement doses ticked">
-                        💊
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">💊</span>
+                        <span className="sr-only">Supplement doses ticked</span>
                       </th>
-                      <th className="pb-2 pr-4 text-right font-medium" title="Days adjusted by a calorie plan">
-                        📅
+                      <th scope="col" className="pb-2 pr-4 text-right font-medium">
+                        <span aria-hidden="true">📅</span>
+                        <span className="sr-only">Days adjusted by a calorie plan</span>
                       </th>
-                      <th className="pb-2 text-right font-medium">AI</th>
+                      <th scope="col" className="pb-2 text-right font-medium">AI</th>
                     </tr>
                   </thead>
                   <tbody>

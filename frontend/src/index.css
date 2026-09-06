@@ -46,9 +46,19 @@
    * ink-muted, flattening the caption/label hierarchy across the app. This keeps
    * 1.36x, against the 1.86x slate-400/slate-500 had.
    *
-   * The one exception is --color-raised, where ink-faint is 4.19:1. Placeholder
-   * text lives on that background and uses ink-muted (5.71:1) instead. One token
-   * genuinely cannot serve both. */
+   * ⚠ THE RULE IS ABOUT THE GROUND, NOT ABOUT PLACEHOLDERS. On --color-raised
+   * ink-faint is 4.19:1 and fails AA, so text there steps up to ink-muted
+   * (5.71:1) instead. One token genuinely cannot serve both.
+   *
+   * This note used to say "placeholder text lives on that background", naming
+   * the only thing that was true of at the time -- and six phases later a
+   * caption had appeared inside an OptionChip, whose ground is bg-raised, at
+   * exactly the 4.19 predicted here. Nothing caught it, because a caption and
+   * its ground are DIFFERENT ELEMENTS and no grep can join them. So: the rule is
+   * that anything on a ground lighter than --color-surface uses ink-muted, and
+   * scripts/a11y-audit.mjs is what enforces it now. The composited tinted
+   * grounds are worse still, not better -- ink-faint measures 4.06 on
+   * bg-emerald-500/15 and 3.74 on bg-sky-500/20. */
   --color-ink: #f1f5f9;          /* slate-100 */
   --color-ink-muted: #94a3b8;    /* slate-400 */
   --color-ink-faint: #7c8aa3;    /* measured, between slate-500 and slate-400 */

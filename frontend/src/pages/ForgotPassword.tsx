@@ -8,11 +8,13 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [submitting, setSubmitting] = useState(false)
   const announcements = useAnnouncements()
 
@@ -36,7 +38,7 @@ export default function ForgotPassword() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-3xl">🍽️</span>
+          <span className="text-3xl" aria-hidden="true">🍽️</span>
           <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
@@ -61,7 +63,7 @@ export default function ForgotPassword() {
               minutes.
             </p>
             <p className="text-center text-slate-400">
-              <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
+              <Link to="/login" className="text-emerald-400 underline hover:text-emerald-300">
                 Back to log in
               </Link>
             </p>
@@ -93,7 +95,7 @@ export default function ForgotPassword() {
             </Button>
             <p className="text-center text-sm text-slate-400">
               Remembered it?{' '}
-              <Link to="/login" className="text-emerald-400 hover:text-emerald-300">
+              <Link to="/login" className="text-emerald-400 underline hover:text-emerald-300">
                 Log in
               </Link>
             </p>

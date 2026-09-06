@@ -27,7 +27,10 @@ export default function MacroRing({ label, value, goal, unit, color, caption }: 
   return (
     <Card pad="sm" className="flex flex-col items-center">
       <div className="relative h-32 w-32">
-        <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
+        {/* Decorative: the value, the goal and the percentage are all in text
+            below, so this adds a stop on the tab-less reading order with
+            nothing behind it. */}
+        <svg viewBox="0 0 128 128" aria-hidden="true" className="h-full w-full -rotate-90">
           <circle cx="64" cy="64" r={radius} fill="none" stroke={raisedSurface} strokeWidth="11" />
           <circle
             cx="64"

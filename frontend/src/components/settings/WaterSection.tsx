@@ -65,7 +65,7 @@ export default function WaterSection({
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">💧 Water</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">💧</span> Water</h2>
       <p className="mb-4 text-sm text-slate-400">
         The card on your dashboard. Nothing here is required — leave it alone and
         the goal follows your weight.

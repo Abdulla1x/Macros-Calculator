@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Calibration, MacroCalibration } from '../types'
 import Card from './ui/Card'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 const round = (value: number) => Math.round(value)
 
@@ -55,6 +56,7 @@ function MacroCard({ label, macro }: { label: string; macro: MacroCalibration })
 export default function CalibrationSection() {
   const [data, setData] = useState<Calibration | null>(null)
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
 

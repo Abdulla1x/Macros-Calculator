@@ -31,6 +31,7 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
@@ -45,6 +46,8 @@ export default function Weight() {
   const [weight, setWeight] = useState('')
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [error, setError] = useState<string | null>(null)
+  useLiveMessage(error)
+  useLiveMessage(status === 'saved' ? 'Weigh-in saved' : '')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   const unit = settings?.weight_unit ?? 'kg'
@@ -279,6 +282,14 @@ export default function Weight() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-3">
+                    {/* ⚠ `title` is not a name here. A button's CONTENTS win the
+                        accessible-name computation whenever they are non-empty,
+                        so these two announced as "✎" and "✕" and the title was
+                        never read. And a name has to identify WHICH row: every
+                        entry in this list rendered the same pair, so "delete"
+                        on its own names one of thirty identical controls. axe
+                        cannot see either problem -- the glyph is a non-empty
+                        name, so the button passes. */}
                     <button
                       onClick={() => {
                         setDate(entry.date)
@@ -287,16 +298,16 @@ export default function Weight() {
                         window.scrollTo({ top: 0, behavior: 'smooth' })
                       }}
                       className="text-xs text-ink-faint hover:text-emerald-400"
-                      title="Edit this weigh-in"
+                      aria-label={`Edit the weigh-in from ${entry.date}`}
                     >
-                      ✎
+                      <span aria-hidden="true">✎</span>
                     </button>
                     <button
                       onClick={() => setConfirmDelete(entry.id)}
                       className="text-xs text-ink-faint hover:text-rose-400"
-                      title="Delete this weigh-in"
+                      aria-label={`Delete the weigh-in from ${entry.date}`}
                     >
-                      ✕
+                      <span aria-hidden="true">✕</span>
                     </button>
                   </span>
                 )}
@@ -337,10 +348,12 @@ function TrendReadout({
             ? '—'
             : `${formatWeight(trend.latest_trend_kg, unit)} ${label}`}
         </dd>
-        <p className="mt-0.5 text-xs text-ink-faint">
+        {/* A second <dd>, not a <p>: a <div> inside a <dl> may hold only
+            <dt>/<dd>, and one term may have several descriptions. */}
+        <dd className="mt-0.5 text-xs text-ink-faint">
           Smoothed over {trend.point_count} weigh-in
           {trend.point_count === 1 ? '' : 's'}, weighted towards recent ones.
-        </p>
+        </dd>
       </div>
       <div>
         <dt className="text-xs text-slate-400">Weekly change</dt>
@@ -349,11 +362,11 @@ function TrendReadout({
             ? '—'
             : `${formatRate(trend.weekly_rate_kg, unit)} ${label}/week`}
         </dd>
-        <p className="mt-0.5 text-xs text-ink-faint">
+        <dd className="mt-0.5 text-xs text-ink-faint">
           {trend.weekly_rate_kg === null
             ? 'Needs at least 7 weigh-ins in the last 28 days.'
             : 'Fitted to the trend line over the last 28 days.'}
-        </p>
+        </dd>
       </div>
     </dl>
   )

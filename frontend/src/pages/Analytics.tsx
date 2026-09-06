@@ -25,6 +25,7 @@ import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, ImportResult } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
+import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** One average tile, with its sample size when that is not the obvious one.
  *
@@ -75,11 +76,14 @@ export default function Analytics() {
   const [end, setEnd] = useState(localIsoDate())
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  useLiveMessage(loadError)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
+  useLiveMessage(importError)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  useLiveMessage(exportError)
   const fileInput = useRef<HTMLInputElement>(null)
 
   async function handleExport() {
@@ -232,15 +236,26 @@ export default function Analytics() {
             </Card>
           ))}
 
-          <Card as="section" pad="none" className="overflow-x-auto">
+          {/* tabIndex + role + label because this scrolls. At 360px the table
+              is wider than the screen, and without a tab stop the columns past
+              the right edge are reachable by mouse only. The ring comes from
+              :focus-visible in index.css. */}
+          <Card
+            as="section"
+            pad="none"
+            className="overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Daily totals, scrollable"
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-400">
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Calories</th>
-                  <th className="px-4 py-3">Protein (g)</th>
-                  {settings?.track_carbs && <th className="px-4 py-3">Carbs (g)</th>}
-                  {settings?.track_fat && <th className="px-4 py-3">Fat (g)</th>}
+                  <th scope="col" className="px-4 py-3">Date</th>
+                  <th scope="col" className="px-4 py-3">Calories</th>
+                  <th scope="col" className="px-4 py-3">Protein (g)</th>
+                  {settings?.track_carbs && <th scope="col" className="px-4 py-3">Carbs (g)</th>}
+                  {settings?.track_fat && <th scope="col" className="px-4 py-3">Fat (g)</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -297,14 +312,26 @@ export default function Analytics() {
             disabled={exporting}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
-            {exporting ? 'Exporting…' : '⬇️ Export all meals (CSV)'}
+            {exporting ? (
+              'Exporting…'
+            ) : (
+              <>
+                <span aria-hidden="true">⬇️</span> Export all meals (CSV)
+              </>
+            )}
           </button>
           <button
             onClick={() => fileInput.current?.click()}
             disabled={importing}
             className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
           >
-            {importing ? 'Importing…' : '⬆️ Import meals (CSV)'}
+            {importing ? (
+              'Importing…'
+            ) : (
+              <>
+                <span aria-hidden="true">⬆️</span> Import meals (CSV)
+              </>
+            )}
           </button>
           <input
             ref={fileInput}

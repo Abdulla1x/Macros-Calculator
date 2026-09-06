@@ -6,6 +6,7 @@ import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 export default function AccountSection() {
   const { user, changePassword, deleteAccount } = useAuth()
@@ -16,11 +17,15 @@ export default function AccountSection() {
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
   const [passwordError, setPasswordError] = useState('')
+  useLiveMessage(passwordError)
+  useLiveMessage(passwordStatus === 'saved' ? 'Password changed' : '')
   const [exportError, setExportError] = useState('')
+  useLiveMessage(exportError)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'error'>('idle')
   const [deleteError, setDeleteError] = useState('')
+  useLiveMessage(deleteError)
 
   const submitPassword = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -77,7 +82,7 @@ export default function AccountSection() {
             too, but it is dismissible and then gone -- an entry point that exists
             only inside a thing you just closed is not an entry point. */}
         <p className="mb-4 text-sm text-ink-faint">
-          <Link to="/whats-new" className="text-emerald-400 hover:text-emerald-300">
+          <Link to="/whats-new" className="text-emerald-400 underline hover:text-emerald-300">
             What’s new
           </Link>{' '}
           — every release note, newest first.

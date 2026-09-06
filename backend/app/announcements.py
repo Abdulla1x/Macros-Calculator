@@ -29,6 +29,29 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-06-accessibility",
+        date="2026-09-06",
+        title="The app now works with a keyboard and a screen reader",
+        body=(
+            "**The food search could be seen but not used without a mouse.** "
+            "Typing a name brought up a list of matches that arrow keys could "
+            "not reach and Escape could not dismiss. It is now a proper "
+            "combobox: arrow keys move through the suggestions, Enter picks "
+            "one, Escape closes the list.\n\n"
+            "**Nothing the app told you was reaching a screen reader.** A "
+            "save that failed, an import that was rejected, a password that "
+            "changed — all of it appeared in red or green text and was "
+            "announced nowhere. Every one of those messages is now spoken.\n\n"
+            "Alongside that: the small icon buttons say what they do and "
+            "which row they belong to, rather than reading out as a symbol; "
+            "the tables that scroll sideways on a phone can be reached with "
+            "Tab; and links inside a sentence are underlined, so they are not "
+            "told apart by colour alone.\n\n"
+            "If none of this describes how you use the app, you will notice "
+            "almost nothing — which is the intended outcome."
+        ),
+    ),
+    Announcement(
         id="2026-09-05-analysis-progress",
         date="2026-09-05",
         title="You can see what an AI analysis is actually waiting on",

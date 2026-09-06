@@ -32,7 +32,7 @@ export default function WeighInReminderSection({
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">⚖️ Weigh-in reminder</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">⚖️</span> Weigh-in reminder</h2>
       <p className="mb-4 text-sm text-slate-400">
         Your weigh-ins are not just a chart — they are what the trend line, your
         measured daily burn and (if you have them switched on) your automatic

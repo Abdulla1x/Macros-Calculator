@@ -6,6 +6,7 @@ import type { ImportResult, Settings as SettingsType } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
+import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The step goal, and the one place the app admits there is no sync.
  *
@@ -27,6 +28,7 @@ export default function StepsSection({
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
+  useLiveMessage(importError)
 
   const importFile = async (file: File) => {
     setImporting(true)
@@ -45,7 +47,7 @@ export default function StepsSection({
 
   return (
     <Card as="section">
-      <h2 className="mb-1 font-semibold">👟 Steps</h2>
+      <h2 className="mb-1 font-semibold"><span aria-hidden="true">👟</span> Steps</h2>
       <p className="mb-4 text-sm text-slate-400">
         Step counts are typed in by hand. Reading them from your phone or watch
         needs Health Connect or Apple Health, and neither is open to a web app
@@ -108,7 +110,13 @@ export default function StepsSection({
           disabled={importing}
           className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:border-violet-500 hover:text-violet-300 disabled:opacity-40"
         >
-          {importing ? 'Importing…' : '⬆️ Import steps (CSV)'}
+          {importing ? (
+            'Importing…'
+          ) : (
+            <>
+              <span aria-hidden="true">⬆️</span> Import steps (CSV)
+            </>
+          )}
         </button>
         <input
           ref={fileInput}
