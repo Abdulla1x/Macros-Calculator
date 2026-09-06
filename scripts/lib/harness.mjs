@@ -302,8 +302,21 @@ export async function seed(token) {
 //
 // A route may name several, applied in order -- /settings/food stacks two capped
 // lists and an add form, and one selector cannot reach all three.
+//
+// An entry is either a selector to CLICK, or { fill, text } to type into. The
+// typing form exists because the food autocomplete's dropdown cannot be clicked
+// open: it appears only once two characters are in the field, so the entire
+// suggestion list -- and the whole combobox rewrite that turned its rows into
+// options -- was invisible to both scripts. That was the SIXTH time a default
+// state has hidden a section here, and it was found the same way as the other
+// five: by noticing after the fact that a change had produced no diff.
 export const EXPAND_ON = {
-  '/log': 'button:has-text("Estimate macros with AI")',
+  '/log': [
+    'button:has-text("Estimate macros with AI")',
+    // "Snapshot" matches the seeded library (Snapshot food 0..N), so the list
+    // is deterministic. Two characters is the threshold; this clears it.
+    { fill: 'input[placeholder="Type a food name…"]', text: 'Snapshot' },
+  ],
   // Both lists render their first COLLAPSED_ROWS entries and hide the rest, and
   // "+ Add a food" opens a form that is otherwise never in the DOM -- the same
   // form this route exists to make findable. Matched on the plural nouns rather
@@ -333,14 +346,22 @@ export async function visitRoutes(context, routes, onRoute) {
     await page.waitForLoadState('networkidle')
     const expanders = [EXPAND_ON[route] ?? []].flat()
     for (const expander of expanders) {
+      const selector = typeof expander === 'string' ? expander : expander.fill
       // Guarded rather than asserted: a route legitimately has no expander
       // before its data is seeded, and a hard failure there would make the
       // harness unusable on a fresh account.
-      if ((await page.locator(expander).count()) === 0) continue
-      await page.locator(expander).click()
-      // /log's panel fetches the food library when it opens, so wait for that to
-      // land or the caller races an empty picker. The settings expanders fetch
-      // nothing and this resolves immediately for them.
+      if ((await page.locator(selector).count()) === 0) continue
+      if (typeof expander === 'string') {
+        await page.locator(selector).click()
+      } else {
+        // Typed rather than filled: the field debounces on change, and fill()
+        // sets the value in one event that the debounce never sees.
+        await page.locator(selector).click()
+        await page.locator(selector).type(expander.text, { delay: 30 })
+      }
+      // /log's panel fetches the food library when it opens, and the
+      // autocomplete fetches again when it has two characters -- so wait, or the
+      // caller races an empty picker or an empty list.
       await page.waitForLoadState('networkidle')
     }
     await onRoute(page, route)
