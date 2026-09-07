@@ -61,6 +61,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ### ⚖️ Weight & trends
 - Log a weigh-in and read the **trend**, not the daily noise — an exponentially weighted line over the raw points, with the weekly rate fitted over the last 28 days
+- **Set a goal weight and it works out when you would reach it** — from the rate you are actually moving at, never the rate you asked for, because projecting from your own target would just hand your input back as a prediction. The goal is drawn on the chart, the gap is spelled out, and when a date cannot honestly be named the app says why instead: too few weigh-ins to fit a rate, a trend going the other way, a log that has stopped, or a pace that puts the date more than two years out
+- **Zoom the chart** to 7, 14, 30 or 90 days, a year, or everything — for when you cut for a while and are now bulking and want to see just the part you care about. The trend weight and weekly rate deliberately do *not* follow the zoom: they are measured over their own fixed windows, so the app cannot report a different "current rate" depending on which range you happen to be looking at
 - Kilograms or pounds, switchable at any time; the stored value never changes, only how it's shown
 - Your weigh-ins are not just a chart: they are what the measured daily burn and — if you enable them — the automatic daily targets are worked out from
 - **An optional weigh-in nudge.** Set a time and how many days you want between weigh-ins, and on a day one is due a card appears with a link straight to the weight log. Dismiss it and it stays gone until the next day it is due. It never appears on the weight page itself — you are already where it would send you. Leave the time empty, which is how every account starts, and none of it happens
@@ -69,8 +71,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Calories + protein always on; **carbs and fat are opt-in**
 - Per-macro daily goals drive the dashboard rings, log form, and analytics
 - Optional **body profile** (height, date of birth, sex, activity level, goal
-  rate) turns into BMI, a daily burn, and calorie/macro targets — every figure
-  shown next to the input it came from
+  weight, goal rate) turns into BMI, a daily burn, and calorie/macro targets —
+  every figure shown next to the input it came from
 - **Your daily burn is measured, not guessed**, once you have logged enough:
   roughly two weeks of weigh-ins and meals turns into a real energy-balance
   figure from your own data, shown beside what the formula would have said.
