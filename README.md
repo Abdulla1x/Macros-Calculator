@@ -129,7 +129,7 @@ Rings against your goals, one-tap quick log, the three daily trackers, today's m
 
 ### AI meal analysis
 
-Describe it, speak it or photograph it. The estimate comes back as a range with a confidence badge, per-ingredient confidence dots, and every assumption listed and editable.
+Describe it, speak it or photograph it. The estimate comes back as a range with a confidence badge, per-ingredient confidence dots, every assumption listed and editable, and a one-tap save to your library for any ingredient you have not got saved yet.
 
 <table>
 <tr><th align="center">Desktop</th><th align="center">Phone</th></tr>
@@ -171,7 +171,7 @@ Type an ingredient and your food library fills in the macros, with an Open Food 
 
 ### Weight
 
-The trend line rather than the daily noise, with the weekly rate fitted over 28 days.
+The trend line rather than the daily noise, with the weekly rate fitted over 28 days and a goal weight projected from that measured rate. The chart zooms from a week to everything; the two figures under it are measured over their own windows and deliberately do not move when it does.
 
 <table>
 <tr><th align="center">Desktop</th><th align="center">Phone</th></tr>
