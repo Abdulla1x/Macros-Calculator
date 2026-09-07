@@ -73,6 +73,11 @@ export interface Settings {
   birth_date: string | null
   sex: Sex | null
   activity_level: ActivityLevel | null
+  /** The weight being aimed for, in kg. Null means "not set" — the one
+   *  nullable setting whose emptiness means neither "derive it" nor "off",
+   *  because only the user can answer it. Kept directly above the rate it is
+   *  so often confused with. */
+  goal_weight_kg: number | null
   /** Signed kg/week: negative loses, positive gains, 0 maintains. */
   goal_rate_kg_per_week: number | null
   /** When true the four goals above are derived server-side, not typed. */

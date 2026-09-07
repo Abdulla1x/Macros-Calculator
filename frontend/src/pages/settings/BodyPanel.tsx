@@ -1,3 +1,4 @@
+import GoalWeightField from '../../components/settings/GoalWeightField'
 import HeightField from '../../components/settings/HeightField'
 import WeighInReminderSection from '../../components/settings/WeighInReminderSection'
 import { num } from '../../lib/parse'
@@ -108,12 +109,27 @@ export default function BodyPanel() {
             </p>
           </div>
 
+          {/* Directly above the rate, and that adjacency is the point. Someone
+              once typed their goal *weight* into the rate box and got a bare
+              422; PR #15 added the guard, but the field they were reaching for
+              did not exist until now. The guard's message can finally point
+              somewhere instead of only saying what the box is not. */}
+          <div className="sm:col-span-2">
+            <GoalWeightField
+              settings={settings}
+              update={update}
+              onBlur={guard('goal_weight_kg')}
+            />
+          </div>
+
           <Field className="sm:col-span-2" label="Goal rate (kg per week)"
             caption={
               <>
-              Negative to lose, positive to gain, 0 to maintain. Leave it blank
-              and we won't guess — "not set" and "maintain" aren't the same
-              answer. Anything past 1 kg/week gets capped, and we'll say so.
+              How fast, not how heavy — the weight you're aiming for is the
+              field above. Negative to lose, positive to gain, 0 to maintain.
+              Leave it blank and we won't guess — "not set" and "maintain"
+              aren't the same answer. Anything past 1 kg/week gets capped, and
+              we'll say so.
               </>
             }
           >
