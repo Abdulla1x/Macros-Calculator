@@ -26,6 +26,7 @@ _PATCHED_FIELDS = (
     "birth_date",
     "sex",
     "activity_level",
+    "goal_weight_kg",
     "goal_rate_kg_per_week",
     "targets_auto",
     "water_goal_ml",

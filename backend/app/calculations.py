@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import date as date_type
 from datetime import timedelta
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 # Smoothing factor for the weight trend line. 0.25 is a chosen convention, not a
 # measured constant: it weights each new weigh-in at a quarter and gives roughly
@@ -81,6 +81,138 @@ def weekly_rate(
         return None
     slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / denominator
     return round(slope * 7, 3)
+
+
+# --- Goal weight -------------------------------------------------------------
+
+# POLICY. How close the trend has to sit to the goal before the app says you
+# are there. 0.1 kg is one decimal place -- the precision bathroom scales
+# actually report, and the precision `formatWeight` prints. Anything tighter
+# would call two numbers different that the UI displays identically.
+GOAL_REACHED_TOLERANCE_KG = 0.1
+
+# POLICY. The furthest out a date is worth naming. Two years of a measured rate
+# holding is already a generous assumption; past that the date is not something
+# anyone can act on, and printing it would dress arithmetic up as a forecast.
+MAX_PROJECTION_WEEKS = 104
+
+# The eight answers `goal_projection` can give. Spelled here rather than in
+# schemas.py so the API Literal and the function cannot drift apart: schemas
+# imports this name.
+ProjectionStatus = Literal[
+    "no_goal",
+    "reached",
+    "no_rate",
+    "stale",
+    "holding",
+    "moving_away",
+    "too_far",
+    "on_course",
+]
+
+
+class GoalProjection(NamedTuple):
+    """When the measured trend reaches the goal weight, or why it cannot say.
+
+    `remaining_kg` is signed the way the goal is approached: negative means
+    there is still weight to lose. `from_date` is the weigh-in the projection
+    is anchored at -- never today -- because that is the last date anything was
+    actually measured, and a date computed forward from an unmeasured today
+    would be a day of drift per day of not weighing in.
+    """
+
+    status: ProjectionStatus
+    goal_weight_kg: float | None = None
+    remaining_kg: float | None = None
+    weeks: float | None = None
+    reach_date: date_type | None = None
+    from_date: date_type | None = None
+
+
+def goal_projection(
+    goal_weight_kg: float | None,
+    trend_points: Sequence[TrendPoint],
+    rate_kg_per_week: float | None,
+    today: date_type,
+    window_days: int = RATE_WINDOW_DAYS,
+    max_weeks: int = MAX_PROJECTION_WEEKS,
+    tolerance_kg: float = GOAL_REACHED_TOLERANCE_KG,
+) -> GoalProjection:
+    """Project the goal weight from the **measured** rate, or refuse to.
+
+    Never from `goal_rate_kg_per_week`. Projecting from the rate the user asked
+    for would hand their own input back to them as a prediction, which is the
+    false precision this app exists to avoid -- the answer would be true by
+    construction and tell them nothing.
+
+    `today` is a parameter rather than a `date.today()` inside, so the staleness
+    branch is testable without freezing the clock.
+
+    **Staleness reuses `RATE_WINDOW_DAYS` rather than inventing a threshold.**
+    `weekly_rate` windows from the latest weigh-in, not from today, so an
+    account that stopped weighing in three months ago still gets a
+    well-fitted slope -- of a period that is entirely over. Once the last
+    weigh-in is older than that window, every point the rate was fitted to has
+    aged out, and a forward date drawn from it is a claim about a measurement
+    that stopped. `review.py`'s `weight_check` refuses at REVIEW_WINDOW_DAYS (7)
+    instead; the two differ on purpose, because a weekly review makes a weekly
+    claim and this one does not.
+
+    The order of the checks is the design:
+
+    * `reached` is tested before `no_rate`, so someone with three weigh-ins
+      sitting on their goal is told the one thing that is already true rather
+      than asked for more data.
+    * `reached` is tested before `stale` too, because "you were there at your
+      last weigh-in" stays honest at any age -- `from_date` travels with it.
+
+    There is deliberately no "rate too small to count" threshold. `weekly_rate`
+    rounds to 3 dp, so an exactly-zero rate is reachable and `holding` catches
+    it; anything non-zero divides, and `too_far` handles the absurd end. A
+    minimum-rate constant would refuse a genuine 0.1 kg/week as noise.
+    """
+    if goal_weight_kg is None:
+        return GoalProjection(status="no_goal")
+    if not trend_points:
+        # No weigh-ins is not its own status: `weekly_rate` already answers
+        # None for it, and the thing to say -- weigh in more -- is identical.
+        return GoalProjection(status="no_rate", goal_weight_kg=goal_weight_kg)
+
+    latest = max(trend_points, key=lambda point: point.date)
+    remaining = round(goal_weight_kg - latest.trend_kg, 3)
+
+    def answer(status: ProjectionStatus, **extra: object) -> GoalProjection:
+        return GoalProjection(
+            status=status,
+            goal_weight_kg=goal_weight_kg,
+            remaining_kg=remaining,
+            from_date=latest.date,
+            **extra,
+        )
+
+    if abs(remaining) <= tolerance_kg:
+        return answer("reached")
+    if rate_kg_per_week is None:
+        return answer("no_rate")
+    if (today - latest.date).days > window_days:
+        return answer("stale")
+    if rate_kg_per_week == 0:
+        return answer("holding")
+    # Both are non-zero here, so comparing their signs is enough: the trend is
+    # moving away from the goal rather than towards it.
+    if (rate_kg_per_week > 0) != (remaining > 0):
+        return answer("moving_away")
+
+    weeks = remaining / rate_kg_per_week
+    if weeks > max_weeks:
+        return answer("too_far", weeks=round(weeks, 1))
+    # Days are derived from the unrounded weeks; the rounded `weeks` is for
+    # display only, and rounding before multiplying would shift the date.
+    return answer(
+        "on_course",
+        weeks=round(weeks, 1),
+        reach_date=latest.date + timedelta(days=round(weeks * 7)),
+    )
 
 
 def scale_macros(

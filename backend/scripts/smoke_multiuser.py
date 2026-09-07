@@ -269,11 +269,14 @@ def main() -> None:
         # weight query inside compute_targets were unscoped, these would match.
         profile = {"height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
                    "activity_level": "moderate", "goal_rate_kg_per_week": 0.0}
+        # A alone sets a goal weight -- deliberately outside `profile`, which
+        # both users share. A field they both set could not show a leak.
         client.put(
             "/api/settings",
             json={"calorie_goal": 1750, "protein_goal": 155, "carbs_goal": 200,
                   "fat_goal": 55, "track_carbs": True, "track_fat": False,
-                  "weight_unit": "lb", **profile, "targets_auto": True},
+                  "weight_unit": "lb", **profile, "targets_auto": True,
+                  "goal_weight_kg": 77.5},
             headers=headers_a,
         )
         client.put(
@@ -359,6 +362,10 @@ def main() -> None:
             client.get("/api/settings", headers=headers_a).json()["height_cm"] == 180.0,
             "a PUT without profile keys leaves the profile alone",
         )
+        a_goal = client.get("/api/settings", headers=headers_a).json()
+        b_goal = client.get("/api/settings", headers=headers_b).json()
+        check(a_goal["goal_weight_kg"] == 77.5, "A kept A's goal weight")
+        check(b_goal["goal_weight_kg"] is None, "A's goal weight invisible to B")
 
         # -- Read isolation ----------------------------------------------------
         a_names = {m["name"] for m in client.get("/api/meals", headers=headers_a).json()}

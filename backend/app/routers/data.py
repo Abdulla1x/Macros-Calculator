@@ -139,6 +139,10 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             ),
             "sex": setting.sex,
             "activity_level": setting.activity_level,
+            # A fourth meaning for null in this block: not "derive it for me"
+            # (water_goal_ml), not "no goal" (steps_goal), not "switched off"
+            # (weigh_in_reminder_time) -- just never entered.
+            "goal_weight_kg": setting.goal_weight_kg,
             "goal_rate_kg_per_week": setting.goal_rate_kg_per_week,
             "targets_auto": setting.targets_auto,
             # Null means "derived from my weight" rather than "unset", so it

@@ -141,7 +141,8 @@ def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
 # what a whole-payload assertion should be pinning.
 UNSET_OPTIONALS = {
     "height_cm": None, "birth_date": None, "sex": None,
-    "activity_level": None, "goal_rate_kg_per_week": None,
+    "activity_level": None,
+    "goal_weight_kg": None, "goal_rate_kg_per_week": None,
     "targets_auto": False,
     "water_goal_ml": None, "water_quick_adds": None,
     "steps_goal": None,
@@ -172,7 +173,8 @@ def test_body_profile_round_trips(client):
         "fat_goal": 70, "track_carbs": False, "track_fat": False,
         "weight_unit": "kg",
         "height_cm": 180.0, "birth_date": "1990-05-04", "sex": "male",
-        "activity_level": "moderate", "goal_rate_kg_per_week": -0.5,
+        "activity_level": "moderate",
+        "goal_weight_kg": 75.0, "goal_rate_kg_per_week": -0.5,
         "targets_auto": False,
         "water_goal_ml": None, "water_quick_adds": None,
         "steps_goal": None,
@@ -228,6 +230,9 @@ def test_settings_reject_implausible_profile_values(client):
         ("sex", "other"), ("sex", "Male"),
         ("activity_level", "athlete"), ("activity_level", ""),
         ("goal_rate_kg_per_week", 50), ("goal_rate_kg_per_week", -50),
+        # The same bound weigh-ins carry. A goal of zero is not a goal, and
+        # anything past the heaviest human on record is a stray digit.
+        ("goal_weight_kg", 0), ("goal_weight_kg", -70), ("goal_weight_kg", 5000),
         ("birth_date", "2099-01-01"), ("birth_date", "1600-01-01"),
     ]
     for field, bad in bad_values:
