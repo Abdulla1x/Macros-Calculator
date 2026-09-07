@@ -11,7 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
-import { daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
+import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { displayToKg, formatRate, formatWeight, unitLabel } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
 import {
@@ -33,6 +33,7 @@ import type {
   Settings,
   WeightEntry,
   WeightTrend,
+  WeightTrendPoint,
 } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
@@ -40,9 +41,39 @@ import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
-// How far back the chart looks. The rate is fitted over a shorter window by the
-// server; this is just how much history is drawn.
-const CHART_DAYS = 90
+// not the range the chart happens to be showing.
+//
+// ⚠️ `days` on GET /api/weights/trend decides what the numbers are computed
+// from, not just what is drawn: the EWMA seeds at the first entry in the window
+// and the rate needs seven points inside 28 days. Wiring the picker below to it
+// would move the trend weight, the weekly rate and the projected date every
+// time someone zoomed the chart, and a short enough range would blank the last
+// two outright. So the fetch is fixed and the picker slices what came back.
+// Choosing which points to draw is a display decision; recomputing a number
+// client-side is not, and this stays on the right side of that line.
+const TREND_FETCH_DAYS = 1825
+
+// What the picker offers. `days: null` is everything fetched -- five years,
+// which is "all" for any real account and is what the endpoint will serve.
+const RANGE_OPTIONS = [
+  { days: 30, label: '30 days', heading: 'Last 30 days' },
+  { days: 90, label: '90 days', heading: 'Last 90 days' },
+  { days: 365, label: '1 year', heading: 'Last year' },
+  { days: null, label: 'All', heading: 'All weigh-ins' },
+] as const
+
+// 90 by default, so the page opens on exactly what it always showed.
+const DEFAULT_RANGE_DAYS: number | null = 90
+
+/** The points inside the picked range, or all of them. Display only. */
+function pointsInRange(
+  points: WeightTrendPoint[],
+  days: number | null,
+): WeightTrendPoint[] {
+  if (days === null) return points
+  const cutoff = addDays(localIsoDate(), -(days - 1))
+  return points.filter((point) => point.date >= cutoff)
+}
 
 
 // What the page uses when the response has no `projection` at all.
@@ -85,6 +116,7 @@ export default function Weight() {
   useLiveMessage(error)
   useLiveMessage(status === 'saved' ? 'Weigh-in saved' : '')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [rangeDays, setRangeDays] = useState<number | null>(DEFAULT_RANGE_DAYS)
 
   const unit = settings?.weight_unit ?? 'kg'
   const label = unitLabel(unit)
@@ -96,7 +128,7 @@ export default function Weight() {
       setEntries([])
       setError("Couldn't load your weight log — check your connection and try again.")
     })
-    api.getWeightTrend(CHART_DAYS).then(setTrend).catch(() => setTrend(null))
+    api.getWeightTrend(TREND_FETCH_DAYS).then(setTrend).catch(() => setTrend(null))
   }, [])
 
   useEffect(() => {
@@ -150,7 +182,10 @@ export default function Weight() {
     load()
   }
 
-  const chartData = (trend?.points ?? []).map((point) => ({
+  const range =
+    RANGE_OPTIONS.find((option) => option.days === rangeDays) ?? RANGE_OPTIONS[1]
+  const visiblePoints = pointsInRange(trend?.points ?? [], rangeDays)
+  const chartData = visiblePoints.map((point) => ({
     date: point.date,
     weight: Number(formatWeight(point.weight_kg, unit)),
     trend: Number(formatWeight(point.trend_kg, unit)),
@@ -218,14 +253,20 @@ export default function Weight() {
       </Card>
 
       <Card as="section">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h2 className="font-semibold">Last {CHART_DAYS} days</h2>
-          {trend && trend.point_count > 0 && (
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <h2 className="font-semibold">{range.heading}</h2>
+          {/* "shown", not "logged". With a fixed fetch this counts the drawn
+              slice, while TrendReadout below keeps reporting the full sample
+              the trend was smoothed over -- two different numbers, each saying
+              what it counts. */}
+          {visiblePoints.length > 0 && (
             <p className="text-xs text-ink-faint">
-              {trend.point_count} weigh-in{trend.point_count === 1 ? '' : 's'} logged
+              {visiblePoints.length} weigh-in{visiblePoints.length === 1 ? '' : 's'} shown
             </p>
           )}
+          <RangePicker value={rangeDays} onChange={setRangeDays} />
         </div>
+
 
         {chartData.length > 0 ? (
           <>
@@ -379,6 +420,47 @@ export default function Weight() {
           </ul>
         )}
       </Card>
+    </div>
+  )
+}
+
+/** Which slice of the history the chart draws. Chart only -- it never reaches
+ *  the server, and it deliberately does not filter the history list below.
+ *  A control in one card that silently reshaped another would be hidden, and
+ *  someone hunting an old typo to delete would have to discover that the
+ *  chart's zoom was also a list filter.
+ *
+ *  Buttons with aria-pressed inside a labelled group rather than a radio set:
+ *  this toggles what is drawn, it does not submit a value. The group label is
+ *  the part that matters and the part an audit cannot check -- axe accepts an
+ *  unlabelled group of buttons happily. */
+function RangePicker({
+  value,
+  onChange,
+}: {
+  value: number | null
+  onChange: (days: number | null) => void
+}) {
+  return (
+    <div role="group" aria-label="Chart range" className="flex flex-wrap gap-1.5">
+      {RANGE_OPTIONS.map((option) => {
+        const active = option.days === value
+        return (
+          <button
+            key={option.heading}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.days)}
+            className={`rounded-control border px-2.5 py-1 text-xs ${
+              active
+                ? 'border-brand bg-brand/10 font-semibold text-brand'
+                : 'border-line-strong text-ink-muted hover:border-brand hover:text-brand'
+            }`}
+          >
+            {option.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
