@@ -297,7 +297,6 @@ export interface WeightTrend {
   projection: GoalProjection
 }
 
-
 export interface Meal {
   id: number
   date: string

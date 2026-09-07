@@ -7,7 +7,7 @@ import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
-import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
+import ShowAllToggle, { COLLAPSED_ROWS } from '../ShowAllToggle'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved-food library: see it, correct it, rename it, delete it.

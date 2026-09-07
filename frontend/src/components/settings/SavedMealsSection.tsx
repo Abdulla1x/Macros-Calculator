@@ -4,7 +4,7 @@ import ShareCodePanel from '../ShareCodePanel'
 import type { MealTemplate } from '../../types'
 import Card from '../ui/Card'
 import TextInput from '../ui/TextInput'
-import ShowAllToggle, { COLLAPSED_ROWS } from './ShowAllToggle'
+import ShowAllToggle, { COLLAPSED_ROWS } from '../ShowAllToggle'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved meals behind Quick log: see them, share one, remove one.

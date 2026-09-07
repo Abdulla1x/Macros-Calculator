@@ -14,7 +14,11 @@
  *
  * Not a components/ui/ primitive: those exist to settle colliding Tailwind
  * utilities behind variant props (see ui/Button.tsx), and this has none to
- * settle. It is one button with one job in two files.
+ * settle. It is one button with one job in three files.
+ *
+ * It lived under components/settings/ until the Weight page's history list
+ * needed the same button. Nothing about it was settings-specific; the directory
+ * was just where the first two callers happened to be.
  */
 /** How many rows a capped list shows before it asks.
  *
@@ -25,6 +29,13 @@
  * Five is enough to recognise a list for what it is, and short enough that the
  * controls belonging to it -- "+ Add a food", the filter, the whole Saved meals
  * section underneath -- stay on the first screen.
+ *
+ * `cap` is a prop rather than this constant read directly, and the Weight
+ * page's history uses its own larger one. That is not a drift: the reason the
+ * two library lists must agree is that they are *stacked in one tab*, and the
+ * weight log has no neighbour to look inconsistent beside. Ten rows there is
+ * about a week and a half of daily weigh-ins, which is the unit that list is
+ * actually read in.
  */
 export const COLLAPSED_ROWS = 5
 

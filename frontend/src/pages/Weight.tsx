@@ -40,7 +40,9 @@ import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
+import ShowAllToggle from '../components/ShowAllToggle'
 
+// How much history is FETCHED -- the endpoint's own maximum, and deliberately
 // not the range the chart happens to be showing.
 //
 // ⚠️ `days` on GET /api/weights/trend decides what the numbers are computed
@@ -65,6 +67,11 @@ const RANGE_OPTIONS = [
 // 90 by default, so the page opens on exactly what it always showed.
 const DEFAULT_RANGE_DAYS: number | null = 90
 
+// How many weigh-ins the history shows before it offers the rest. Ten rather
+// than ShowAllToggle's COLLAPSED_ROWS of five -- see the note there on why the
+// two library lists must agree with each other and this one need not.
+const HISTORY_ROWS = 10
+
 /** The points inside the picked range, or all of them. Display only. */
 function pointsInRange(
   points: WeightTrendPoint[],
@@ -74,7 +81,6 @@ function pointsInRange(
   const cutoff = addDays(localIsoDate(), -(days - 1))
   return points.filter((point) => point.date >= cutoff)
 }
-
 
 // What the page uses when the response has no `projection` at all.
 //
@@ -117,6 +123,7 @@ export default function Weight() {
   useLiveMessage(status === 'saved' ? 'Weigh-in saved' : '')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [rangeDays, setRangeDays] = useState<number | null>(DEFAULT_RANGE_DAYS)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
 
   const unit = settings?.weight_unit ?? 'kg'
   const label = unitLabel(unit)
@@ -190,6 +197,11 @@ export default function Weight() {
     weight: Number(formatWeight(point.weight_kg, unit)),
     trend: Number(formatWeight(point.trend_kg, unit)),
   }))
+
+  // Newest first, then capped. The cap applies to the reversed array so
+  // collapsing keeps the most recent weigh-ins rather than the oldest.
+  const ordered = [...entries].reverse()
+  const visibleEntries = historyExpanded ? ordered : ordered.slice(0, HISTORY_ROWS)
   const goalKg = (trend?.projection ?? NO_PROJECTION).goal_weight_kg
 
   return (
@@ -266,7 +278,6 @@ export default function Weight() {
           )}
           <RangePicker value={rangeDays} onChange={setRangeDays} />
         </div>
-
 
         {chartData.length > 0 ? (
           <>
@@ -361,7 +372,7 @@ export default function Weight() {
           <p className="py-6 text-center text-sm text-ink-faint">Nothing logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-800">
-            {[...entries].reverse().map((entry) => (
+            {visibleEntries.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div>
                   <p className="text-sm font-medium">
@@ -419,6 +430,20 @@ export default function Weight() {
             ))}
           </ul>
         )}
+        <ShowAllToggle
+          total={ordered.length}
+          cap={HISTORY_ROWS}
+          expanded={historyExpanded}
+          onToggle={() => {
+            setHistoryExpanded((current) => !current)
+            // An armed delete must not survive out of sight, for the reason
+            // FoodLibrarySection gives: a row scrolled away still holding its
+            // confirmation comes back armed, one tap from deleting something
+            // the user had already moved on from.
+            setConfirmDelete(null)
+          }}
+          noun="weigh-in"
+        />
       </Card>
     </div>
   )
@@ -587,4 +612,3 @@ function projectionCaption(trend: WeightTrend, unit: Settings['weight_unit']): s
         : `${gap}. At your measured ${formatRate(rate, unit)} ${label}/week, around ${longDate(goal.reach_date)}.`
   }
 }
-
