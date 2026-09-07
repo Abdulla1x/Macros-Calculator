@@ -46,21 +46,25 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Honest uncertainty**: results show a calorie/macro **range** (low–estimate–high), an overall confidence badge, and per-ingredient confidence dots — not a false-precision single number
 - **Editable assumptions**: the AI lists every assumption it made ("1 cup cooked rice ≈ 158 g"); tap one to correct it in the note and **refine** the estimate without starting over
 - **It can use your saved foods instead of guessing them.** Attach foods from your library before analysing and their macros are sent as facts. It splits the work along the line each side is good at: a photo is poor evidence for how many calories are in chicken breast — you already know that exactly, because you saved it — and good evidence for how much of it is on the plate, which your library cannot know. **The AI estimates the portion; your library supplies the macros.** If it names a food you have saved but did not attach, the ingredient row *offers* to use your numbers rather than quietly rewriting them
+- **And the estimate can feed the library back.** Any ingredient the AI guessed that you do not already have saved offers a one-tap "save this to my library", prefilled and converted to per-100 g. The first time you eat something the AI guesses it; every time after, your own numbers are the facts it is handed. The two bullets above and this one are the same relationship in both directions
 - **You stay in control**: detected ingredients prefill the normal meal editor, so you review and adjust everything before saving
 - **Estimate accuracy, measured against you.** Every analysis is logged to an `ai_analyses` table (photo and audio discarded) and compared with what you actually saved: how often the true value fell inside the stated range, and whether the estimates lean high or low. Where there is not enough evidence to answer honestly it **refuses** rather than printing a reassuring number
 - Powered by **Gemini 3.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change. Google retires models on a schedule, so the id is overridable at runtime via `MEAL_AI_MODEL` (no deploy needed) and provider failures are logged with the reason
+- **The wait is shown as the two things it actually is.** Sending your photos depends on your connection and the model does not, so they get separate indicators — a real percentage of the bytes uploaded, then the wait for the estimate. If the free server happens to be asleep the app checks and says so rather than leaving you watching a spinner, and the "AI service is busy" message now waits until your photos have actually gone, instead of blaming the service for your own upload
 - **Survives provider outages**: Gemini's "model is overloaded" 503 is retried with jittered backoff and then re-tried against a fallback model — overload is per serving pool, so an older generation is usually still answering. Every call carries an explicit deadline, and `GET /api/ai/status?probe=true` names the cause when it doesn't
 
 ### 🍽️ Smart meal logging
 - **Type-ahead food search**: ingredients you've logged before auto-fill their macros from your personal food library
 - **Open Food Facts fallback**: unknown foods can be looked up in the public OFF database (per-serving macros normalized automatically) and are cached locally for next time
-- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings. Correcting one that came from Open Food Facts makes it yours, so a later lookup can't overwrite your own numbers
+- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings. Correcting one that came from Open Food Facts makes it yours, so a later lookup can't overwrite your own numbers. Both lists show their first few rows with the rest a tap away, so the controls that act on them — the filter, and adding a food by hand — stay on the first screen instead of sitting below everything you have ever saved
 - **Saved meals**: store a meal you eat often and re-log it in one tap from the dashboard
 - **Share a meal by code**: turn a meal or a saved template into a short code, hand it to someone, and they get an **editable copy in their own account**. The code is a self-contained encoded payload — there is no shared row, no invite, nothing to revoke, and no account id inside it, so per-user isolation is untouched by the feature existing
 - Single- or multi-ingredient meals with live-updating totals as you type
 
 ### ⚖️ Weight & trends
 - Log a weigh-in and read the **trend**, not the daily noise — an exponentially weighted line over the raw points, with the weekly rate fitted over the last 28 days
+- **Set a goal weight and it works out when you would reach it** — from the rate you are actually moving at, never the rate you asked for, because projecting from your own target would just hand your input back as a prediction. The goal is drawn on the chart, the gap is spelled out, and when a date cannot honestly be named the app says why instead: too few weigh-ins to fit a rate, a trend going the other way, a log that has stopped, or a pace that puts the date more than two years out
+- **Zoom the chart** to 7, 14, 30 or 90 days, a year, or everything — for when you cut for a while and are now bulking and want to see just the part you care about. The trend weight and weekly rate deliberately do *not* follow the zoom: they are measured over their own fixed windows, so the app cannot report a different "current rate" depending on which range you happen to be looking at
 - Kilograms or pounds, switchable at any time; the stored value never changes, only how it's shown
 - Your weigh-ins are not just a chart: they are what the measured daily burn and — if you enable them — the automatic daily targets are worked out from
 - **An optional weigh-in nudge.** Set a time and how many days you want between weigh-ins, and on a day one is due a card appears with a link straight to the weight log. Dismiss it and it stays gone until the next day it is due. It never appears on the weight page itself — you are already where it would send you. Leave the time empty, which is how every account starts, and none of it happens
@@ -69,8 +73,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Calories + protein always on; **carbs and fat are opt-in**
 - Per-macro daily goals drive the dashboard rings, log form, and analytics
 - Optional **body profile** (height, date of birth, sex, activity level, goal
-  rate) turns into BMI, a daily burn, and calorie/macro targets — every figure
-  shown next to the input it came from
+  weight, goal rate) turns into BMI, a daily burn, and calorie/macro targets —
+  every figure shown next to the input it came from
 - **Your daily burn is measured, not guessed**, once you have logged enough:
   roughly two weeks of weigh-ins and meals turns into a real energy-balance
   figure from your own data, shown beside what the formula would have said.
@@ -92,6 +96,13 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Any date range: totals, daily averages, per-macro trend charts, daily table
 - Averages are **per day you logged**, not per day in the range — a day with nothing recorded is missing data, not a day of zero intake
 - **CSV export/import** with duplicate detection and date normalization
+
+### ♿ Accessibility
+- **The food search works without a mouse.** Typing a name used to bring up a list of matches that arrow keys could not reach and Escape could not dismiss. It is a proper combobox: arrows move through the suggestions, Enter picks one, Escape closes it
+- **Everything the app tells you reaches a screen reader.** A save that failed, an import that was rejected, a password that changed — all of it used to appear as coloured text and be announced nowhere. Every one of those messages is now spoken
+- **Icon-only buttons say what they do and which row they belong to** — a list of thirty weigh-ins no longer offers thirty controls all called the same thing
+- Tables that scroll sideways on a phone are reachable with Tab, links inside a sentence are underlined rather than told apart by colour alone, and every colour pair clears WCAG AA contrast
+- **Measured, not asserted.** `scripts/a11y-audit.mjs` drives the real app through axe-core across all 18 routes at 360 px and 1280 px. It reports **zero WCAG 2.1 A/AA violations** — and the script's own header says why that number is a floor rather than a claim: an automated pass cannot see a wrong label, and three of the four real defects it found were ones a hand-written checklist had missed
 
 ---
 
