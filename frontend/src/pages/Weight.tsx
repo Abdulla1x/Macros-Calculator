@@ -4,13 +4,14 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
-import { localIsoDate } from '../lib/dates'
+import { daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { displayToKg, formatRate, formatWeight, unitLabel } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
 import {
@@ -18,6 +19,7 @@ import {
   axisStroke,
   axisTick,
   chartMargin,
+  GOAL_COLOR,
   gridStroke,
   legendStyle,
   RAW_COLOR,
@@ -26,7 +28,12 @@ import {
   tooltipStyle,
   TREND_COLOR,
 } from '../lib/chartTheme'
-import type { Settings, WeightEntry, WeightTrend } from '../types'
+import type {
+  GoalProjection,
+  Settings,
+  WeightEntry,
+  WeightTrend,
+} from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
@@ -36,6 +43,35 @@ import { useLiveMessage } from '../hooks/useLiveMessage'
 // How far back the chart looks. The rate is fitted over a shorter window by the
 // server; this is just how much history is drawn.
 const CHART_DAYS = 90
+
+
+// What the page uses when the response has no `projection` at all.
+//
+// Not defensive programming for its own sake, and not a type the API can
+// return: the frontend ships from Vercel and the API from Render,
+// independently, so for a minute after any release this page runs against a
+// backend that predates the field. Reading through `trend.projection`
+// unguarded in that gap throws and replaces the whole Weight page with the
+// error boundary. AILatencyCard in Admin.tsx carries the same `??` for the
+// same reason, and its comment records that the bug was caught exactly that
+// way rather than reasoned about.
+const NO_PROJECTION: GoalProjection = {
+  status: 'no_goal',
+  goal_weight_kg: null,
+  remaining_kg: null,
+  weeks: null,
+  reach_date: null,
+  from_date: null,
+}
+
+/** A date far enough ahead that the year matters. Every other date in this app
+ *  drops it; a projection is the one that can land in another year. */
+const longDate = (iso: string) =>
+  parseIsoDate(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 
 
 export default function Weight() {
@@ -119,6 +155,7 @@ export default function Weight() {
     weight: Number(formatWeight(point.weight_kg, unit)),
     trend: Number(formatWeight(point.trend_kg, unit)),
   }))
+  const goalKg = (trend?.projection ?? NO_PROJECTION).goal_weight_kg
 
   return (
     <div className="space-y-6">
@@ -215,6 +252,32 @@ export default function Weight() {
                   formatter={(value) => `${Number(value).toFixed(1)} ${label}`}
                 />
                 <Legend wrapperStyle={legendStyle} />
+                {/* Fed from the projection rather than from settings, so the
+                    line and the sentence under the chart can never name two
+                    different goals.
+
+                    ifOverflow is set rather than inherited, and it matters:
+                    the YAxis above carries an explicit domain, so recharts
+                    would otherwise DISCARD a goal that falls outside it -- the
+                    line would silently vanish for exactly the people whose
+                    goal is furthest away. Extending squashes the series when
+                    the goal is distant, which is the trade taken knowingly: a
+                    goal line you cannot see is not a feature, and the
+                    compression is itself honest about the distance. */}
+                {goalKg !== null && (
+                  <ReferenceLine
+                    y={Number(formatWeight(goalKg, unit))}
+                    stroke={GOAL_COLOR}
+                    strokeDasharray="4 4"
+                    ifOverflow="extendDomain"
+                    label={{
+                      value: `Goal ${formatWeight(goalKg, unit)} ${label}`,
+                      position: 'insideBottomLeft',
+                      fill: GOAL_COLOR,
+                      fontSize: 11,
+                    }}
+                  />
+                )}
                 {/* strokeWidth 0 rather than stroke "none": the dots are the
                     mark, but the legend swatch still needs a colour to draw,
                     or this series is identified by its label alone. */}
@@ -331,6 +394,7 @@ function TrendReadout({
 }) {
   if (!trend) return null
   const label = unitLabel(unit)
+  const goal = trend.projection ?? NO_PROJECTION
 
   return (
     <dl className="mt-4 grid gap-4 border-t border-slate-800 pt-4 sm:grid-cols-2">
@@ -368,6 +432,77 @@ function TrendReadout({
             : 'Fitted to the trend line over the last 28 days.'}
         </dd>
       </div>
+      {/* Spans both columns: the two above are numbers, this one is a
+          sentence. A <dt>/<dd> pair like its neighbours and not a <p> -- a
+          bare paragraph inside a <dl> group is invalid, and was one of the
+          four real defects the accessibility audit turned up. */}
+      <div className="sm:col-span-2">
+        <dt className="text-xs text-slate-400">Goal weight</dt>
+        <dd className="flex items-center gap-2 text-lg font-semibold">
+          {goal.goal_weight_kg !== null && (
+            <span
+              aria-hidden="true"
+              className="inline-block h-0.5 w-3 shrink-0"
+              style={{ background: GOAL_COLOR }}
+            />
+          )}
+          {goal.goal_weight_kg === null
+            ? '—'
+            : `${formatWeight(goal.goal_weight_kg, unit)} ${label}`}
+        </dd>
+        <dd className="mt-0.5 text-xs text-ink-faint">
+          {projectionCaption(trend, unit)}
+        </dd>
+      </div>
     </dl>
   )
 }
+
+/** The projection, as a sentence. Assembled here rather than server-side
+ *  because it has to name a weight in the reader's own unit and a date in
+ *  their own locale, and the server knows neither.
+ *
+ *  Every branch is driven by `status`, never by which fields are null: the
+ *  server decides what it is willing to claim, and this only says it. */
+function projectionCaption(trend: WeightTrend, unit: Settings['weight_unit']): string {
+  const goal = trend.projection ?? NO_PROJECTION
+  const rate = trend.weekly_rate_kg
+  const label = unitLabel(unit)
+  // Signed towards the goal, so the sign is the direction and the magnitude is
+  // the gap. A rate conversion works on a difference for the same reason it
+  // works on a weight -- both scales are linear through zero.
+  const gap =
+    goal.remaining_kg === null
+      ? ''
+      : `${formatWeight(Math.abs(goal.remaining_kg), unit)} ${label} ` +
+        `${goal.remaining_kg < 0 ? 'to lose' : 'to gain'}`
+
+  switch (goal.status) {
+    case 'no_goal':
+      return "Set a goal weight in Settings and we'll work out when you would reach it."
+    case 'reached':
+      return goal.from_date === null
+        ? 'You are there.'
+        : `You were there at your weigh-in on ${longDate(goal.from_date)}.`
+    case 'no_rate':
+      return 'Needs at least 7 weigh-ins in the last 28 days before a date can be worked out.'
+    case 'stale':
+      return goal.from_date === null
+        ? 'No recent weigh-ins to project from.'
+        : `Your last weigh-in was ${daysBetween(goal.from_date, localIsoDate())} days ago, so there is no current rate to project from.`
+    case 'holding':
+      return `${gap}, but your weight is holding steady — no date to give.`
+    case 'moving_away':
+      return `${gap}, and the trend is currently going the other way.`
+    case 'too_far':
+      return `${gap}. At your current rate that is more than two years out, so we will not name a date.`
+    case 'on_course':
+      // Both are always set alongside this status. Guarded anyway because the
+      // alternative to a fallback here is longDate('') throwing, which takes
+      // the page down rather than degrading the sentence.
+      return goal.reach_date === null || rate === null
+        ? `${gap}.`
+        : `${gap}. At your measured ${formatRate(rate, unit)} ${label}/week, around ${longDate(goal.reach_date)}.`
+  }
+}
+
