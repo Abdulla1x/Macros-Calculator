@@ -470,6 +470,17 @@ class Setting(Base):
     # The Settings UI says the field is optional, which remains accurate.
     sex: Mapped[str | None] = mapped_column(String(6), default=None)
     activity_level: Mapped[str | None] = mapped_column(String(12), default=None)
+    # The weight being aimed for. Nullable, so no backfill and no
+    # server_default: NULL means "I have not said", and unlike water_goal_ml
+    # below there is nothing to derive it from. That is a fourth distinct
+    # meaning for an empty settings column -- the comments on water_goal_ml,
+    # steps_goal and weigh_in_reminder_time spell out the other three.
+    #
+    # Directly above the rate on purpose. A real user typed their goal *weight*
+    # into the rate field and got a 422; the pair being adjacent in the model,
+    # the schema and the form is the actual fix, and PR #15's input guard was
+    # only the apology.
+    goal_weight_kg: Mapped[float | None] = mapped_column(Float, default=None)
     # Signed: negative loses weight, positive gains, zero maintains.
     goal_rate_kg_per_week: Mapped[float | None] = mapped_column(Float, default=None)
     # When true the four goals above are derived from the profile rather than

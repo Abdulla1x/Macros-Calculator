@@ -117,6 +117,18 @@ export const trackerHues = {
 export const TREND_COLOR = '#3b82f6'
 export const RAW_COLOR = '#64748b'
 
+/** The goal-weight reference line on the Weight chart.
+ *
+ *  Amber against the blue trend for the reason adminHues gives below: blue and
+ *  green is the worst possible pair under tritanopia, where blue and amber
+ *  separate cleanly. It is drawn dashed as well as coloured, so the line reads
+ *  as a target rather than as a third series even before colour is considered.
+ *
+ *  The same value as macroHues.calories, and kept as its own name for the
+ *  reason trackerHues.water is: they never share a chart, and a retune of one
+ *  has no reason to move the other. */
+export const GOAL_COLOR = '#f59e0b'
+
 // Validated against this app's chart surface (#0f172a) for lightness band,
 // chroma, CVD separation and contrast. Blue and amber rather than the more
 // obvious blue and green: blue/green is the worst possible pair under

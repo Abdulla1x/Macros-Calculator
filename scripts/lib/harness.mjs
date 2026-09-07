@@ -284,6 +284,16 @@ export async function seed(token) {
       track_carbs: true, track_fat: true, weight_unit: 'kg',
       height_cm: 180, birth_date: '1990-05-04', sex: 'male',
       activity_level: 'moderate', goal_rate_kg_per_week: -0.5,
+      // ⚠️ ABOVE the seeded weigh-ins, not below, and that is not a typo.
+      // The seed's day counter runs BACKWARDS from today, so `82.5 - day *
+      // 0.05` puts the lightest reading furthest in the past and the trend
+      // RISES towards today -- the same inversion that made a previous seed
+      // report a gain while the comment claimed a loss. A goal of 78 against a
+      // rising trend lands on 'moving_away', which draws the line but never a
+      // date; 85 lands on 'on_course', the one status of the eight that has a
+      // date in it and therefore the only one that puts every element of the
+      // readout in front of these scripts.
+      goal_weight_kg: 85,
       targets_auto: false, steps_goal: 10000,
     }),
   })
@@ -317,6 +327,10 @@ export const EXPAND_ON = {
     // is deterministic. Two characters is the threshold; this clears it.
     { fill: 'input[placeholder="Type a food name…"]', text: 'Snapshot' },
   ],
+  // The weigh-in history caps at HISTORY_ROWS and hides the rest behind the
+  // same toggle the library lists use. Matched on the plural noun, not the full
+  // label, which carries a count that moves with SEED_DAYS.
+  '/weight': ['button:has-text("weigh-ins")'],
   // Both lists render their first COLLAPSED_ROWS entries and hide the rest, and
   // "+ Add a food" opens a form that is otherwise never in the DOM -- the same
   // form this route exists to make findable. Matched on the plural nouns rather

@@ -613,7 +613,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | Method | Endpoint | Description |
 |---|---|---|
 | GET/POST | `/api/weights` | Weigh-in history / log one (upsert by date) |
-| GET | `/api/weights/trend` | Smoothed trend line, latest trend weight and weekly rate |
+| GET | `/api/weights/trend` | Smoothed trend line, latest trend weight, weekly rate and the goal-weight projection |
 | DELETE | `/api/weights/{id}` | Delete a weigh-in |
 | GET/POST | `/api/water` | One day's water (entries, total, derived goal) / log a drink |
 | DELETE | `/api/water/{id}` | Remove one water entry (what the card's undo calls) |

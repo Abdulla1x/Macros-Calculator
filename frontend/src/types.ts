@@ -73,6 +73,11 @@ export interface Settings {
   birth_date: string | null
   sex: Sex | null
   activity_level: ActivityLevel | null
+  /** The weight being aimed for, in kg. Null means "not set" — the one
+   *  nullable setting whose emptiness means neither "derive it" nor "off",
+   *  because only the user can answer it. Kept directly above the rate it is
+   *  so often confused with. */
+  goal_weight_kg: number | null
   /** Signed kg/week: negative loses, positive gains, 0 maintains. */
   goal_rate_kg_per_week: number | null
   /** When true the four goals above are derived server-side, not typed. */
@@ -257,12 +262,39 @@ export interface WeightTrendPoint {
   trend_kg: number
 }
 
+/** The eight answers the server's goal projection can give. Mirrors
+ *  calculations.ProjectionStatus; the UI branches on this and never on which
+ *  of the fields below happen to be null. */
+export type ProjectionStatus =
+  | 'no_goal'
+  | 'reached'
+  | 'no_rate'
+  | 'stale'
+  | 'holding'
+  | 'moving_away'
+  | 'too_far'
+  | 'on_course'
+
+export interface GoalProjection {
+  status: ProjectionStatus
+  goal_weight_kg: number | null
+  /** Signed towards the goal: negative means weight still to lose. */
+  remaining_kg: number | null
+  weeks: number | null
+  /** YYYY-MM-DD, only on 'on_course'. */
+  reach_date: string | null
+  /** The weigh-in the projection is anchored at — never today. */
+  from_date: string | null
+}
+
 export interface WeightTrend {
   points: WeightTrendPoint[]
   latest_trend_kg: number | null
   /** Null when there are too few weigh-ins to fit a rate. */
   weekly_rate_kg: number | null
   point_count: number
+  /** Never null: 'no_goal' is the empty case. */
+  projection: GoalProjection
 }
 
 export interface Meal {

@@ -29,6 +29,33 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-07-goal-weight",
+        date="2026-09-07",
+        title="Set a goal weight and see when you would reach it",
+        body=(
+            "**There was a box for how fast you wanted to change and none "
+            "for where you were heading.** Settings now has a goal weight, "
+            "right above the goal rate, and the Weight page draws it on the "
+            "chart as a dashed line.\n\n"
+            "Underneath the chart it works out when you would get there — "
+            "**from the rate you are actually moving at, never the rate you "
+            "asked for.** Projecting from your own target would just hand "
+            "your input back as a prediction. It says how far there is to "
+            "go, and if it cannot honestly name a date it says why instead: "
+            "too few weigh-ins to fit a rate, a trend going the other way, a "
+            "log that stopped, or a pace that puts the date more than two "
+            "years out.\n\n"
+            "**The chart is no longer stuck at 90 days.** Pick 30 days, 90 "
+            "days, a year or everything. If you cut for a while and are now "
+            "bulking, you can look at just the part you care about — and the "
+            "trend weight and weekly rate stay put while you do, because "
+            "they are measured over their own windows rather than over "
+            "whatever the chart happens to show.\n\n"
+            "**The weigh-in history now shows the last ten** with a button "
+            "for the rest, instead of every entry you have ever logged."
+        ),
+    ),
+    Announcement(
         id="2026-09-06-accessibility",
         date="2026-09-06",
         title="The app now works with a keyboard and a screen reader",

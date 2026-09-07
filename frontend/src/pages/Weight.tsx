@@ -4,13 +4,14 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { api } from '../api/client'
-import { localIsoDate } from '../lib/dates'
+import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { displayToKg, formatRate, formatWeight, unitLabel } from '../lib/units'
 import { useSettings } from '../settings/SettingsContext'
 import {
@@ -18,6 +19,7 @@ import {
   axisStroke,
   axisTick,
   chartMargin,
+  GOAL_COLOR,
   gridStroke,
   legendStyle,
   RAW_COLOR,
@@ -26,16 +28,87 @@ import {
   tooltipStyle,
   TREND_COLOR,
 } from '../lib/chartTheme'
-import type { Settings, WeightEntry, WeightTrend } from '../types'
+import type {
+  GoalProjection,
+  Settings,
+  WeightEntry,
+  WeightTrend,
+  WeightTrendPoint,
+} from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Field from '../components/ui/Field'
 import Button from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
+import ShowAllToggle from '../components/ShowAllToggle'
 
-// How far back the chart looks. The rate is fitted over a shorter window by the
-// server; this is just how much history is drawn.
-const CHART_DAYS = 90
+// How much history is FETCHED -- the endpoint's own maximum, and deliberately
+// not the range the chart happens to be showing.
+//
+// ⚠️ `days` on GET /api/weights/trend decides what the numbers are computed
+// from, not just what is drawn: the EWMA seeds at the first entry in the window
+// and the rate needs seven points inside 28 days. Wiring the picker below to it
+// would move the trend weight, the weekly rate and the projected date every
+// time someone zoomed the chart, and a short enough range would blank the last
+// two outright. So the fetch is fixed and the picker slices what came back.
+// Choosing which points to draw is a display decision; recomputing a number
+// client-side is not, and this stays on the right side of that line.
+const TREND_FETCH_DAYS = 1825
+
+// What the picker offers. `days: null` is everything fetched -- five years,
+// which is "all" for any real account and is what the endpoint will serve.
+const RANGE_OPTIONS = [
+  { days: 30, label: '30 days', heading: 'Last 30 days' },
+  { days: 90, label: '90 days', heading: 'Last 90 days' },
+  { days: 365, label: '1 year', heading: 'Last year' },
+  { days: null, label: 'All', heading: 'All weigh-ins' },
+] as const
+
+// 90 by default, so the page opens on exactly what it always showed.
+const DEFAULT_RANGE_DAYS: number | null = 90
+
+// How many weigh-ins the history shows before it offers the rest. Ten rather
+// than ShowAllToggle's COLLAPSED_ROWS of five -- see the note there on why the
+// two library lists must agree with each other and this one need not.
+const HISTORY_ROWS = 10
+
+/** The points inside the picked range, or all of them. Display only. */
+function pointsInRange(
+  points: WeightTrendPoint[],
+  days: number | null,
+): WeightTrendPoint[] {
+  if (days === null) return points
+  const cutoff = addDays(localIsoDate(), -(days - 1))
+  return points.filter((point) => point.date >= cutoff)
+}
+
+// What the page uses when the response has no `projection` at all.
+//
+// Not defensive programming for its own sake, and not a type the API can
+// return: the frontend ships from Vercel and the API from Render,
+// independently, so for a minute after any release this page runs against a
+// backend that predates the field. Reading through `trend.projection`
+// unguarded in that gap throws and replaces the whole Weight page with the
+// error boundary. AILatencyCard in Admin.tsx carries the same `??` for the
+// same reason, and its comment records that the bug was caught exactly that
+// way rather than reasoned about.
+const NO_PROJECTION: GoalProjection = {
+  status: 'no_goal',
+  goal_weight_kg: null,
+  remaining_kg: null,
+  weeks: null,
+  reach_date: null,
+  from_date: null,
+}
+
+/** A date far enough ahead that the year matters. Every other date in this app
+ *  drops it; a projection is the one that can land in another year. */
+const longDate = (iso: string) =>
+  parseIsoDate(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 
 
 export default function Weight() {
@@ -49,6 +122,8 @@ export default function Weight() {
   useLiveMessage(error)
   useLiveMessage(status === 'saved' ? 'Weigh-in saved' : '')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [rangeDays, setRangeDays] = useState<number | null>(DEFAULT_RANGE_DAYS)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
 
   const unit = settings?.weight_unit ?? 'kg'
   const label = unitLabel(unit)
@@ -60,7 +135,7 @@ export default function Weight() {
       setEntries([])
       setError("Couldn't load your weight log — check your connection and try again.")
     })
-    api.getWeightTrend(CHART_DAYS).then(setTrend).catch(() => setTrend(null))
+    api.getWeightTrend(TREND_FETCH_DAYS).then(setTrend).catch(() => setTrend(null))
   }, [])
 
   useEffect(() => {
@@ -114,11 +189,20 @@ export default function Weight() {
     load()
   }
 
-  const chartData = (trend?.points ?? []).map((point) => ({
+  const range =
+    RANGE_OPTIONS.find((option) => option.days === rangeDays) ?? RANGE_OPTIONS[1]
+  const visiblePoints = pointsInRange(trend?.points ?? [], rangeDays)
+  const chartData = visiblePoints.map((point) => ({
     date: point.date,
     weight: Number(formatWeight(point.weight_kg, unit)),
     trend: Number(formatWeight(point.trend_kg, unit)),
   }))
+
+  // Newest first, then capped. The cap applies to the reversed array so
+  // collapsing keeps the most recent weigh-ins rather than the oldest.
+  const ordered = [...entries].reverse()
+  const visibleEntries = historyExpanded ? ordered : ordered.slice(0, HISTORY_ROWS)
+  const goalKg = (trend?.projection ?? NO_PROJECTION).goal_weight_kg
 
   return (
     <div className="space-y-6">
@@ -181,13 +265,18 @@ export default function Weight() {
       </Card>
 
       <Card as="section">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h2 className="font-semibold">Last {CHART_DAYS} days</h2>
-          {trend && trend.point_count > 0 && (
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <h2 className="font-semibold">{range.heading}</h2>
+          {/* "shown", not "logged". With a fixed fetch this counts the drawn
+              slice, while TrendReadout below keeps reporting the full sample
+              the trend was smoothed over -- two different numbers, each saying
+              what it counts. */}
+          {visiblePoints.length > 0 && (
             <p className="text-xs text-ink-faint">
-              {trend.point_count} weigh-in{trend.point_count === 1 ? '' : 's'} logged
+              {visiblePoints.length} weigh-in{visiblePoints.length === 1 ? '' : 's'} shown
             </p>
           )}
+          <RangePicker value={rangeDays} onChange={setRangeDays} />
         </div>
 
         {chartData.length > 0 ? (
@@ -215,6 +304,32 @@ export default function Weight() {
                   formatter={(value) => `${Number(value).toFixed(1)} ${label}`}
                 />
                 <Legend wrapperStyle={legendStyle} />
+                {/* Fed from the projection rather than from settings, so the
+                    line and the sentence under the chart can never name two
+                    different goals.
+
+                    ifOverflow is set rather than inherited, and it matters:
+                    the YAxis above carries an explicit domain, so recharts
+                    would otherwise DISCARD a goal that falls outside it -- the
+                    line would silently vanish for exactly the people whose
+                    goal is furthest away. Extending squashes the series when
+                    the goal is distant, which is the trade taken knowingly: a
+                    goal line you cannot see is not a feature, and the
+                    compression is itself honest about the distance. */}
+                {goalKg !== null && (
+                  <ReferenceLine
+                    y={Number(formatWeight(goalKg, unit))}
+                    stroke={GOAL_COLOR}
+                    strokeDasharray="4 4"
+                    ifOverflow="extendDomain"
+                    label={{
+                      value: `Goal ${formatWeight(goalKg, unit)} ${label}`,
+                      position: 'insideBottomLeft',
+                      fill: GOAL_COLOR,
+                      fontSize: 11,
+                    }}
+                  />
+                )}
                 {/* strokeWidth 0 rather than stroke "none": the dots are the
                     mark, but the legend swatch still needs a colour to draw,
                     or this series is identified by its label alone. */}
@@ -257,7 +372,7 @@ export default function Weight() {
           <p className="py-6 text-center text-sm text-ink-faint">Nothing logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-800">
-            {[...entries].reverse().map((entry) => (
+            {visibleEntries.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div>
                   <p className="text-sm font-medium">
@@ -315,7 +430,62 @@ export default function Weight() {
             ))}
           </ul>
         )}
+        <ShowAllToggle
+          total={ordered.length}
+          cap={HISTORY_ROWS}
+          expanded={historyExpanded}
+          onToggle={() => {
+            setHistoryExpanded((current) => !current)
+            // An armed delete must not survive out of sight, for the reason
+            // FoodLibrarySection gives: a row scrolled away still holding its
+            // confirmation comes back armed, one tap from deleting something
+            // the user had already moved on from.
+            setConfirmDelete(null)
+          }}
+          noun="weigh-in"
+        />
       </Card>
+    </div>
+  )
+}
+
+/** Which slice of the history the chart draws. Chart only -- it never reaches
+ *  the server, and it deliberately does not filter the history list below.
+ *  A control in one card that silently reshaped another would be hidden, and
+ *  someone hunting an old typo to delete would have to discover that the
+ *  chart's zoom was also a list filter.
+ *
+ *  Buttons with aria-pressed inside a labelled group rather than a radio set:
+ *  this toggles what is drawn, it does not submit a value. The group label is
+ *  the part that matters and the part an audit cannot check -- axe accepts an
+ *  unlabelled group of buttons happily. */
+function RangePicker({
+  value,
+  onChange,
+}: {
+  value: number | null
+  onChange: (days: number | null) => void
+}) {
+  return (
+    <div role="group" aria-label="Chart range" className="flex flex-wrap gap-1.5">
+      {RANGE_OPTIONS.map((option) => {
+        const active = option.days === value
+        return (
+          <button
+            key={option.heading}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.days)}
+            className={`rounded-control border px-2.5 py-1 text-xs ${
+              active
+                ? 'border-brand bg-brand/10 font-semibold text-brand'
+                : 'border-line-strong text-ink-muted hover:border-brand hover:text-brand'
+            }`}
+          >
+            {option.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -331,6 +501,7 @@ function TrendReadout({
 }) {
   if (!trend) return null
   const label = unitLabel(unit)
+  const goal = trend.projection ?? NO_PROJECTION
 
   return (
     <dl className="mt-4 grid gap-4 border-t border-slate-800 pt-4 sm:grid-cols-2">
@@ -368,6 +539,76 @@ function TrendReadout({
             : 'Fitted to the trend line over the last 28 days.'}
         </dd>
       </div>
+      {/* Spans both columns: the two above are numbers, this one is a
+          sentence. A <dt>/<dd> pair like its neighbours and not a <p> -- a
+          bare paragraph inside a <dl> group is invalid, and was one of the
+          four real defects the accessibility audit turned up. */}
+      <div className="sm:col-span-2">
+        <dt className="text-xs text-slate-400">Goal weight</dt>
+        <dd className="flex items-center gap-2 text-lg font-semibold">
+          {goal.goal_weight_kg !== null && (
+            <span
+              aria-hidden="true"
+              className="inline-block h-0.5 w-3 shrink-0"
+              style={{ background: GOAL_COLOR }}
+            />
+          )}
+          {goal.goal_weight_kg === null
+            ? '—'
+            : `${formatWeight(goal.goal_weight_kg, unit)} ${label}`}
+        </dd>
+        <dd className="mt-0.5 text-xs text-ink-faint">
+          {projectionCaption(trend, unit)}
+        </dd>
+      </div>
     </dl>
   )
+}
+
+/** The projection, as a sentence. Assembled here rather than server-side
+ *  because it has to name a weight in the reader's own unit and a date in
+ *  their own locale, and the server knows neither.
+ *
+ *  Every branch is driven by `status`, never by which fields are null: the
+ *  server decides what it is willing to claim, and this only says it. */
+function projectionCaption(trend: WeightTrend, unit: Settings['weight_unit']): string {
+  const goal = trend.projection ?? NO_PROJECTION
+  const rate = trend.weekly_rate_kg
+  const label = unitLabel(unit)
+  // Signed towards the goal, so the sign is the direction and the magnitude is
+  // the gap. A rate conversion works on a difference for the same reason it
+  // works on a weight -- both scales are linear through zero.
+  const gap =
+    goal.remaining_kg === null
+      ? ''
+      : `${formatWeight(Math.abs(goal.remaining_kg), unit)} ${label} ` +
+        `${goal.remaining_kg < 0 ? 'to lose' : 'to gain'}`
+
+  switch (goal.status) {
+    case 'no_goal':
+      return "Set a goal weight in Settings and we'll work out when you would reach it."
+    case 'reached':
+      return goal.from_date === null
+        ? 'You are there.'
+        : `You were there at your weigh-in on ${longDate(goal.from_date)}.`
+    case 'no_rate':
+      return 'Needs at least 7 weigh-ins in the last 28 days before a date can be worked out.'
+    case 'stale':
+      return goal.from_date === null
+        ? 'No recent weigh-ins to project from.'
+        : `Your last weigh-in was ${daysBetween(goal.from_date, localIsoDate())} days ago, so there is no current rate to project from.`
+    case 'holding':
+      return `${gap}, but your weight is holding steady — no date to give.`
+    case 'moving_away':
+      return `${gap}, and the trend is currently going the other way.`
+    case 'too_far':
+      return `${gap}. At your current rate that is more than two years out, so we will not name a date.`
+    case 'on_course':
+      // Both are always set alongside this status. Guarded anyway because the
+      // alternative to a fallback here is longDate('') throwing, which takes
+      // the page down rather than degrading the sentence.
+      return goal.reach_date === null || rate === null
+        ? `${gap}.`
+        : `${gap}. At your measured ${formatRate(rate, unit)} ${label}/week, around ${longDate(goal.reach_date)}.`
+  }
 }

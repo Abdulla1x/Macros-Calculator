@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .banking import MAX_DAY_DELTA_KCAL, MAX_PLAN_DAYS
+from .calculations import ProjectionStatus
 from .share import MAX_CODE_CHARS
 
 # "HH:MM", 24-hour. A plain string rather than datetime.time because it is a
@@ -296,6 +297,31 @@ class WeightTrendPoint(BaseModel):
     trend_kg: float
 
 
+class GoalProjection(BaseModel):
+    """When the measured trend reaches the goal weight, or why it cannot say.
+
+    Mirrors `calculations.GoalProjection` field for field. `status` carries the
+    answer and the other five carry whatever that answer could compute, so the
+    UI branches on one string instead of guessing from which fields are null.
+
+    Deliberately structured rather than a ready-made sentence, unlike
+    `BodyTargets.clamped_reason` next door. The sentence has to name a weight
+    in the reader's own unit and a date in their own locale, and neither is
+    something the server knows.
+    """
+
+    status: ProjectionStatus
+    goal_weight_kg: float | None = None
+    # Signed the way the goal is approached: negative means weight still to
+    # lose. The UI takes the absolute value and reads the sign as a direction.
+    remaining_kg: float | None = None
+    weeks: float | None = None
+    reach_date: date_type | None = None
+    # The weigh-in the projection is anchored at, never today. See the note on
+    # calculations.goal_projection.
+    from_date: date_type | None = None
+
+
 class WeightTrend(BaseModel):
     """Smoothed weight history. `weekly_rate_kg` is null when there are too few
     weigh-ins to fit one; `point_count` is how many the numbers are built from,
@@ -305,6 +331,10 @@ class WeightTrend(BaseModel):
     latest_trend_kg: float | None = None
     weekly_rate_kg: float | None = None
     point_count: int
+    # Required, with no default. A `status` of "no_goal" is the empty case, so
+    # the UI never has to tell null apart from a real answer -- and a field with
+    # no default cannot go silently missing the way a defaulted one can.
+    projection: GoalProjection
 
 
 # Taller than the tallest human ever recorded, so a misplaced decimal point is
@@ -747,6 +777,13 @@ class Settings(BaseModel):
     birth_date: date_type | None = None
     sex: Literal["male", "female"] | None = None
     activity_level: ACTIVITY_LEVELS | None = None
+    # Same bound as WeightEntryCreate.weight_kg, and for the same reason: it
+    # catches a misplaced decimal point and carries no opinion beyond that.
+    # Judging whether a goal is healthy needs height, which is optional, so the
+    # refusal would be unavailable to exactly the people it was written for --
+    # the client warns instead, in lib/limits.ts. No allow_inf_nan for the
+    # reason WeightEntryCreate gives: the upper bound closes inf and nan.
+    goal_weight_kg: float | None = Field(default=None, gt=0, le=MAX_WEIGHT_KG)
     goal_rate_kg_per_week: float | None = Field(
         default=None,
         ge=-MAX_INPUT_GOAL_RATE_KG_PER_WEEK,

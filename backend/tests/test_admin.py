@@ -27,6 +27,10 @@ SECRET_INGREDIENT_NAME = "Vermillion Sprocket Oats"
 # metrics-only boundary has to cover it from the day it exists.
 SECRET_HEIGHT_CM = 173.7
 SECRET_BIRTH_DATE = "1987-03-19"
+# A goal weight is the same class of thing as the height beside it: a fact about
+# a body, not a usage count. Distinctive enough not to collide with a rounded
+# metric.
+SECRET_GOAL_WEIGHT_KG = 67.3
 # Water is a count on the dashboard and never an amount: how much someone drank
 # on a given day is content, the same way a weigh-in is. Both the entry and a
 # custom goal are personal figures that live in the settings row.
@@ -237,6 +241,7 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
             "height_cm": SECRET_HEIGHT_CM,
             "birth_date": SECRET_BIRTH_DATE,
             "sex": "female",
+            "goal_weight_kg": SECRET_GOAL_WEIGHT_KG,
             "water_goal_ml": SECRET_WATER_GOAL_ML,
             "steps_goal": SECRET_STEPS_GOAL,
         },
@@ -251,6 +256,7 @@ def test_admin_payloads_contain_no_user_content(client, client_b, monkeypatch):
         assert SECRET_INGREDIENT_NAME not in body, route
         assert str(SECRET_HEIGHT_CM) not in body, route
         assert SECRET_BIRTH_DATE not in body, route
+        assert str(SECRET_GOAL_WEIGHT_KG) not in body, route
         assert str(SECRET_WATER_ML) not in body, route
         assert str(SECRET_WATER_GOAL_ML) not in body, route
         assert str(SECRET_STEPS) not in body, route

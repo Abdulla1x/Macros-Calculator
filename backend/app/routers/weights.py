@@ -6,11 +6,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth.deps import get_current_user
-from ..calculations import weekly_rate, weight_trend
+from ..calculations import goal_projection, weekly_rate, weight_trend
 from ..db import get_db
 from ..models import Setting, User
 from ..models import WeightEntry as WeightRow
-from ..schemas import WeightEntry, WeightEntryCreate, WeightTrend, WeightTrendPoint
+from ..schemas import (
+    GoalProjection,
+    WeightEntry,
+    WeightEntryCreate,
+    WeightTrend,
+    WeightTrendPoint,
+)
 from ..targets import apply_auto_targets
 from ..upsert import upsert
 
@@ -47,8 +53,17 @@ def get_trend(
 ):
     """Weigh-ins over the last `days`, each with its smoothed trend value.
 
-    The smoothing and the rate come from `calculations.py`; nothing is computed
-    client-side, so there is one definition of the trend line.
+    The smoothing, the rate and the goal projection all come from
+    `calculations.py`; nothing is computed client-side, so there is one
+    definition of the trend line.
+
+    ⚠️ `days` decides what the numbers are built from, not merely what is
+    drawn: `weight_trend`'s EWMA seeds at the first entry in the window and
+    `weekly_rate` needs seven points inside 28 days. A client that narrows this
+    to zoom a chart would move `latest_trend_kg`, `weekly_rate_kg` and the
+    projected date with it, and a short enough window would blank the last two
+    outright. The frontend therefore fetches once at the cap and slices for
+    display -- see TREND_FETCH_DAYS in pages/Weight.tsx.
     """
     cutoff = date_type.today() - timedelta(days=days - 1)
     rows = db.scalars(
@@ -58,11 +73,40 @@ def get_trend(
     ).all()
 
     points = weight_trend([(row.date, row.weight_kg) for row in rows])
+    rate = weekly_rate(points)
+
+    # db.get rather than the settings router's _get_or_create: a GET must not
+    # write a row. An account old enough to predate settings-on-signup simply
+    # has no goal weight, which is an answer the projection already has a
+    # status for.
+    setting = db.get(Setting, user.id)
+    projected = goal_projection(
+        None if setting is None else setting.goal_weight_kg,
+        points,
+        rate,
+        date_type.today(),
+    )
+
     return WeightTrend(
         points=[WeightTrendPoint.model_validate(point) for point in points],
         latest_trend_kg=points[-1].trend_kg if points else None,
-        weekly_rate_kg=weekly_rate(points),
+        weekly_rate_kg=rate,
         point_count=len(points),
+        # Field by field, deliberately -- not model_validate(projected), which
+        # is what the line above does for WeightTrendPoint. The two are safe
+        # for opposite reasons: WeightTrendPoint has no defaulted field, so a
+        # name that stopped matching would raise, while every field here
+        # defaults to None and a rename would serialise as null instead of
+        # failing. That is the silent-default trap `_user_out`,
+        # `_template_out` and `_settings_out` each exist to close.
+        projection=GoalProjection(
+            status=projected.status,
+            goal_weight_kg=projected.goal_weight_kg,
+            remaining_kg=projected.remaining_kg,
+            weeks=projected.weeks,
+            reach_date=projected.reach_date,
+            from_date=projected.from_date,
+        ),
     )
 
 

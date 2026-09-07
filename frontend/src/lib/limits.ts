@@ -16,6 +16,21 @@ import type { Settings } from '../types'
 /** schemas.py MAX_HEIGHT_CM — taller than the tallest recorded human. */
 export const MAX_HEIGHT_CM = 272
 
+/** schemas.py MAX_WEIGHT_KG — heavier than the heaviest human on record, so a
+ *  misplaced decimal point is rejected and every real value is accepted. The
+ *  same bound a weigh-in carries, because a goal weight is a weight. */
+export const MAX_WEIGHT_KG = 635
+
+/** The bottom of the healthy BMI band. Used only to WARN, never to refuse.
+ *
+ *  Refusing would need a height, which is optional — so the refusal would be
+ *  unavailable to exactly the people it was written for, and present for
+ *  someone whose height went stale. It is also a judgement this app has no
+ *  standing to enforce: unlike MAX_WATER_GOAL_ML, where the harm is acute and
+ *  the number is the harm, a low goal weight is a fact about a person's
+ *  situation that BMI alone cannot read. */
+export const MIN_HEALTHY_BMI = 18.5
+
 /** schemas.py MAX_INPUT_GOAL_RATE_KG_PER_WEEK.
  *
  * Note this is far wider than the 1 kg/week the server *clamps* to. Anything
@@ -258,12 +273,22 @@ export const settingsFieldRules: Partial<Record<keyof Settings, FieldRule>> = {
       return null
     },
   },
+  goal_weight_kg: {
+    label: 'Goal weight',
+    check: (value) => {
+      if (value <= 0) return 'A goal weight has to be greater than zero.'
+      if (value > MAX_WEIGHT_KG) {
+        return `A goal weight has to be ${MAX_WEIGHT_KG} kg or less — that is heavier than anyone on record.`
+      }
+      return null
+    },
+  },
   goal_rate_kg_per_week: {
     label: 'Goal rate',
     check: (value) =>
       Math.abs(value) <= MAX_GOAL_RATE_KG_PER_WEEK
         ? null
-        : `Goal rate is how fast you want your weight to change each week, not the weight you are aiming for. It has to be between −${MAX_GOAL_RATE_KG_PER_WEEK} and ${MAX_GOAL_RATE_KG_PER_WEEK} kg per week.`,
+        : `Goal rate is how fast you want your weight to change each week — the weight you are aiming for goes in Goal weight, just above it. The rate has to be between −${MAX_GOAL_RATE_KG_PER_WEEK} and ${MAX_GOAL_RATE_KG_PER_WEEK} kg per week.`,
   },
 }
 
@@ -280,6 +305,34 @@ export function validateSettingsField(
   return rule ? rule.check(value) : null
 }
 
+
+/** A remark about a goal weight worth making, or null. Never a refusal.
+ *
+ * Deliberately not a `settingsFieldRules` entry: that record answers "why
+ * would the server reject this", and every answer in it undoes the value on
+ * blur. This one is advisory — it is shown beside a field that still saves.
+ * Same job, different shape, exactly as validateWaterQuickAdd is.
+ *
+ * ⚠️ This is the app's second spelling of the BMI formula; calculations.py
+ * `bmi()` is the first. It cannot come from the server: the warning has to
+ * appear while someone is typing, before the draft is saved, so there is
+ * nothing for the server to look at yet. Inverted to a minimum weight rather
+ * than computing a BMI, because the useful sentence names a weight. If the
+ * formula or MIN_HEALTHY_BMI ever changes, both spellings move — nothing
+ * asserts the pairing, which is the same honest cost every mirror in this
+ * file carries. */
+export function goalWeightAdvice(
+  goalWeightKg: number | null,
+  heightCm: number | null,
+): string | null {
+  // Silent without a height. Guessing one would produce a warning that is not
+  // about this person, which is worse than no warning.
+  if (goalWeightKg === null || heightCm === null || heightCm <= 0) return null
+  const heightM = heightCm / 100
+  const floor = MIN_HEALTHY_BMI * heightM * heightM
+  if (goalWeightKg >= floor) return null
+  return `That is a BMI of about ${(goalWeightKg / (heightM * heightM)).toFixed(1)} for your height — under ${MIN_HEALTHY_BMI}, the bottom of the healthy range, which for you works out at about ${floor.toFixed(1)} kg. We'll save it either way.`
+}
 
 /** Why a quick-add amount would be refused, or null if it would not be.
  *

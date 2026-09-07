@@ -4,11 +4,14 @@ import pytest
 
 from app.calculations import (
     DEFAULT_WATER_QUICK_ADDS,
+    GOAL_REACHED_TOLERANCE_KG,
     KCAL_PER_G_CARB,
     KCAL_PER_G_FAT,
     KCAL_PER_G_PROTEIN,
     KCAL_PER_KG,
     KCAL_PER_STEP_PER_KG,
+    MAX_PROJECTION_WEEKS,
+    RATE_WINDOW_DAYS,
     TDEE_PLAUSIBLE_BMR_RANGE,
     WATER_DEFAULT_GOAL_ML,
     WATER_ML_PER_KG,
@@ -19,6 +22,7 @@ from app.calculations import (
     bmr_mifflin_st_jeor,
     clamp_measured_tdee,
     estimated_tdee,
+    goal_projection,
     macro_targets,
     measured_tdee,
     scale_macros,
@@ -437,3 +441,150 @@ def test_the_walking_estimate_is_none_without_a_weight():
 
 def test_no_steps_costs_nothing_to_report():
     assert steps_burn(0, 70.0) is None
+
+
+# --- Goal weight projection ---------------------------------------------------
+#
+# `trend_series` is used throughout rather than `weight_trend`: it sets each
+# point's trend value directly, so these test the projection rather than the
+# EWMA's lag underneath it. Same reason the rate tests use it.
+
+LAST_DAY = date(2026, 6, 1) + timedelta(days=9)  # trend_series of ten points
+
+
+def test_no_goal_weight_is_its_own_answer_not_a_missing_one():
+    """A user who has set no goal is not short of data -- they are short of a
+    decision, and the UI has a different thing to say about each."""
+    result = goal_projection(None, trend_series([80.0] * 10), -0.5, LAST_DAY)
+    assert result.status == "no_goal"
+    assert result.reach_date is None
+    assert result.goal_weight_kg is None
+
+
+def test_no_weigh_ins_reports_as_no_rate_rather_than_a_status_of_its_own():
+    result = goal_projection(78.0, [], None, LAST_DAY)
+    assert result.status == "no_rate"
+    assert result.goal_weight_kg == 78.0
+    assert result.from_date is None
+
+
+def test_a_goal_within_reach_of_the_trend_reads_as_reached():
+    points = trend_series([80.0] * 10)
+    assert goal_projection(79.9, points, -0.5, LAST_DAY).status == "reached"
+    assert goal_projection(80.1, points, -0.5, LAST_DAY).status == "reached"
+
+
+def test_the_reached_tolerance_is_exactly_one_decimal_place():
+    """0.1 kg is what the scale reports and what the UI prints. A goal that
+    rounds to a different displayed number is not reached."""
+    points = trend_series([80.0] * 10)
+    just_inside = 80.0 - GOAL_REACHED_TOLERANCE_KG
+    just_outside = 80.0 - GOAL_REACHED_TOLERANCE_KG - 0.01
+    assert goal_projection(just_inside, points, -0.5, LAST_DAY).status == "reached"
+    assert goal_projection(just_outside, points, -0.5, LAST_DAY).status != "reached"
+
+
+def test_reached_is_answered_before_asking_for_more_weigh_ins():
+    """Three weigh-ins sitting on the goal get told the thing that is already
+    true, rather than asked for a fourth. This is why the order of the checks
+    inside goal_projection is part of its design."""
+    points = trend_series([78.0, 78.0, 78.0])
+    last = points[-1].date
+    assert goal_projection(78.0, points, None, last).status == "reached"
+
+
+def test_reached_survives_a_log_that_stopped_because_from_date_travels_with_it():
+    points = trend_series([78.0] * 10)
+    result = goal_projection(78.0, points, -0.5, LAST_DAY + timedelta(days=200))
+    assert result.status == "reached"
+    assert result.from_date == LAST_DAY
+
+
+def test_a_rate_that_cannot_be_fitted_gives_no_date():
+    result = goal_projection(74.0, trend_series([80.0] * 10), None, LAST_DAY)
+    assert result.status == "no_rate"
+    # The gap is still known and still worth showing, even with no rate.
+    assert result.remaining_kg == -6.0
+
+
+def test_a_log_that_stopped_longer_ago_than_the_rate_window_is_refused():
+    """`weekly_rate` windows from the latest weigh-in, so it happily fits a
+    slope through a period that is entirely over. A forward date drawn from
+    that would be a present-tense claim about a measurement that stopped."""
+    points = trend_series([80.0] * 10)
+    stale_day = LAST_DAY + timedelta(days=RATE_WINDOW_DAYS + 1)
+    assert goal_projection(74.0, points, -0.5, stale_day).status == "stale"
+
+
+def test_the_staleness_threshold_is_the_rate_window_itself():
+    points = trend_series([80.0] * 10)
+    on_the_edge = LAST_DAY + timedelta(days=RATE_WINDOW_DAYS)
+    assert goal_projection(74.0, points, -0.5, on_the_edge).status == "on_course"
+
+
+def test_a_flat_trend_gives_no_date_rather_than_an_infinite_one():
+    result = goal_projection(74.0, trend_series([80.0] * 10), 0.0, LAST_DAY)
+    assert result.status == "holding"
+    assert result.reach_date is None
+    assert result.remaining_kg == -6.0
+
+
+def test_a_trend_going_the_wrong_way_says_so():
+    """Gaining while aiming lower. The arithmetic would produce a date in the
+    past, which is worse than no date."""
+    result = goal_projection(74.0, trend_series([80.0] * 10), 0.4, LAST_DAY)
+    assert result.status == "moving_away"
+    assert result.reach_date is None
+
+
+def test_overshooting_a_goal_downwards_also_reads_as_moving_away():
+    """Goal 78, trend 76 and still falling: the gap is now upwards and the
+    trend is not closing it. Accurate, if not flattering."""
+    result = goal_projection(78.0, trend_series([76.0] * 10), -0.3, LAST_DAY)
+    assert result.status == "moving_away"
+    assert result.remaining_kg == 2.0
+
+
+def test_a_date_past_the_horizon_is_not_named():
+    points = trend_series([100.0] * 10)
+    result = goal_projection(74.0, points, -0.24, LAST_DAY)
+    assert result.status == "too_far"
+    assert result.reach_date is None
+    # The weeks are still reported, so the UI can say how far off it is.
+    assert result.weeks is not None and result.weeks > MAX_PROJECTION_WEEKS
+
+
+def test_the_horizon_boundary_itself_still_gets_a_date():
+    """26 kg at 0.25 kg/week is exactly 104 weeks. Chosen so the division is
+    exact in binary and the boundary is really being tested."""
+    points = trend_series([100.0] * 10)
+    result = goal_projection(74.0, points, -0.25, LAST_DAY)
+    assert result.weeks == MAX_PROJECTION_WEEKS
+    assert result.status == "on_course"
+
+
+def test_a_reachable_goal_gets_a_date_and_the_weeks_behind_it():
+    points = trend_series([82.0] * 10)
+    result = goal_projection(78.0, points, -0.5, LAST_DAY)
+    assert result.status == "on_course"
+    assert result.remaining_kg == -4.0
+    assert result.weeks == 8.0
+    assert result.reach_date == LAST_DAY + timedelta(days=56)
+
+
+def test_the_date_is_anchored_at_the_last_weigh_in_not_at_today():
+    """Otherwise the projection slides a day further out for every day someone
+    does not stand on the scale, which reads as the goal running away."""
+    points = trend_series([82.0] * 10)
+    later = goal_projection(78.0, points, -0.5, LAST_DAY + timedelta(days=10))
+    assert later.from_date == LAST_DAY
+    assert later.reach_date == LAST_DAY + timedelta(days=56)
+
+
+def test_a_goal_above_the_trend_projects_a_gain():
+    points = trend_series([70.0] * 10)
+    result = goal_projection(74.0, points, 0.5, LAST_DAY)
+    assert result.status == "on_course"
+    # Signed towards the goal: positive means there is weight still to gain.
+    assert result.remaining_kg == 4.0
+    assert result.weeks == 8.0
