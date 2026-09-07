@@ -280,6 +280,13 @@ async function seed(token) {
       track_carbs: true, track_fat: true, weight_unit: 'kg',
       height_cm: 179, birth_date: '1996-03-14', sex: 'male',
       activity_level: 'moderate', goal_rate_kg_per_week: -0.35,
+      // BELOW the seeded weigh-ins, which end at 82.9 kg and are FALLING --
+      // note this is the opposite of scripts/lib/harness.mjs, whose seed
+      // rises, so the two files want goals on opposite sides and neither is a
+      // typo. 78 is ~4.9 kg away at the measured rate, which lands on the
+      // 'on_course' projection: the one status of the eight that names a date,
+      // and so the only one that puts the whole readout in the screenshot.
+      goal_weight_kg: 78,
       targets_auto: true, steps_goal: 9000,
     }),
   })
