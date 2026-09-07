@@ -57,7 +57,14 @@ const TREND_FETCH_DAYS = 1825
 
 // What the picker offers. `days: null` is everything fetched -- five years,
 // which is "all" for any real account and is what the endpoint will serve.
+//
+// The short ranges are for reading the last week or two of dots, NOT for
+// getting a shorter-term rate out of the readout below: the trend weight and
+// the weekly change are current-state numbers over their own fixed windows and
+// do not move with this control. See the note on TREND_FETCH_DAYS.
 const RANGE_OPTIONS = [
+  { days: 7, label: '7 days', heading: 'Last 7 days' },
+  { days: 14, label: '14 days', heading: 'Last 14 days' },
   { days: 30, label: '30 days', heading: 'Last 30 days' },
   { days: 90, label: '90 days', heading: 'Last 90 days' },
   { days: 365, label: '1 year', heading: 'Last year' },
@@ -189,8 +196,13 @@ export default function Weight() {
     load()
   }
 
+  // Resolved by value, never by index. `RANGE_OPTIONS[1]` was the default only
+  // because 90 days happened to sit second, and adding a shorter range at the
+  // front would have moved the fallback without touching this line.
   const range =
-    RANGE_OPTIONS.find((option) => option.days === rangeDays) ?? RANGE_OPTIONS[1]
+    RANGE_OPTIONS.find((option) => option.days === rangeDays) ??
+    RANGE_OPTIONS.find((option) => option.days === DEFAULT_RANGE_DAYS) ??
+    RANGE_OPTIONS[0]
   const visiblePoints = pointsInRange(trend?.points ?? [], rangeDays)
   const chartData = visiblePoints.map((point) => ({
     date: point.date,
