@@ -29,6 +29,27 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-08-log-it-again",
+        date="2026-09-08",
+        title="Log a meal you have eaten before, without typing it again",
+        body=(
+            "**Saved meals only help with the meals you thought to save.** The "
+            "dashboard now offers the ones you actually logged recently, right "
+            "under Quick log \u2014 so the thing you ate on Tuesday and never "
+            "got round to saving is one tap away too.\n\n"
+            "**It is one entry per meal name, not one per meal.** If you log "
+            "\u201cBreakfast\u201d every morning you get one Breakfast, "
+            "carrying the most recent version of it, with the day it came from "
+            "printed beside the numbers \u2014 because Monday's breakfast was "
+            "not Tuesday's and the app should say which one it is showing "
+            "you.\n\n"
+            "**Tapping one opens the log form filled in rather than logging it "
+            "outright.** The portion is still yours to change, the date is "
+            "whichever day you were looking at, and the meal you copied stays "
+            "exactly where it was."
+        ),
+    ),
+    Announcement(
         id="2026-09-08-library-tidying",
         date="2026-09-08",
         title="Your food library can now be compared and tidied",
