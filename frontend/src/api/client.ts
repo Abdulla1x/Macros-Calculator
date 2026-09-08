@@ -11,6 +11,7 @@ import type {
   DaySurplus,
   Food,
   FoodCreate,
+  FoodDuplicatePair,
   HealthStatus,
   KeepWarmStatus,
   ImportResult,
@@ -378,6 +379,15 @@ export const api = {
     request<Food>(`/api/foods/${id}`, { method: 'PUT', body: JSON.stringify(food) }),
   deleteFood: (id: number) =>
     request<void>(`/api/foods/${id}`, { method: 'DELETE' }),
+  // Rescale to per-100 g. A POST rather than a PUT with recomputed numbers
+  // because the server decides `source` from what changed, and a rescale is the
+  // same claim in different units -- sending it as an edit would strip the
+  // Open Food Facts badge off a row nobody corrected. See routers/foods.py.
+  normalizeFood: (id: number) =>
+    request<Food>(`/api/foods/${id}/normalize`, { method: 'POST' }),
+  // Pairs of saved foods that look like the same thing twice, as ids into the
+  // library the caller already has.
+  getFoodDuplicates: () => request<FoodDuplicatePair[]>('/api/foods/duplicates'),
 
   getWeights: (start?: string, end?: string) => {
     const params = new URLSearchParams()

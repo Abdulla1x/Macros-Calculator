@@ -8,6 +8,8 @@ import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
 import ShowAllToggle, { COLLAPSED_ROWS } from '../ShowAllToggle'
+import DuplicateFoodsPanel from './DuplicateFoodsPanel'
+import { isPer100g, per100gSummary } from '../../lib/foodDensity'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
@@ -53,6 +55,38 @@ const draftFrom = (food: Food): Draft => ({
   fat: food.fat == null ? '' : String(food.fat),
 })
 
+/** How the list can be ordered.
+ *
+ * Two, because those are the two the data can honestly support. "Most used
+ * first" is the one people ask for and it is not here: a meal is a flat row
+ * with no link to a food, so nothing in this database records that a saved food
+ * was ever used. Offering it would mean ranking on something else and calling
+ * it usage.
+ */
+const SORT_OPTIONS = [
+  { value: 'name', label: 'Name' },
+  { value: 'recent', label: 'Recently added' },
+] as const
+
+type SortKey = (typeof SORT_OPTIONS)[number]['value']
+
+/** ⚠️ By VALUE, never `SORT_OPTIONS[0].value`. The Weight page's range picker
+ *  had exactly that, defaulting to 90 days only because 90 happened to sit
+ *  second in its list -- so adding an option at the front silently repointed the
+ *  default. Naming the value costs nothing and cannot drift. */
+const DEFAULT_SORT: SortKey = 'name'
+
+const compare: Record<SortKey, (a: Food, b: Food) => number> = {
+  // localeCompare rather than leaning on the server's ORDER BY: that is a
+  // database collation, so "Apple" and "apple" order differently on SQLite and
+  // Postgres. This list is read by a person, and a person expects them adjacent.
+  name: (a, b) => a.name.localeCompare(b.name),
+  // Newest first, tie-broken by id. Foods saved together -- LogMeal writes its
+  // ticked ingredients in one Promise.all -- can share a timestamp exactly, and
+  // an unstable sort would let them swap places between renders.
+  recent: (a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id,
+}
+
 const macroSummary = (food: Food) =>
   `${food.calories} kcal · ${food.protein} g protein / ${food.serving_size} g`
 
@@ -71,6 +105,8 @@ export default function FoodLibrarySection({
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT)
+  const [confirmNormalize, setConfirmNormalize] = useState<number | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -94,9 +130,14 @@ export default function FoodLibrarySection({
   // is already in memory, so this also costs no round-trip per keystroke.
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase()
-    if (needle === '') return items
-    return items.filter((food) => food.name.toLowerCase().includes(needle))
-  }, [items, filter])
+    const matching =
+      needle === ''
+        ? items
+        : items.filter((food) => food.name.toLowerCase().includes(needle))
+    // Copied before sorting: `items` is state, and sorting it in place would
+    // mutate the array React is holding without telling React it changed.
+    return [...matching].sort(compare[sort])
+  }, [items, filter, sort])
 
   // Capped *after* filtering, not before: a filter that already narrows 62 foods
   // to three has answered the question the expander asks, and offering to expand
@@ -189,6 +230,28 @@ export default function FoodLibrarySection({
     }
   }
 
+  /** Rescale one food to per 100 g.
+   *
+   * A POST to its own endpoint, not a PUT carrying recomputed numbers. PUT
+   * decides `source` from what changed and would mark a rescaled Open Food
+   * Facts row as the user's own -- claiming they typed figures they only asked
+   * to see in different units, on the one screen whose job is saying which
+   * numbers came from where.
+   */
+  const normalize = async (id: number) => {
+    setBusy(true)
+    try {
+      await api.normalizeFood(id)
+      setConfirmNormalize(null)
+      setError('')
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not convert that — try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const remove = async (id: number) => {
     setBusy(true)
     try {
@@ -226,6 +289,12 @@ export default function FoodLibrarySection({
         — a meal records its own macros, so nothing here rewrites your history.
       </p>
 
+      {/* Above everything it is about, and open whenever it has something to
+          say. A default-collapsed state has hidden a section from both browser
+          harnesses six times over (see scripts/lib/harness.mjs); there is no
+          reason to make this the seventh. */}
+      <DuplicateFoodsPanel foods={items} onChanged={load} />
+
       {items.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <TextInput
@@ -233,8 +302,25 @@ export default function FoodLibrarySection({
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter by name…"
             aria-label="Filter food library"
-            className="min-w-0 flex-1"
+            // basis-full below sm: the sort control joined this row and squeezed
+            // the filter to about a third of it on a phone, where the
+            // placeholder truncated to "Filter by". The filter is the control
+            // people actually type in, so it takes the line and the sort and the
+            // count wrap underneath; from sm they share one row as before.
+            className="min-w-0 flex-1 basis-full sm:basis-auto"
           />
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value as SortKey)}
+            aria-label="Sort food library"
+            className="rounded-control border border-line-strong bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200 focus:border-emerald-500"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <span className="text-xs text-slate-400">
             {items.length} food{items.length === 1 ? '' : 's'}
             {filter.trim() !== '' && ` · ${shown.length} matching`}
@@ -297,6 +383,16 @@ export default function FoodLibrarySection({
                     <span className="ml-2 text-xs text-slate-400">
                       {macroSummary(food)}
                     </span>
+                    {/* Only when the row is not already per 100 g. On a library
+                        where most things are, repeating the same two numbers in
+                        brackets after every one of them is noise -- this earns
+                        its place exactly where the serving size is what makes
+                        two rows hard to compare. */}
+                    {!isPer100g(food) && (
+                      <span className="ml-2 text-xs text-slate-400">
+                        ({per100gSummary(food)})
+                      </span>
+                    )}
                   </span>
                   {/* Which figures came from where. An entry the user typed and
                       one a third-party database supplied warrant different
@@ -318,6 +414,40 @@ export default function FoodLibrarySection({
                     >
                       Edit
                     </button>
+                    {/* Two steps, like Delete beside it. This rewrites five
+                        stored numbers, so the figures it will write are shown
+                        first and the second click is the one that acts -- the
+                        idiom is already on this row, so it needs no explaining.
+                        Hidden entirely on a row that is already per 100 g,
+                        which is why the server can answer that case with an
+                        unchanged 200 instead of an error. */}
+                    {!isPer100g(food) &&
+                      (confirmNormalize === food.id ? (
+                        <>
+                          <button
+                            onClick={() => normalize(food.id)}
+                            disabled={busy}
+                            className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
+                          >
+                            Convert
+                          </button>
+                          <button
+                            onClick={() => setConfirmNormalize(null)}
+                            className="text-slate-400 hover:text-slate-200"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmNormalize(food.id)}
+                          disabled={busy}
+                          aria-label={`Convert ${food.name} to per 100 g`}
+                          className="text-slate-400 hover:text-emerald-300 disabled:opacity-40"
+                        >
+                          Per 100 g
+                        </button>
+                      ))}
                     {confirmDelete === food.id ? (
                       <>
                         <button
@@ -356,6 +486,15 @@ export default function FoodLibrarySection({
                       with it keep their numbers.
                     </p>
                   )}
+                  {confirmNormalize === food.id && (
+                    <p className="w-full text-xs text-slate-400">
+                      Saves as <strong className="text-slate-300">{per100gSummary(food)}</strong>
+                      . Same food, same figures, different serving —{' '}
+                      {food.source === 'user'
+                        ? 'nothing else about the row changes.'
+                        : 'it stays an Open Food Facts entry, because a rescale corrects nothing.'}
+                    </p>
+                  )}
                 </div>
               )}
             </li>
@@ -372,8 +511,10 @@ export default function FoodLibrarySection({
           // An armed "Delete for good" must not survive out of sight. A row
           // scrolled away still holding its confirmation would come back armed
           // on the next expand, one tap from deleting something the user had
-          // already moved on from.
+          // already moved on from. The same goes for an armed Convert, which
+          // rewrites five numbers.
           setConfirmDelete(null)
+          setConfirmNormalize(null)
         }}
         noun="food"
       />

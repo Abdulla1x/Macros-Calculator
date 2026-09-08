@@ -382,9 +382,26 @@ export interface Food {
   carbs: number | null
   fat: number | null
   source: 'user' | 'openfoodfacts'
+  /** When the row was written. Server-set and read-only; what the Library's
+   *  "Recently added" sort orders on. */
+  created_at: string
 }
 
-export type FoodCreate = Omit<Food, 'id'>
+// Both server-set fields come off, not just the id. FoodCreate is a request
+// body, and a created_at in it would be either ignored or a claim the client
+// has no business making -- the same reason the Pydantic side puts the field on
+// the response model rather than on FoodCreate.
+export type FoodCreate = Omit<Food, 'id' | 'created_at'>
+
+/** Two library rows that look like the same food.
+ *
+ * Ids, not rows: the Library section already holds the foods, so this stays a
+ * pointer into the list it is rendered beside rather than a second copy that
+ * can go stale after an edit. */
+export interface FoodDuplicatePair {
+  a_id: number
+  b_id: number
+}
 
 export interface OFFProduct {
   name: string
