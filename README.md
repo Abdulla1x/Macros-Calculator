@@ -320,6 +320,7 @@ Macros-Calculator
 │   │       └── email.py         # password-reset email (the only Brevo-aware module; switched off)
 │   ├── alembic/                 # database migrations (Postgres)
 │   ├── scripts/                 # smoke_multiuser.py — the live two-account isolation check
+│   │                            # delete_account_by_email.py — ops: remove an account whose password is gone
 │   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
@@ -438,6 +439,20 @@ that also covers routing, auth middleware and the deployed database:
 cd backend
 BASE_URL=http://localhost:8000 DATABASE_URL=... venv/bin/python scripts/smoke_multiuser.py
 ```
+
+It removes both throwaway accounts when it finishes, **however it finishes** —
+the cleanup is registered with `atexit`, not written at the end of the run, because
+the runs that leave accounts behind are the ones that *failed*. Pass `--keep` to
+inspect them instead; it then prints each email and its password.
+
+For the one case that cannot go through the API — an account whose password is gone,
+since `DELETE /api/auth/account` needs that account's own token and password —
+`scripts/delete_account_by_email.py` does the same thing against the database. It is
+a dry run unless given `--delete`, it never takes the connection string as an
+argument, and it checks two separate claims afterwards: that the account is gone,
+**and** that no rows of theirs are left under any of the twelve tables carrying a
+`user_id`. Those are not the same claim — with SQLite's foreign keys off, the first
+one passes while six tables keep their rows.
 
 ⚠️ **Set `DATABASE_URL` or the row-ownership half silently skips** and you get a
 smaller, quieter pass. It also runs against the deployed URL — note that it leaves
