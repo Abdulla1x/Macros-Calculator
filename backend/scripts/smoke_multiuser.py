@@ -10,10 +10,17 @@ Usage:
 If DATABASE_URL is also set, the script additionally connects to the database
 and asserts row-level ownership directly.
 
-Leaves behind the two throwaway accounts; their data is removed via the API
-where possible. (DELETE /api/auth/account exists and would clean them up
-properly — worth wiring in, but it needs the password kept to hand.)
+Removes both throwaway accounts when it finishes, however it finishes. Pass
+--keep to leave them behind for inspection; it then prints the email and
+password of each.
+
+⚠️ This note used to say the accounts were left behind because wiring in
+DELETE /api/auth/account "needs the password kept to hand". The password was
+kept to hand -- it is PASSWORD, twelve lines below -- so nothing was actually
+blocking it, and two accounts sat in production for months because a comment
+described an obstacle that had never existed.
 """
+import atexit
 import os
 import sys
 import uuid
@@ -23,8 +30,54 @@ import httpx
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
 PASSWORD = "smoke-test-password-1"
+KEEP = "--keep" in sys.argv
 
 _checks = 0
+
+# Every account this run created, removed by _remove_accounts below.
+#
+# ⚠️ Registered with atexit rather than written at the end of main(), and that
+# is the whole point: check() calls sys.exit() the moment anything fails, so a
+# cleanup at the tail of main runs only on the happy path -- exactly backwards,
+# because the runs that strand accounts are the ones that FAILED. Two smoke
+# accounts and one throwaway survived in production this way.
+_created: list[tuple[str, dict[str, str]]] = []
+
+
+def _remove_accounts() -> None:
+    if not _created:
+        return
+    if KEEP:
+        print("\n--keep: leaving these accounts behind")
+        for email, _ in _created:
+            print(f"  {email}  password: {PASSWORD}")
+        return
+    print("\nRemoving throwaway accounts:")
+    # A fresh client: this runs after main's `with` block has closed its own.
+    with httpx.Client(base_url=BASE_URL, timeout=60) as client:
+        for email, headers in _created:
+            # httpx's .delete() takes no json=, so a DELETE with a body has to
+            # go through .request(). Sending none answers 422, and a 422 nobody
+            # asserted is how an account was stranded for twelve days.
+            gone = client.request(
+                "DELETE", "/api/auth/account",
+                headers=headers, json={"password": PASSWORD},
+            )
+            # Asserting the 204 alone is not enough -- the account is only
+            # really gone if its credentials stop working.
+            relogin = client.post(
+                "/api/auth/login", json={"email": email, "password": PASSWORD}
+            )
+            ok = gone.status_code == 204 and relogin.status_code == 401
+            print(
+                f"  [{'ok' if ok else '!!'}] {email} — "
+                f"DELETE {gone.status_code}, re-login {relogin.status_code}"
+            )
+            if not ok:
+                print(f"       STILL EXISTS — password is {PASSWORD!r}")
+
+
+atexit.register(_remove_accounts)
 
 
 def check(condition: bool, label: str) -> None:
@@ -43,7 +96,11 @@ def make_user(client: httpx.Client, tag: str) -> tuple[dict[str, str], dict]:
     )
     check(response.status_code == 201, f"signup {tag} ({email})")
     body = response.json()
-    return {"Authorization": f"Bearer {body['access_token']}"}, body["user"]
+    headers = {"Authorization": f"Bearer {body['access_token']}"}
+    # Recorded before anything else can fail, so a run that dies mid-way still
+    # cleans up what it had already created.
+    _created.append((email, headers))
+    return headers, body["user"]
 
 
 def main() -> None:
@@ -749,35 +806,19 @@ def main() -> None:
         else:
             print("  [skip] DATABASE_URL not set — DB row checks skipped")
 
-        # -- Cleanup (accounts remain; see module docstring) --------------------
-        for meal_id in a_meal_ids:
-            client.delete(f"/api/meals/{meal_id}", headers=headers_a)
-        client.delete(f"/api/meals/{b_meal_id}", headers=headers_b)
-        client.delete(f"/api/foods/{a_food_id}", headers=headers_a)
-        client.delete(f"/api/foods/{b_food_id}", headers=headers_b)
-        client.delete(f"/api/weights/{a_weight_id}", headers=headers_a)
-        client.delete(f"/api/weights/{b_weight_id}", headers=headers_b)
-        client.delete(f"/api/meal-templates/{a_template_id}", headers=headers_a)
-        client.delete(f"/api/meal-templates/{b_template_id}", headers=headers_b)
-        client.delete(f"/api/water/{a_water_id}", headers=headers_a)
-        client.delete(f"/api/water/{b_water_id}", headers=headers_b)
-        client.delete("/api/steps", params={"date": step_day}, headers=headers_a)
-        client.delete("/api/steps", params={"date": step_day}, headers=headers_b)
-        client.delete(f"/api/plan/{plan_event}", headers=headers_a)
-        client.delete(f"/api/plan/{plan_event}", headers=headers_b)
-        # The dose rows go with the supplements by CASCADE, which is worth
-        # leaning on here rather than deleting them separately: if the cascade
-        # were missing, the next run's DB check would find an orphan.
-        client.delete(f"/api/supplements/{a_supplement_id}", headers=headers_a)
-        client.delete(f"/api/supplements/{b_supplement_id}", headers=headers_b)
-        # B's imported duplicate meal
-        for meal in client.get("/api/meals", headers=headers_b).json():
-            client.delete(f"/api/meals/{meal['id']}", headers=headers_b)
-        for meal in client.get("/api/meals", headers=headers_a).json():
-            client.delete(f"/api/meals/{meal['id']}", headers=headers_a)
+        # -- Cleanup ----------------------------------------------------------
+        # There isn't any, deliberately. This block used to delete about twenty
+        # rows one at a time -- every meal, food, weigh-in, template, water log,
+        # step day, plan and supplement, by id. Deleting the two ACCOUNTS at
+        # exit removes all of it by cascade, and cannot go stale: a hand-written
+        # list silently stops covering a table the next time a feature adds one,
+        # and this script's own DB checks are what would have to notice.
+        #
+        # It also exercises strictly more than the old block did. That code
+        # leaned on one cascade on purpose (supplement_logs behind supplements);
+        # an account delete leans on all twelve.
 
     print(f"\nAll {_checks} checks passed against {BASE_URL}")
-    print("Note: throwaway smoke-* accounts remain; delete them from Settings.")
 
 
 if __name__ == "__main__":
