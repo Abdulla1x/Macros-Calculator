@@ -54,6 +54,18 @@ def test_meal_lists_are_scoped(client, client_b):
     assert all(m["id"] != a_meal["id"] for m in b_today)
 
 
+def test_recent_meals_are_scoped(client, client_b):
+    # The dedup pass runs over whatever the query returned, so an unscoped query
+    # would surface another account's meal here even though every other meal
+    # route is scoped -- a new read path is a new place for the boundary to be
+    # missing, not a place it is inherited.
+    client.post("/api/meals", json=MEAL_A)
+    client_b.post("/api/meals", json=MEAL_B)
+
+    assert [m["name"] for m in client.get("/api/meals/recent").json()] == ["Alpha Meal"]
+    assert [m["name"] for m in client_b.get("/api/meals/recent").json()] == ["Beta Meal"]
+
+
 def test_cannot_delete_another_users_meal(client, client_b):
     a_meal = client.post("/api/meals", json=MEAL_A).json()
 

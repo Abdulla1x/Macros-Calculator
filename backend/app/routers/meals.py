@@ -31,6 +31,81 @@ def list_meals(
     return db.scalars(stmt).all()
 
 
+# How many recent rows /api/meals/recent scans looking for distinct names.
+#
+# The endpoint returns one meal per name, so how far it must read to fill a list
+# of `limit` depends entirely on how repetitive the account is: someone logging
+# "Breakfast", "Lunch" and "Dinner" every day has three distinct names in any
+# number of rows, and no window would find a fourth. A list shorter than `limit`
+# is the honest answer there, not a shortfall.
+#
+# 200 is about fifty days for a four-meal-a-day account -- far enough back that
+# anything older is not a meal you are about to log again, and bounded, which is
+# the point of having a number here at all.
+RECENT_SCAN_ROWS = 200
+
+
+def _distinct_by_name(rows: list[MealRow], limit: int) -> list[MealRow]:
+    """The first row for each distinct name, in the order given, up to `limit`.
+
+    Case-insensitive, matching the convention `foods` and `meal_templates`
+    already enforce with their expression indexes: "Breakfast" and "breakfast"
+    are one meal to a person, and offering both would be this list failing at
+    the one job it has.
+
+    Callers pass rows newest-first, so the row kept for a name is the most
+    recent one. Two meals can share a name and hold different macros -- Monday's
+    breakfast was not Tuesday's -- and the newest is the better guess at what
+    "log it again" means. It is still a guess, which is why the row carries its
+    date into the UI instead of presenting its numbers as the name's.
+    """
+    seen: set[str] = set()
+    kept: list[MealRow] = []
+    for row in rows:
+        key = row.name.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(row)
+        if len(kept) == limit:
+            break
+    return kept
+
+
+@router.get("/recent", response_model=list[Meal])
+def recent_meals(
+    limit: int = Query(default=8, ge=1, le=50),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The most recent meal under each distinct name -- "log it again".
+
+    Saved meals cover the meal you thought to store in advance; this covers the
+    one you ate on Tuesday and did not think to save. Deduplicated because an
+    account that logs "Breakfast" every day would otherwise be offered the same
+    name six times.
+
+    Ordered like the undated branch of `list_meals` above, so the two agree
+    about what "recent" means rather than each having its own idea.
+
+    Deduplicated in Python rather than with DISTINCT ON, which is Postgres-only
+    while the suite runs SQLite -- a rule that holds on one dialect is a rule
+    the tests cannot defend. Same trap `lib/recentTemplates.ts` documents about
+    NULL ordering, from the other direction.
+
+    ⚠️ Declared ABOVE the `/{meal_id}` routes. Nothing routes GET on a path
+    parameter today, so "recent" cannot be read as an id -- but adding
+    `GET /{meal_id}` later would shadow this one unless it stays underneath.
+    """
+    stmt = (
+        select(MealRow)
+        .where(MealRow.user_id == user.id)
+        .order_by(MealRow.date.desc(), MealRow.id.desc())
+        .limit(RECENT_SCAN_ROWS)
+    )
+    return _distinct_by_name(list(db.scalars(stmt).all()), limit)
+
+
 @router.post("", response_model=Meal, status_code=201)
 def create_meal(
     meal: MealCreate,

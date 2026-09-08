@@ -1,3 +1,4 @@
+from app.routers.meals import RECENT_SCAN_ROWS
 from conftest import post_raw_json
 
 
@@ -143,3 +144,107 @@ def test_undated_list_is_capped_and_newest_first(client):
     assert [m["date"] for m in meals] == ["2026-07-03", "2026-07-02"]
     assert client.get("/api/meals", params={"limit": 0}).status_code == 422
     assert client.get("/api/meals", params={"limit": 5000}).status_code == 422
+
+
+# --- /api/meals/recent -------------------------------------------------------
+#
+# "Log it again": the most recent meal under each distinct name. Saved meals
+# cover the meal you thought to store in advance; this covers the one you ate on
+# Tuesday and did not.
+
+
+def test_recent_is_newest_first(client):
+    for day in ("2026-07-01", "2026-07-02", "2026-07-03"):
+        client.post("/api/meals", json=_sample(date=day, name=f"Meal {day}"))
+
+    recent = client.get("/api/meals/recent").json()
+    assert [m["date"] for m in recent] == ["2026-07-03", "2026-07-02", "2026-07-01"]
+
+
+def test_recent_keeps_only_the_newest_meal_of_each_name(client):
+    # The same name on two days with different numbers. Which row survives is
+    # the whole question: offering Monday's figures under a name last eaten on
+    # Tuesday would be the list quietly answering a question nobody asked.
+    client.post("/api/meals", json=_sample(date="2026-07-01", calories=400))
+    client.post("/api/meals", json=_sample(date="2026-07-02", calories=650))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Salad"))
+
+    recent = client.get("/api/meals/recent").json()
+    assert [(m["name"], m["calories"], m["date"]) for m in recent] == [
+        ("Salad", 560, "2026-07-02"),
+        ("Chicken & Rice", 650, "2026-07-02"),
+    ]
+
+
+def test_recent_dedupes_case_insensitively(client):
+    client.post("/api/meals", json=_sample(date="2026-07-01", name="Breakfast"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="breakfast"))
+    client.post("/api/meals", json=_sample(date="2026-07-03", name="  BREAKFAST  "))
+
+    recent = client.get("/api/meals/recent").json()
+    # Stored stripped by create_meal, so the survivor is the third row's name
+    # rather than its untrimmed input.
+    assert [m["name"] for m in recent] == ["BREAKFAST"]
+
+
+def test_recent_honours_limit_and_rejects_an_impossible_one(client):
+    for day in ("2026-07-01", "2026-07-02", "2026-07-03"):
+        client.post("/api/meals", json=_sample(date=day, name=f"Meal {day}"))
+
+    assert len(client.get("/api/meals/recent", params={"limit": 2}).json()) == 2
+    assert client.get("/api/meals/recent", params={"limit": 0}).status_code == 422
+    assert client.get("/api/meals/recent", params={"limit": 500}).status_code == 422
+
+
+def test_recent_is_empty_for_an_account_that_has_logged_nothing(client):
+    response = client.get("/api/meals/recent")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_recent_is_not_read_as_a_meal_id(client):
+    # `/recent` sits above the `/{meal_id}` routes. Nothing routes GET on a path
+    # parameter today, so this asserts the arrangement rather than a near miss:
+    # it is what would fail if a later `GET /{meal_id}` were declared first.
+    assert client.get("/api/meals/recent").status_code == 200
+
+
+def test_recent_stops_at_the_scan_window(client):
+    """The bounded scan has a visible consequence, and it is the intended one.
+
+    A name that falls outside RECENT_SCAN_ROWS is not offered, however few
+    distinct names the account has. That is the cost of not reading an unbounded
+    history on every dashboard load, and it is worth pinning: without this test
+    the constant looks like a number nobody chose, and raising or dropping it
+    would break nothing.
+    """
+    client.post("/api/meals", json=_sample(date="2026-06-01", name="Ancient Salad"))
+    for _ in range(RECENT_SCAN_ROWS):
+        client.post("/api/meals", json=_sample(date="2026-07-01", name="Breakfast"))
+
+    names = [m["name"] for m in client.get("/api/meals/recent").json()]
+    assert names == ["Breakfast"]
+
+
+def test_a_copied_meal_is_a_new_row_logged_now(client):
+    """The copy path's two dates, asserted rather than assumed.
+
+    `date` is when the food was eaten and `created_at` is when the row was
+    written -- the column comments on `models.py` exist because those answer
+    different questions. Copying a meal to today must move the first and stamp
+    the second afresh, or the copy would report the original's history.
+    """
+    source = client.post("/api/meals", json=_sample(date="2026-07-01")).json()
+
+    copy = client.post(
+        "/api/meals",
+        json=_sample(date="2026-07-09", name=source["name"], calories=source["calories"]),
+    ).json()
+
+    assert copy["id"] != source["id"]
+    assert copy["date"] == "2026-07-09"
+    # Never edited, so it carries no edit stamp -- a copy is a new meal, not a
+    # revision of the one it came from.
+    assert copy["updated_at"] is None
+    # The original is untouched by the copy.
+    assert client.get("/api/meals?date=2026-07-01").json()[0]["id"] == source["id"]

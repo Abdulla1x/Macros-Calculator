@@ -111,6 +111,7 @@ def main() -> None:
         # -- Anonymous access is rejected everywhere --------------------------
         for method, path in [
             ("GET", "/api/meals"),
+            ("GET", "/api/meals/recent"),
             ("GET", "/api/foods"),
             ("GET", "/api/meal-templates"),
             ("GET", "/api/settings"),
@@ -142,6 +143,11 @@ def main() -> None:
         for meal in (
             {"date": "2026-07-01", "name": "Smoke Alpha One", "calories": 500, "protein": 40},
             {"date": "2026-07-02", "name": "Smoke Alpha Two", "calories": 350, "protein": 25},
+            # Repeats the first meal's NAME on a later day with different
+            # numbers, which is what /api/meals/recent has to collapse. Without
+            # it every name here is unique and the deduplication is untested
+            # live -- the shape of hole the snapshot seed had.
+            {"date": "2026-07-03", "name": "Smoke Alpha One", "calories": 700, "protein": 55},
         ):
             response = client.post("/api/meals", json=meal, headers=headers_a)
             check(response.status_code == 201, f"A creates meal {meal['name']}")
@@ -430,6 +436,18 @@ def main() -> None:
         check(a_names == {"Smoke Alpha One", "Smoke Alpha Two"}, "A sees only A's meals")
         check(b_names == {"Smoke Beta One"}, "B sees only B's meals")
 
+        a_recent = client.get("/api/meals/recent", headers=headers_a).json()
+        b_recent = client.get("/api/meals/recent", headers=headers_b).json()
+        check(
+            [(m["name"], m["calories"]) for m in a_recent]
+            == [("Smoke Alpha One", 700), ("Smoke Alpha Two", 350)],
+            "A's three meals over two names come back deduplicated, newest first",
+        )
+        check(
+            [m["name"] for m in b_recent] == ["Smoke Beta One"],
+            "B's recent meals are B's alone",
+        )
+
         b_foods = client.get("/api/foods", headers=headers_b).json()
         check([f["id"] for f in b_foods] == [b_food_id], "B sees only B's foods")
         check(b_foods[0]["calories"] == 999, "B's upsert did not touch A's food")
@@ -717,8 +735,11 @@ def main() -> None:
 
             engine = create_engine(os.environ["DATABASE_URL"])
             with Session(engine) as session:
-                # A: 2 created (import was a duplicate); B: 1 created + 1 imported.
-                for uid, expected in ((user_a["id"], 2), (user_b["id"], 2)):
+                # A: 3 created (import was a duplicate); B: 1 created + 1
+                # imported. A's third repeats the first's name on a later day,
+                # which is what the recent-meals deduplication is checked on
+                # above -- it is three ROWS, and two names.
+                for uid, expected in ((user_a["id"], 3), (user_b["id"], 2)):
                     rows = session.scalars(select(Meal).where(Meal.user_id == uid)).all()
                     check(len(rows) == expected, f"DB: user {uid} owns {expected} meals")
                 foods = session.scalars(
