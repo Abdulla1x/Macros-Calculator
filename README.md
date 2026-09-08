@@ -56,7 +56,9 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### 🍽️ Smart meal logging
 - **Type-ahead food search**: ingredients you've logged before auto-fill their macros from your personal food library
 - **Open Food Facts fallback**: unknown foods can be looked up in the public OFF database (per-serving macros normalized automatically) and are cached locally for next time
-- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings. Correcting one that came from Open Food Facts makes it yours, so a later lookup can't overwrite your own numbers. Both lists show their first few rows with the rest a tap away, so the controls that act on them — the filter, and adding a food by hand — stay on the first screen instead of sitting below everything you have ever saved
+- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings, filter by name, and sort by name or by when each one arrived. Correcting one that came from Open Food Facts makes it yours, so a later lookup can't overwrite your own numbers. Both lists show their first few rows with the rest a tap away, so the controls that act on them — the filter, and adding a food by hand — stay on the first screen instead of sitting below everything you have ever saved
+- **Every saved food is comparable, whatever it was saved against.** Macros are stored per the food's own serving size, which is what the packet says and useless for comparing two of them — 108 kcal per 90 g and 70 kcal per 50 g are the same food twice, and nothing about those two lines says so. Any row that is not already per 100 g now shows what it works out to, and a **Per 100 g** button rewrites it that way for good: it previews the figures first, and it **keeps the Open Food Facts badge**, because a rescale is the same claim in different units and corrects nothing
+- **It tells you when you have saved the same food twice.** The library fills itself up on its own — every Open Food Facts pick is cached, every ticked ingredient saved — so the same thing arrives under names nobody chose to make match. A pair is flagged only when the names overlap **and** the per-100 g calories and protein are close, because names alone would call "chicken breast" and "chicken thigh" duplicates. And it argues rather than acts: both rows are put side by side in the same units so you can see why, every delete is yours, and "not a duplicate" makes it stop asking
 - **Saved meals**: store a meal you eat often and re-log it in one tap from the dashboard
 - **Share a meal by code**: turn a meal or a saved template into a short code, hand it to someone, and they get an **editable copy in their own account**. The code is a self-contained encoded payload — there is no shared row, no invite, nothing to revoke, and no account id inside it, so per-user isolation is untouched by the feature existing
 - Single- or multi-ingredient meals with live-updating totals as you type
@@ -576,7 +578,7 @@ to anything else. That failure looks like a network error and never reaches the 
 
 ## 🔌 API overview
 
-51 paths. All of them require an `Authorization: Bearer <token>` header and operate
+53 paths. All of them require an `Authorization: Bearer <token>` header and operate
 only on the caller's data, except these public ones: `/api/health`,
 `/api/announcements`, `/api/auth/signup|login`, and
 `/api/auth/forgot-password|reset-password`.
@@ -603,6 +605,8 @@ only on the caller's data, except these public ones: `/api/health`,
 | DELETE | `/api/meal-templates/{id}` | Delete a saved meal template |
 | GET/POST | `/api/foods` | The food library / save or update a food |
 | PUT/DELETE | `/api/foods/{id}` | Rename and correct a saved food / remove it |
+| POST | `/api/foods/{id}/normalize` | Rescale one food's macros to per 100 g, keeping its provenance |
+| GET | `/api/foods/duplicates` | Pairs of saved foods that look like the same thing twice |
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | GET | `/api/share/meal/{id}` | Encode one of your meals as a shareable code |

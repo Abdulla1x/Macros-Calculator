@@ -240,6 +240,30 @@ class Food(FoodCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # When the row was written. Read-only -- it is on this model and not on
+    # FoodCreate, so a request body can neither set it nor be asked for it.
+    #
+    # Deliberately NOT defaulted, which is what keeps it clear of the trap that
+    # has bitten this project four times: a defaulted field on a
+    # from_attributes model silently reports the default when the attribute is
+    # missing, rather than failing. Nothing here can be missing -- 0001 created
+    # the column NOT NULL -- and if that ever stopped being true, this should
+    # break loudly rather than invent a date.
+    created_at: datetime
+
+
+class FoodDuplicatePair(BaseModel):
+    """Two library rows that look like the same food.
+
+    Ids, not embedded rows. The client already holds the library it is about to
+    render this beside, so sending the rows again would give the screen two
+    copies of every food and a way for them to disagree after an edit. It also
+    means a pair whose ids no longer both resolve -- because one was just
+    deleted -- simply stops rendering, with no second request.
+    """
+
+    a_id: int
+    b_id: int
 
 
 class OFFProduct(BaseModel):

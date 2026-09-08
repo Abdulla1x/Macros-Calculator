@@ -112,9 +112,26 @@ def test_food_library_is_scoped(client, client_b):
         ).status_code
         == 404
     )
+    # The rescale verb, which writes to every macro on the row. A scope failure
+    # here would not merely leak a reading, it would rewrite A's numbers.
+    assert client_b.post(f"/api/foods/{a_food['id']}/normalize").status_code == 404
     assert [f["id"] for f in client.get("/api/foods").json()] == [a_food["id"]]
     assert client.get("/api/foods").json()[0]["name"] == FOOD_A["name"]
     assert client.get("/api/foods").json()[0]["calories"] == FOOD_A["calories"]
+
+
+def test_duplicate_detection_never_pairs_across_accounts(client, client_b):
+    """B holds a row that duplicates A's, and neither is told about the other.
+
+    The detector compares every row with every other, so a query that forgot to
+    scope on user_id would not fail quietly -- it would hand each account a card
+    naming a food they have never seen, with a delete button on it.
+    """
+    client.post("/api/foods", json=FOOD_A)
+    client_b.post("/api/foods", json={**FOOD_A, "name": "Shared Name Foods"})
+
+    assert client.get("/api/foods/duplicates").json() == []
+    assert client_b.get("/api/foods/duplicates").json() == []
 
 
 def test_same_food_name_allowed_per_user_and_upsert_stays_scoped(client, client_b):

@@ -29,6 +29,33 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-08-library-tidying",
+        date="2026-09-08",
+        title="Your food library can now be compared and tidied",
+        body=(
+            "**The library fills itself up whether you ask it to or not** — "
+            "every Open Food Facts result you pick is saved, along with every "
+            "ingredient you tick and every AI estimate you keep. Three things "
+            "have been added for once it has grown.\n\n"
+            "**It tells you when the same food is in there twice.** Two rows "
+            "get flagged only when their names overlap *and* their macros "
+            "match once both are put over 100 g — names alone would call "
+            "\"chicken breast\" and \"chicken thigh\" the same food. It shows "
+            "you both rows side by side in the same units and lets you decide: "
+            "nothing is ever deleted for you, and \"not a duplicate\" makes it "
+            "stop asking about that pair.\n\n"
+            "**Every food is now comparable.** Macros are stored against "
+            "whatever serving the packet used, so 108 kcal per 90 g and 70 "
+            "kcal per 50 g are the same food twice and neither line says so. "
+            "Any row that is not already per 100 g shows what it comes to, and "
+            "a **Per 100 g** button converts it for good — it shows you the "
+            "figures before it writes them, and a converted Open Food Facts "
+            "row keeps its badge, because changing the units corrects "
+            "nothing.\n\n"
+            "**And you can sort it** by name or by what arrived most recently."
+        ),
+    ),
+    Announcement(
         id="2026-09-07-goal-weight",
         date="2026-09-07",
         title="Set a goal weight and see when you would reach it",

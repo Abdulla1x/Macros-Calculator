@@ -77,6 +77,58 @@ export const SEED_TEMPLATES = Number(process.env.SEED_TEMPLATES ?? 8)
 // COLLAPSED_ROWS, so the rows and the control that expands them are both covered.
 export const SEED_FOODS = Number(process.env.SEED_FOODS ?? 8)
 
+/** The seeded library, as real foods rather than a counter.
+ *
+ * ⚠ IT USED TO BE `Snapshot food ${n}` AT 100 g, AND THAT MADE TWO FEATURES
+ * INVISIBLE AND ONE FALSE. Every generated name reduced to the same tokens, and
+ * consecutive rows sat 15 kcal apart, so the duplicate detector matched all 28
+ * pairs of them -- the seeded account would have opened the Library tab under a
+ * wall of bogus cards. And every serving size was exactly 100, so the "Per
+ * 100 g" button, which only appears on a row that is not, was never once in the
+ * DOM. Both scripts would have been comparing a screen no real user sees.
+ *
+ * So the list is fixed and chosen: distinct foods that must NOT pair, ONE
+ * deliberate near-duplicate pair, and two servings that are not 100 g. The pair
+ * is the real one from the legacy single-user library -- 120 kcal/100 g against
+ * 140 under two names -- which is also the pair app/duplicates.py's thresholds
+ * were checked against.
+ *
+ * Both `source` badges are covered, and one row leaves carbs and fat unrecorded,
+ * as the generated version did. The Open Food Facts row at 90 g is doing a third
+ * job: converting it is the case where the badge must SURVIVE the rescale.
+ */
+const SEED_FOOD_CATALOGUE = [
+  { name: 'Chicken breast, raw', serving_size: 100, calories: 165, protein: 31, carbs: 0, fat: 3.6, source: 'user' },
+  { name: 'White rice, dry', serving_size: 100, calories: 360, protein: 7, carbs: 80, fat: 0.9, source: 'openfoodfacts' },
+  { name: 'Free range hard boiled eggs', serving_size: 90, calories: 108, protein: 11.7, carbs: 0.6, fat: 7.8, source: 'openfoodfacts' },
+  { name: 'Large White Eggs-Hard boiled', serving_size: 50, calories: 70, protein: 6, carbs: 0.4, fat: 5, source: 'openfoodfacts' },
+  { name: 'Rolled oats', serving_size: 100, calories: 379, protein: 13.2, carbs: 67.7, fat: 6.5, source: 'user' },
+  { name: 'Greek yogurt 0%', serving_size: 100, calories: 59, protein: 10, carbs: null, fat: null, source: 'user' },
+  { name: 'Olive oil', serving_size: 100, calories: 884, protein: 0, carbs: 0, fat: 100, source: 'openfoodfacts' },
+  { name: 'Almonds', serving_size: 100, calories: 579, protein: 21.2, carbs: 21.6, fat: 49.9, source: 'user' },
+]
+
+/** SEED_FOODS rows, from the catalogue and then from filler.
+ *
+ * The filler exists only so the env knob still means something above the
+ * catalogue's length. Its calories are spread far wider than the duplicate
+ * detector's tolerance so the extras cannot pair with each other or with the
+ * catalogue -- the whole point of the list above is that exactly one pair is
+ * reported. */
+function seedFoods() {
+  return Array.from({ length: SEED_FOODS }, (_, n) =>
+    SEED_FOOD_CATALOGUE[n] ?? {
+      name: `Filler food ${n}`,
+      serving_size: 100,
+      calories: 300 + n * 120,
+      protein: 5 + n * 4,
+      carbs: n % 2 === 0 ? 14 + n : null,
+      fat: n % 2 === 0 ? 3 + n : null,
+      source: n % 2 === 0 ? 'user' : 'openfoodfacts',
+    },
+  )
+}
+
 // Routes that render without a token. Kept in a separate context from the rest:
 // nothing redirects an authenticated visitor away from /login, but visiting them
 // signed out is what a signed-out visitor actually sees.
@@ -203,23 +255,10 @@ const isoDaysAgo = (days) => {
  *  section inert, it makes it unwatched.** */
 export async function seed(token) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-  for (let n = 0; n < SEED_FOODS; n += 1) {
-    await apiJson('/api/foods', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        name: `Snapshot food ${n}`,
-        serving_size: 100,
-        calories: 120 + n * 15,
-        protein: 8 + n,
-        // Alternated so both provenance badges are covered. The server takes
-        // `source` as given on POST -- it only overrides it on PUT -- so this is
-        // the one place a seeded account can produce an openfoodfacts row.
-        carbs: n % 2 === 0 ? 14 + n : null,
-        fat: n % 2 === 0 ? 3 + n : null,
-        source: n % 2 === 0 ? 'user' : 'openfoodfacts',
-      }),
-    })
+  // The server takes `source` as given on POST -- it only overrides it on PUT --
+  // so this is the one place a seeded account can produce an openfoodfacts row.
+  for (const food of seedFoods()) {
+    await apiJson('/api/foods', { method: 'POST', headers, body: JSON.stringify(food) })
   }
   for (let n = 0; n < SEED_TEMPLATES; n += 1) {
     await apiJson('/api/meal-templates', {
@@ -323,9 +362,11 @@ export async function seed(token) {
 export const EXPAND_ON = {
   '/log': [
     'button:has-text("Estimate macros with AI")',
-    // "Snapshot" matches the seeded library (Snapshot food 0..N), so the list
-    // is deterministic. Two characters is the threshold; this clears it.
-    { fill: 'input[placeholder="Type a food name…"]', text: 'Snapshot' },
+    // "egg" matches exactly the two seeded egg rows, in a fixed order (neither
+    // is a prefix match, so /api/foods/search falls through to name order), so
+    // the panel is deterministic. Two characters is the threshold; this clears
+    // it. ⚠ It matches the CATALOGUE, so a SEED_FOODS below 4 opens no panel.
+    { fill: 'input[placeholder="Type a food name…"]', text: 'egg' },
   ],
   // The weigh-in history caps at HISTORY_ROWS and hides the rest behind the
   // same toggle the library lists use. Matched on the plural noun, not the full
