@@ -1,7 +1,7 @@
 import asyncio
 import io
 import json
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import httpx
@@ -527,13 +527,21 @@ def test_build_contents_includes_prior_for_refinement():
 
 # --- attached library foods in the prompt -----------------------------------
 
+# created_at is required on the response schema and carries no meaning for the
+# prompt -- _library_block reads names and macros and nothing else -- so it is a
+# fixed stamp here rather than utcnow(), which would make these fixtures differ
+# between runs for no reason.
+STAMP = datetime(2026, 1, 1, 12, 0, 0)
+
 CHICKEN = Food(
     id=1, name="Chicken breast, raw", serving_size=100,
     calories=165, protein=31, carbs=0, fat=3.6, source="user",
+    created_at=STAMP,
 )
 SKYR = Food(
     id=2, name="Skyr", serving_size=100,
     calories=63, protein=11, carbs=None, fat=None, source="user",
+    created_at=STAMP,
 )
 
 

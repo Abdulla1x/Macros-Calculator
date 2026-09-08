@@ -193,6 +193,142 @@ def test_the_body_cannot_set_source_in_either_direction(client):
     assert still_off["source"] == "openfoodfacts"
 
 
+# --- created_at ---------------------------------------------------------------
+
+
+def test_a_saved_food_reports_when_it_was_added(client):
+    """The field the Library's "Recently added" sort runs on.
+
+    The column has existed since 0001; only the response model is new. Asserted
+    rather than assumed because a response model that silently omits a field is
+    this project's most-repeated bug.
+    """
+    client.post("/api/foods", json=_chicken())
+
+    food = client.get("/api/foods").json()[0]
+    assert "created_at" in food
+    assert food["created_at"]
+
+
+# --- normalize ----------------------------------------------------------------
+
+
+def test_normalize_rescales_every_macro_to_100g(client):
+    """The real row from the legacy library: 108 kcal per 90 g becomes 120."""
+    food = client.post(
+        "/api/foods",
+        json=_chicken(
+            name="Free range hard boiled eggs",
+            serving_size=90, calories=108, protein=11.7, carbs=0.6, fat=7.8,
+        ),
+    ).json()
+
+    normalized = client.post(f"/api/foods/{food['id']}/normalize").json()
+
+    assert normalized["serving_size"] == 100
+    assert normalized["calories"] == 120
+    assert normalized["protein"] == 13
+    assert normalized["carbs"] == 0.7
+    assert normalized["fat"] == 8.7
+    assert normalized["id"] == food["id"]
+
+
+def test_normalize_leaves_an_unrecorded_macro_unrecorded(client):
+    """None means "not recorded", which is not zero and cannot be scaled."""
+    food = client.post(
+        "/api/foods",
+        json=_chicken(serving_size=50, calories=70, protein=6, carbs=None, fat=None),
+    ).json()
+
+    normalized = client.post(f"/api/foods/{food['id']}/normalize").json()
+
+    assert normalized["calories"] == 140
+    assert normalized["carbs"] is None
+    assert normalized["fat"] is None
+
+
+def test_normalize_keeps_an_off_row_open_food_facts(client):
+    """The whole reason this is an endpoint and not a PUT from the client.
+
+    A rescale is the same claim in different units, so the provenance is
+    unchanged. If anyone ever folds this back into update_food -- which flips
+    `source` the moment a number differs -- this is the test that stops them.
+    """
+    food = client.post(
+        "/api/foods",
+        json=_chicken(source="openfoodfacts", serving_size=90, calories=108),
+    ).json()
+
+    normalized = client.post(f"/api/foods/{food['id']}/normalize").json()
+
+    assert normalized["calories"] == 120
+    assert normalized["source"] == "openfoodfacts"
+
+
+def test_normalize_is_idempotent_on_a_row_already_per_100g(client):
+    """Not an error: "nothing to do" is a fine answer, and it spares the client
+    a special case for a button it has already hidden."""
+    food = client.post("/api/foods", json=_chicken()).json()
+
+    first = client.post(f"/api/foods/{food['id']}/normalize")
+    second = client.post(f"/api/foods/{first.json()['id']}/normalize")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json() == food
+
+
+def test_normalize_unknown_id_is_404(client):
+    assert client.post("/api/foods/999/normalize").status_code == 404
+
+
+# --- duplicates ---------------------------------------------------------------
+
+
+def test_duplicates_reports_a_near_duplicate_pair(client):
+    """End to end, on the two rows the legacy library actually held.
+
+    The thresholds are exercised in test_duplicates.py; what is checked here is
+    that the endpoint reaches them and answers in ids.
+    """
+    a = client.post(
+        "/api/foods",
+        json=_chicken(
+            name="Free range hard boiled eggs",
+            serving_size=90, calories=108, protein=11.7,
+        ),
+    ).json()
+    b = client.post(
+        "/api/foods",
+        json=_chicken(
+            name="Large White Eggs-Hard boiled",
+            serving_size=50, calories=70, protein=6,
+        ),
+    ).json()
+    client.post("/api/foods", json=_chicken(name="Olive oil", calories=884, protein=0))
+
+    pairs = client.get("/api/foods/duplicates").json()
+
+    assert pairs == [{"a_id": a["id"], "b_id": b["id"]}]
+
+
+def test_duplicates_is_empty_for_a_library_with_nothing_alike(client):
+    client.post("/api/foods", json=_chicken())
+    client.post("/api/foods", json=_chicken(name="Olive oil", calories=884, protein=0))
+
+    assert client.get("/api/foods/duplicates").json() == []
+
+
+def test_duplicates_is_not_shadowed_by_the_food_id_routes(client):
+    """`/duplicates` is a literal path declared above `/{food_id}`.
+
+    Nothing collides today -- there is no GET by id -- so this asserts the
+    property rather than the absence, and would fail the moment one is added
+    below it in the wrong order.
+    """
+    assert client.get("/api/foods/duplicates").status_code == 200
+
+
 def test_lookup_returns_normalized_products(client, monkeypatch):
     async def fake_search(query, limit=8):
         return [OFFProduct(name="Oat Flakes", brand="Quaker", serving_size=40,
