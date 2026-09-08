@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import MealCodeInput from '../components/MealCodeInput'
-import { addDays, localIsoDate } from '../lib/dates'
+import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
@@ -245,6 +245,13 @@ export default function LogMeal() {
   // Set when a Quick log template was tapped on the dashboard.
   const template =
     (location.state as { template?: MealTemplate } | null)?.template ?? null
+  // Set when a recently-logged meal was tapped on the dashboard's "Log it
+  // again" card. Carries a whole Meal, so it arrives through router state like
+  // `template` rather than through the query string like `date` -- but note the
+  // two travel TOGETHER: the meal says what to log and `?date=` says when, and
+  // the meal's own date is deliberately ignored. Copying Tuesday's dinner is
+  // logging dinner today, not editing Tuesday.
+  const copyMeal = (location.state as { copyMeal?: Meal } | null)?.copyMeal ?? null
   // Set when a meal code was pasted below. The decoded meal and the code that
   // produced it travel together: the meal fills the form, and the code is the
   // only stable identity it has -- see the context string in the effect below.
@@ -283,20 +290,28 @@ export default function LogMeal() {
   // directly left it standing over an empty form, and then over the next meal
   // the user typed by hand.
   const [fromCode, setFromCode] = useState(false)
+  // Which day the meal in the form was copied from, or null. Held separately
+  // from `copyMeal` for exactly the reason `fromCode` above is held separately
+  // from `shared`: router state survives a save -- nothing clears a history
+  // entry -- so a notice keyed off the navigation state directly would stand
+  // over the empty form afterwards, and then over the next meal typed by hand.
+  // That is not hypothetical; it is the bug `fromCode` was introduced to fix.
+  const [copiedFrom, setCopiedFrom] = useState<string | null>(null)
   // The library as the analyzer saw it, kept only to offer a swap on rows the
   // user did not attach. Empty until an estimate is applied, so a hand-typed
   // meal is unaffected.
   const [libraryFoods, setLibraryFoods] = useState<Food[]>([])
   const lastContext = useRef(
-    `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`,
+    `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${copyMeal?.id ?? ''}|${logDate ?? ''}`,
   )
 
   // Covers both mount and in-place navigation (edit → "Log a meal" and back).
   //
-  // Precedence is explicit: editing an existing meal beats applying a template,
-  // and both beat a blank form. In practice only one is ever set — they come
-  // from different dashboard buttons — but a silently empty form is the failure
-  // mode if that ever stops being true, and it reads as "the tap did nothing".
+  // Precedence is explicit: editing an existing meal beats applying a template
+  // or copying a logged one, and all of them beat a blank form. In practice only
+  // one is ever set — they come from different dashboard buttons — but a
+  // silently empty form is the failure mode if that ever stops being true, and
+  // it reads as "the tap did nothing".
   useEffect(() => {
     if (editMeal) setRows([rowFromTotals(editMeal)])
     // A pasted code outranks a template: they are never both set, but if that
@@ -304,12 +319,24 @@ export default function LogMeal() {
     // stale navigation state.
     else if (shared) setRows(rowsFromTemplate(shared))
     else if (template) setRows(rowsFromTemplate(template))
+    // A copied meal is flat -- `meals` stores totals and no ingredient rows --
+    // so it loads as the single pass-through row an edit does, and for the same
+    // reason. Below `template` only for tidiness; the two come from different
+    // cards and are never both set.
+    else if (copyMeal) setRows([rowFromTotals(copyMeal)])
     else setRows([emptyRow()])
-    setMealName(editMeal?.name ?? shared?.name ?? template?.name ?? '')
+    setMealName(editMeal?.name ?? shared?.name ?? template?.name ?? copyMeal?.name ?? '')
+    // ⚠️ `copyMeal.date` is NOT in this chain, and its absence is the feature:
+    // the date comes from `?date=`, which the dashboard set to the day it was
+    // showing. A copy is a meal eaten today (or on the day you are looking at),
+    // not a second copy of the day it came from -- see the column comments on
+    // `meals`, which exist because `date` and `created_at` answer different
+    // questions. `created_at` needs nothing here: POST /api/meals stamps it.
     setMealDate(editMeal?.date ?? logDate ?? localIsoDate())
     setAnalysisId(null)
     setLibraryFoods([])
     setFromCode(Boolean(shared))
+    setCopiedFrom(copyMeal?.date ?? null)
     setMessage(null)
     // Switching what this page is for -- a new meal, an edit, a template --
     // must take the analyzer with it. Without this, opening a meal to edit
@@ -329,12 +356,12 @@ export default function LogMeal() {
     // two different codes can carry the same name (someone re-sending a
     // corrected version), so comparing shared.name would silently fail to
     // notice the switch and leave the previous analysis sitting above the form.
-    const context = `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${logDate ?? ''}`
+    const context = `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${copyMeal?.id ?? ''}|${logDate ?? ''}`
     if (lastContext.current !== context) {
       lastContext.current = context
       setAnalyzerNonce((n) => n + 1)
     }
-  }, [editMeal, shared, sharedCode, template, logDate])
+  }, [editMeal, shared, sharedCode, template, copyMeal, logDate])
 
   const updateRow = (key: number, patch: Partial<Row>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -457,6 +484,7 @@ export default function LogMeal() {
       clearNoteDraft()
       // The numbers it described are no longer on screen.
       setFromCode(false)
+      setCopiedFrom(null)
       setLibraryFoods([])
       setAnalyzerNonce((n) => n + 1)
     } catch (error) {
@@ -564,6 +592,21 @@ export default function LogMeal() {
           These numbers came from whoever sent you the code. The app has not checked
           them and cannot — they may have been weighed, estimated or guessed. Change
           anything that looks wrong before you save; this is your copy now.
+        </Card>
+      )}
+
+      {copiedFrom && (
+        <Card as="p" tone="brand" pad="sm" className="text-sm text-ink-muted">
+          Copied from your{' '}
+          <span className="text-slate-200">
+            {parseIsoDate(copiedFrom).toLocaleDateString(undefined, {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+            })}
+          </span>{' '}
+          log. Saving adds a new meal on the date below — the one you copied
+          stays where it is.
         </Card>
       )}
 
