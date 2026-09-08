@@ -236,6 +236,30 @@ const isoDaysAgo = (days) => {
   return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 }
 
+/** The meal names the seed rotates through, one per day.
+ *
+ *  ⚠ These used to be `Snapshot meal ${day}` -- a UNIQUE name on every one of
+ *  the SEED_DAYS days. Nothing noticed until the dashboard grew a list that
+ *  deduplicates by name: with fourteen distinct names it rendered fourteen
+ *  candidates, a shape no real account has, and the deduplication it exists to
+ *  do was never exercised in the browser at all. Fewer names than days is the
+ *  property that matters here, not the words.
+ *
+ *  That is the EIGHTH hole of this shape in this file, and the lesson is the
+ *  second-order one: this seed was correct for every previous phase and became
+ *  misleading the moment a feature read something it had never varied. Check
+ *  the seed against each NEW feature rather than leaving it alone.
+ *
+ *  Names only -- every macro value is still the same deterministic ramp, so no
+ *  chart, average or review figure moves because of this. */
+const SEED_MEAL_NAMES = [
+  'Snapshot breakfast',
+  'Snapshot lunch',
+  'Snapshot dinner',
+  'Snapshot snack',
+  'Snapshot shake',
+]
+
 /** Meals and weigh-ins for the last SEED_DAYS days, so every chart has
  *  something to draw, plus saved meals so the dashboard's Quick log renders.
  *  Values are a deterministic ramp, not random.
@@ -281,7 +305,7 @@ export async function seed(token) {
       headers,
       body: JSON.stringify({
         date,
-        name: `Snapshot meal ${day}`,
+        name: SEED_MEAL_NAMES[day % SEED_MEAL_NAMES.length],
         calories: 1600 + day * 40,
         protein: 110 + day,
         carbs: 150 + day,

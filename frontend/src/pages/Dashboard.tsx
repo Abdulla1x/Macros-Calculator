@@ -17,7 +17,7 @@ import {
   tooltipLabelStyle,
   tooltipStyle,
 } from '../lib/chartTheme'
-import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
+import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
@@ -56,6 +56,30 @@ function planCaption(plan: PlanDay | null, failed: boolean): string | undefined 
     : `${moved} — making up ${when}`
 }
 
+// Which day a recent meal came from, as something readable at a glance.
+//
+// Deliberately NOT Admin.tsx's relativeDay, which looks like the same function
+// and is not: that one takes a TIMESTAMP and calls `new Date(iso)`, which parses
+// a date-only string as UTC -- the off-by-one-near-midnight bug parseIsoDate
+// exists to avoid, and a meal date is a calendar date. Sharing it would import
+// the bug rather than the behaviour.
+//
+// A weekday inside the last week, a date beyond it: "Tue" is how you remember a
+// meal you ate three days ago, and it stops meaning anything once a second
+// Tuesday has passed.
+function relativeDayLabel(iso: string, today: string): string {
+  const days = daysBetween(iso, today)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) {
+    return parseIsoDate(iso).toLocaleDateString(undefined, { weekday: 'short' })
+  }
+  return parseIsoDate(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 // How many quick-log buttons show before the rest are folded away. Six fills
 // three rows of two on a phone and two rows of three from `sm` up, which is
 // about as much as can sit above the fold without pushing the trackers off it.
@@ -63,12 +87,21 @@ function planCaption(plan: PlanDay | null, failed: boolean): string | undefined 
 // without a limit here one prolific week buries the whole page.
 const QUICK_LOG_VISIBLE = 6
 
+// How many recently-logged meals are offered. Matches QUICK_LOG_VISIBLE because
+// the two grids are stacked and one breaking at six while the next breaks at
+// eight would read as a bug in whichever you saw second -- the same reason
+// ShowAllToggle's COLLAPSED_ROWS is shared by the two library lists. No "browse
+// all" here: the server has already reduced a whole history to one row per
+// name, so this list is short by construction rather than capped.
+const LOG_AGAIN_VISIBLE = 6
+
 export default function Dashboard() {
   const { settings } = useSettings()
   const { user } = useAuth()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [templates, setTemplates] = useState<MealTemplate[]>([])
+  const [recent, setRecent] = useState<Meal[]>([])
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [browsingTemplates, setBrowsingTemplates] = useState(false)
   const [templateFilter, setTemplateFilter] = useState('')
@@ -153,6 +186,14 @@ export default function Dashboard() {
     // simply absent, the same way a failed trend leaves the chart out. Raising
     // an error banner for it would be louder than the feature is important.
     api.getMealTemplates().then(setTemplates).catch(() => setTemplates([]))
+    // Same reasoning as Quick log above, and the same failure mode: this is a
+    // shortcut, so if it fails to load the card is simply absent. Asked for by
+    // count rather than trimmed here -- the server has already collapsed the
+    // history to one row per name, so there is nothing to fold away.
+    api
+      .getRecentMeals(LOG_AGAIN_VISIBLE)
+      .then(setRecent)
+      .catch(() => setRecent([]))
   }, [viewedDate])
 
   useEffect(() => {
@@ -412,6 +453,68 @@ export default function Dashboard() {
                 : `Browse all (${templates.length}) ▾`}
             </button>
           )}
+        </Card>
+      )}
+
+      {/* "Log it again" -- the meal you ate on Tuesday and did not think to
+          save. Directly below Quick log because the two are the same gesture
+          from opposite directions, and NOT merged into it because they answer
+          different questions: a template is "I eat this often" and had to be
+          saved in advance, while this is "I ate this recently" and needs no
+          forethought at all. Quick log is also hidden until an account has a
+          template, so before this card someone who had logged twenty meals and
+          saved none had no one-tap path to any of them.
+
+          Rows come deduplicated by name from the server, newest first, so an
+          account that logs "Breakfast" daily gets one Breakfast rather than
+          six. The day each one came from is printed beside its macros because
+          the numbers are the NEWEST meal under that name and Monday's breakfast
+          was not Tuesday's -- the label is what stops that being a silent
+          substitution.
+
+          Same grid and same cell as Quick log above, deliberately: two
+          different-looking lists of tappable meals stacked on one screen would
+          imply a difference that is not there. */}
+      {recent.length > 0 && (
+        <Card as="section">
+          <h2 className="font-semibold">Log it again</h2>
+          <p className="mb-3 mt-0.5 text-xs text-ink-faint">
+            Opens the form filled in, so you can change the portion before saving.
+          </p>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {recent.map((meal) => (
+              <li key={meal.id}>
+                {/* The viewed date, not today's, for the reason the Quick log
+                    link above carries: a meal copied while looking at yesterday
+                    must land on yesterday. The source meal's own date is never
+                    used -- a copy is a new meal eaten on the day you are
+                    looking at, and `created_at` is stamped by the server. */}
+                <Link
+                  to={`/log?date=${viewedDate}`}
+                  state={{ copyMeal: meal }}
+                  className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                >
+                  <span className="truncate text-sm font-medium text-slate-200">
+                    {meal.name}
+                  </span>
+                  <span className="mt-0.5 truncate text-xs text-ink-faint">
+                    {Math.round(meal.calories)} kcal · {Math.round(meal.protein)} g
+                  </span>
+                  {/* The day gets its own line rather than joining the macros
+                      above. At 390 px a two-column cell has about 150 px of
+                      text, and "430 kcal · 23 g · Yesterday" truncated to
+                      "· Ye…" there -- losing the one word that says these
+                      numbers belong to a particular day. It costs a third line
+                      against Quick log's two, which is the right trade: the
+                      label is what stops the newest meal under a name being
+                      presented as the name's. */}
+                  <span className="truncate text-xs text-ink-faint">
+                    {relativeDayLabel(meal.date, realToday)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

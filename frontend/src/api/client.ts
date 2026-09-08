@@ -329,6 +329,12 @@ export const api = {
 
   getMeals: (date?: string) =>
     request<Meal[]>(`/api/meals${date ? `?date=${date}` : ''}`),
+  // The most recent meal under each distinct NAME, newest first -- not the most
+  // recent rows, which for anyone with habits is the same name over and over.
+  // The deduplication is the server's because the rule needs somewhere it can
+  // be broken on purpose, and this project has no frontend test runner.
+  getRecentMeals: (limit?: number) =>
+    request<Meal[]>(`/api/meals/recent${limit ? `?limit=${limit}` : ''}`),
   createMeal: (meal: MealCreate) =>
     request<Meal>('/api/meals', { method: 'POST', body: JSON.stringify(meal) }),
   updateMeal: (id: number, meal: MealCreate) =>

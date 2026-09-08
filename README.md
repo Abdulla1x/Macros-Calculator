@@ -60,6 +60,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Every saved food is comparable, whatever it was saved against.** Macros are stored per the food's own serving size, which is what the packet says and useless for comparing two of them — 108 kcal per 90 g and 70 kcal per 50 g are the same food twice, and nothing about those two lines says so. Any row that is not already per 100 g now shows what it works out to, and a **Per 100 g** button rewrites it that way for good: it previews the figures first, and it **keeps the Open Food Facts badge**, because a rescale is the same claim in different units and corrects nothing
 - **It tells you when you have saved the same food twice.** The library fills itself up on its own — every Open Food Facts pick is cached, every ticked ingredient saved — so the same thing arrives under names nobody chose to make match. A pair is flagged only when the names overlap **and** the per-100 g calories and protein are close, because names alone would call "chicken breast" and "chicken thigh" duplicates. And it argues rather than acts: both rows are put side by side in the same units so you can see why, every delete is yours, and "not a duplicate" makes it stop asking
 - **Saved meals**: store a meal you eat often and re-log it in one tap from the dashboard
+- **Log it again**: the dashboard offers the meals you actually logged recently, so anything you have eaten before can be re-logged without retyping it. It is the counterpart to saved meals rather than a duplicate of them — a saved meal had to be stored in advance, while this needs no forethought at all, which is the case it exists for. The list is one entry per meal *name*, carrying the most recent version of it and the day that came from, so logging “Breakfast” every morning does not fill the card with six Breakfasts. Tapping one opens the log form filled in, so the portion is still yours to change before it is saved
 - **Share a meal by code**: turn a meal or a saved template into a short code, hand it to someone, and they get an **editable copy in their own account**. The code is a self-contained encoded payload — there is no shared row, no invite, nothing to revoke, and no account id inside it, so per-user isolation is untouched by the feature existing
 - Single- or multi-ingredient meals with live-updating totals as you type
 
@@ -117,7 +118,7 @@ Every screen at both widths. Each image is one long capture of the **entire page
 
 ### Dashboard
 
-Rings against your goals, one-tap quick log, the three daily trackers, today's meals, and the seven-day trend.
+Rings against your goals, one-tap quick log, the meals you logged recently ready to log again, the three daily trackers, today's meals, and the seven-day trend.
 
 <table>
 <tr><th align="center">Desktop</th><th align="center">Phone</th></tr>
@@ -615,6 +616,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | Method | Endpoint | Description |
 |---|---|---|
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
+| GET | `/api/meals/recent` | The most recent meal under each distinct name, for re-logging |
 | PUT/DELETE | `/api/meals/{id}` | Edit or delete a meal |
 | GET/POST | `/api/meal-templates` | List saved meals / save one (upsert by name) |
 | DELETE | `/api/meal-templates/{id}` | Delete a saved meal template |
