@@ -32,12 +32,12 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
-- **Quick log** — your saved meals as one-tap tiles, most recently used first, folded to six with the rest a tap away
+- Today's meal list with inline edit and delete, directly under the rings — it is what the page is for, and it used to sit below two shortcut cards and three progress bars, which on a phone put it about five screens down
+- **Saved meals** — your saved meals as one-tap tiles, most recently used first, folded to six with the rest a tap away. Collapsed by default, one tap to open, and the choice is remembered per device
 - **Water tracker** with configurable quick-add buttons and a goal derived from your trend weight — shown with the arithmetic, not just the answer
 - **Steps tracker**, typed in by hand or imported from a `date,steps` CSV — no phone or watch sync is possible in a web app, and the UI says so rather than implying one. Set a goal or don't; with none set the card shows the count alone
 - **Supplement tracker** — a list with a dose and the times of day you take it, ticked off from the dashboard. Reminders are in-app only, deliberately: push on Android needs Google Play Services and scheduled local notifications need a browser API nobody shipped, so the card says a dose is overdue while you have it open and never pretends it will reach your phone. Pausing keeps the history; deleting does not
 - **Calorie planning** — move calories between days without moving the week. Plan a bigger day and fund it from the days around it, or spread a day that already ran over across the days ahead (and the mirror when bulking and under). Three things are deliberate: it is **not a debt** — measured expenditure already absorbs one large day as a slightly slower week, so this only decides where it lands; **nothing prompts you** — one standing link under the calorie ring, present whether the day went well or badly, because an app that asks after every overshoot is a different kind of app; and **you pick the days**, with the server only refusing a spread that would take one below a safe calorie floor, naming the day rather than quietly shaving less than you asked. Protein never moves — carbohydrate and fat absorb the difference
-- Today's meal list with inline edit and delete
 - 7-day calorie trend sparkline
 
 ### 🤖 AI meal analysis
@@ -60,7 +60,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Every saved food is comparable, whatever it was saved against.** Macros are stored per the food's own serving size, which is what the packet says and useless for comparing two of them — 108 kcal per 90 g and 70 kcal per 50 g are the same food twice, and nothing about those two lines says so. Any row that is not already per 100 g now shows what it works out to, and a **Per 100 g** button rewrites it that way for good: it previews the figures first, and it **keeps the Open Food Facts badge**, because a rescale is the same claim in different units and corrects nothing
 - **It tells you when you have saved the same food twice.** The library fills itself up on its own — every Open Food Facts pick is cached, every ticked ingredient saved — so the same thing arrives under names nobody chose to make match. A pair is flagged only when the names overlap **and** the per-100 g calories and protein are close, because names alone would call "chicken breast" and "chicken thigh" duplicates. And it argues rather than acts: both rows are put side by side in the same units so you can see why, every delete is yours, and "not a duplicate" makes it stop asking
 - **Saved meals**: store a meal you eat often and re-log it in one tap from the dashboard
-- **Log it again**: the dashboard offers the meals you actually logged recently, so anything you have eaten before can be re-logged without retyping it. It is the counterpart to saved meals rather than a duplicate of them — a saved meal had to be stored in advance, while this needs no forethought at all, which is the case it exists for. The list is one entry per meal *name*, carrying the most recent version of it and the day that came from, so logging “Breakfast” every morning does not fill the card with six Breakfasts. Tapping one opens the log form filled in, so the portion is still yours to change before it is saved
+- **Recently logged**: the dashboard offers the meals you actually logged recently, so anything you have eaten before can be re-logged without retyping it. It is the counterpart to saved meals rather than a duplicate of them — a saved meal had to be stored in advance, while this needs no forethought at all, which is the case it exists for. The list is one entry per meal *name*, carrying the most recent version of it and the day that came from, so logging “Breakfast” every morning does not fill the card with six Breakfasts. Tapping one opens the log form filled in, so the portion is still yours to change before it is saved. Meals you have already logged on the day you are looking at are moved to the end of the list rather than dropped from it — you can still have the same thing twice, but the card leads with what you have not had yet
 - **Share a meal by code**: turn a meal or a saved template into a short code, hand it to someone, and they get an **editable copy in their own account**. The code is a self-contained encoded payload — there is no shared row, no invite, nothing to revoke, and no account id inside it, so per-user isolation is untouched by the feature existing
 - Single- or multi-ingredient meals with live-updating totals as you type
 
@@ -118,7 +118,7 @@ Every screen at both widths. Each image is one long capture of the **entire page
 
 ### Dashboard
 
-Rings against your goals, one-tap quick log, the meals you logged recently ready to log again, the three daily trackers, today's meals, and the seven-day trend.
+Rings against your goals, then today's meals — the two things the page exists for, both on the first screen. The saved-meal and recently-logged shortcuts fold away above them, and the three daily trackers and the seven-day trend follow below.
 
 <table>
 <tr><th align="center">Desktop</th><th align="center">Phone</th></tr>
@@ -594,7 +594,7 @@ to anything else. That failure looks like a network error and never reaches the 
 
 ## 🔌 API overview
 
-53 paths. All of them require an `Authorization: Bearer <token>` header and operate
+54 paths. All of them require an `Authorization: Bearer <token>` header and operate
 only on the caller's data, except these public ones: `/api/health`,
 `/api/announcements`, `/api/auth/signup|login`, and
 `/api/auth/forgot-password|reset-password`.
@@ -616,7 +616,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | Method | Endpoint | Description |
 |---|---|---|
 | GET/POST | `/api/meals` | List (optionally by `?date=`) / create meals |
-| GET | `/api/meals/recent` | The most recent meal under each distinct name, for re-logging |
+| GET | `/api/meals/recent` | The most recent meal under each distinct name, for re-logging. `?demote_date=` sorts names already logged on that day to the end |
 | PUT/DELETE | `/api/meals/{id}` | Edit or delete a meal |
 | GET/POST | `/api/meal-templates` | List saved meals / save one (upsert by name) |
 | DELETE | `/api/meal-templates/{id}` | Delete a saved meal template |
