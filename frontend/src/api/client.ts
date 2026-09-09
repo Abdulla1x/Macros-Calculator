@@ -333,8 +333,16 @@ export const api = {
   // recent rows, which for anyone with habits is the same name over and over.
   // The deduplication is the server's because the rule needs somewhere it can
   // be broken on purpose, and this project has no frontend test runner.
-  getRecentMeals: (limit?: number) =>
-    request<Meal[]>(`/api/meals/recent${limit ? `?limit=${limit}` : ''}`),
+  // `demoteDate` is the day the caller is showing: names already logged on it
+  // are sorted to the end rather than dropped, server-side, because the
+  // deduplication caps the list before a client could reorder it.
+  getRecentMeals: (limit?: number, demoteDate?: string) => {
+    const query = new URLSearchParams()
+    if (limit) query.set('limit', String(limit))
+    if (demoteDate) query.set('demote_date', demoteDate)
+    const suffix = query.toString()
+    return request<Meal[]>(`/api/meals/recent${suffix ? `?${suffix}` : ''}`)
+  },
   createMeal: (meal: MealCreate) =>
     request<Meal>('/api/meals', { method: 'POST', body: JSON.stringify(meal) }),
   updateMeal: (id: number, meal: MealCreate) =>

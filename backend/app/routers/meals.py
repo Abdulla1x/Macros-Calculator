@@ -45,7 +45,9 @@ def list_meals(
 RECENT_SCAN_ROWS = 200
 
 
-def _distinct_by_name(rows: list[MealRow], limit: int) -> list[MealRow]:
+def _distinct_by_name(
+    rows: list[MealRow], limit: int, demoted: frozenset[str] = frozenset()
+) -> list[MealRow]:
     """The first row for each distinct name, in the order given, up to `limit`.
 
     Case-insensitive, matching the convention `foods` and `meal_templates`
@@ -58,27 +60,45 @@ def _distinct_by_name(rows: list[MealRow], limit: int) -> list[MealRow]:
     breakfast was not Tuesday's -- and the newest is the better guess at what
     "log it again" means. It is still a guess, which is why the row carries its
     date into the UI instead of presenting its numbers as the name's.
+
+    `demoted` names sort to the END rather than being dropped. The card exists
+    to offer what you have not got round to logging, and an account that has
+    already logged six meals today has six of the newest distinct names -- so
+    without this the list is six things sitting in full further down the same
+    page. Demotion rather than exclusion because people do eat the same thing
+    twice in a day: dropping "Tea" because you had one this morning would break
+    the card for its second-best case.
+
+    ⚠️ The demotion has to happen BEFORE the cap, which is why it lives here and
+    not in the caller. Deduplication truncates at `limit`, so by the time a
+    client sees the list the names worth promoting have already been cut from
+    it -- a reordering done downstream has nothing left to reorder. Found in a
+    browser, after exactly that was tried.
     """
     seen: set[str] = set()
     kept: list[MealRow] = []
+    held: list[MealRow] = []
     for row in rows:
         key = row.name.strip().lower()
         if key in seen:
             continue
         seen.add(key)
-        kept.append(row)
+        (held if key in demoted else kept).append(row)
+        # Once `limit` names survive undemoted, nothing held back can reach the
+        # result, so the remaining scan cannot change the answer.
         if len(kept) == limit:
             break
-    return kept
+    return (kept + held)[:limit]
 
 
 @router.get("/recent", response_model=list[Meal])
 def recent_meals(
     limit: int = Query(default=8, ge=1, le=50),
+    demote_date: date_type | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """The most recent meal under each distinct name -- "log it again".
+    """The most recent meal under each distinct name -- "recently logged".
 
     Saved meals cover the meal you thought to store in advance; this covers the
     one you ate on Tuesday and did not think to save. Deduplicated because an
@@ -87,6 +107,11 @@ def recent_meals(
 
     Ordered like the undated branch of `list_meals` above, so the two agree
     about what "recent" means rather than each having its own idea.
+
+    `demote_date` is the day the caller is showing. Names already logged on it
+    sort last -- see `_distinct_by_name`. Optional, and absent means "do not
+    reorder", so a client that has never heard of it gets exactly what it got
+    before.
 
     Deduplicated in Python rather than with DISTINCT ON, which is Postgres-only
     while the suite runs SQLite -- a rule that holds on one dialect is a rule
@@ -103,7 +128,14 @@ def recent_meals(
         .order_by(MealRow.date.desc(), MealRow.id.desc())
         .limit(RECENT_SCAN_ROWS)
     )
-    return _distinct_by_name(list(db.scalars(stmt).all()), limit)
+    rows = list(db.scalars(stmt).all())
+    # Read off the rows already scanned rather than asking again: the window is
+    # newest-first, so any meal on `demote_date` is inside it whenever there is
+    # anything newer to compare against.
+    demoted = frozenset(
+        row.name.strip().lower() for row in rows if row.date == demote_date
+    ) if demote_date is not None else frozenset()
+    return _distinct_by_name(rows, limit, demoted)
 
 
 @router.post("", response_model=Meal, status_code=201)

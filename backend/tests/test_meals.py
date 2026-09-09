@@ -226,6 +226,89 @@ def test_recent_stops_at_the_scan_window(client):
     assert names == ["Breakfast"]
 
 
+def test_recent_demotes_names_already_logged_on_the_viewed_day(client):
+    """The card offers what you have NOT got round to logging, first.
+
+    Without this the dashboard offered six cells every one of which said
+    "Today", because the newest distinct names on a day you have logged six
+    meals ARE those six meals -- each one already listed in full further down
+    the same page.
+    """
+    client.post("/api/meals", json=_sample(date="2026-07-01", name="Beef Stew"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Tea"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Boiled Eggs"))
+
+    plain = [m["name"] for m in client.get("/api/meals/recent").json()]
+    assert plain == ["Boiled Eggs", "Tea", "Beef Stew"]
+
+    demoted = client.get(
+        "/api/meals/recent", params={"demote_date": "2026-07-02"}
+    ).json()
+    assert [m["name"] for m in demoted] == ["Beef Stew", "Boiled Eggs", "Tea"]
+
+
+def test_recent_demotes_rather_than_dropping(client):
+    """Demoted, not excluded -- people eat the same thing twice in a day.
+
+    Every name here was logged on the demoted day, so an implementation that
+    filtered would return nothing at all and the card would vanish on exactly
+    the day it is most used.
+    """
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Tea"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Boiled Eggs"))
+
+    names = [
+        m["name"]
+        for m in client.get(
+            "/api/meals/recent", params={"demote_date": "2026-07-02"}
+        ).json()
+    ]
+    assert sorted(names) == ["Boiled Eggs", "Tea"]
+
+
+def test_recent_without_demote_date_is_unchanged(client):
+    """A client that has never heard of the parameter gets what it always got."""
+    client.post("/api/meals", json=_sample(date="2026-07-01", name="Beef Stew"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Tea"))
+
+    assert [m["name"] for m in client.get("/api/meals/recent").json()] == [
+        "Tea",
+        "Beef Stew",
+    ]
+
+
+def test_recent_demotes_before_applying_the_limit(client):
+    """The consequence that decides WHERE this rule can live.
+
+    The first attempt at this reordered the response in the browser instead,
+    and did nothing: deduplication caps the list at `limit` first, so on a day
+    with `limit` distinct names of its own the older names are already gone by
+    the time any client sees them. Here two meals are logged on the viewed day
+    and one earlier; at limit=2 a downstream sort can only ever return the two
+    from that day, while demoting first surfaces the older one.
+    """
+    client.post("/api/meals", json=_sample(date="2026-07-01", name="Beef Stew"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Tea"))
+    client.post("/api/meals", json=_sample(date="2026-07-02", name="Boiled Eggs"))
+
+    names = [
+        m["name"]
+        for m in client.get(
+            "/api/meals/recent",
+            params={"limit": 2, "demote_date": "2026-07-02"},
+        ).json()
+    ]
+    assert names[0] == "Beef Stew"
+    assert len(names) == 2
+
+
+def test_recent_refuses_a_demote_date_that_is_not_a_date(client):
+    assert (
+        client.get("/api/meals/recent", params={"demote_date": "yesterday"}).status_code
+        == 422
+    )
+
+
 def test_a_copied_meal_is_a_new_row_logged_now(client):
     """The copy path's two dates, asserted rather than assumed.
 
