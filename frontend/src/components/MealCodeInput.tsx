@@ -14,7 +14,7 @@ import { useLiveMessage } from '../hooks/useLiveMessage'
  *
  * Collapsed to a single line by default. This is a rarely-used entry point
  * sitting above the two everyday ones, and a permanently-open textarea for it
- * is the clutter the dashboard's Quick log panel already refuses to be.
+ * is the clutter the dashboard's Saved meals panel already refuses to be.
  *
  * In its own file rather than inside LogMeal.tsx, which is already one of the
  * larger files here, and because the decode-failure handling below is the sort

@@ -29,6 +29,31 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-09-09-dashboard-first-screen",
+        date="2026-09-09",
+        title="Today's meals are back on the first screen",
+        body=(
+            "**On a phone the dashboard was asking for about five screens of "
+            "scrolling before it would show you what you had eaten.** Two "
+            "cards of shortcuts and three progress bars sat between your rings "
+            "and your meal list. The meal list now sits directly under the "
+            "rings, and the trackers moved below it.\n\n"
+            "**The two shortcut cards start folded.** One tap opens either, and "
+            "the choice is remembered on that device — so if you use them "
+            "daily, open them once and they stay open.\n\n"
+            "**“Quick log” is now “Saved meals”, and "
+            "“Log it again” is now “Recently logged”.** "
+            "They always did different things — one holds the meals you "
+            "saved on purpose, the other offers what you actually logged "
+            "recently — but the old names did not say which was which, and "
+            "Settings had been calling the first one Saved meals all along.\n\n"
+            "**Recently logged no longer leads with meals you have already had "
+            "today.** It was offering six things that were sitting in your meal "
+            "list further down the same page. They are still there if you want "
+            "them twice — just after the ones you have not had yet."
+        ),
+    ),
+    Announcement(
         id="2026-09-08-log-it-again",
         date="2026-09-08",
         title="Log a meal you have eaten before, without typing it again",

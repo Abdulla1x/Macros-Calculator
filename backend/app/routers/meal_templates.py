@@ -32,7 +32,7 @@ def _items_of(row: MealTemplateRow) -> list[TemplateItem]:
 
     Nullable column, so absent items are normal and mean "totals only". A
     *malformed* value should not be fatal either: this list feeds the dashboard,
-    and one unreadable row must not take the whole Quick log panel down with it.
+    and one unreadable row must not take the whole Saved meals panel down with it.
     data.py carries the scar from the opposite choice -- json.loads("") raises,
     and it 500'd the entire export for anyone who had recorded a voice note.
     """

@@ -1,4 +1,4 @@
-// Which saved meals this device logged most recently, so Quick log's first row
+// Which saved meals this device logged most recently, so Saved meals's first row
 // is the ones actually being used rather than the ones most recently created.
 //
 // Client-side on purpose. Doing it server-side means a `last_used_at` column,
@@ -14,14 +14,14 @@
 
 import { readLocal, writeLocal } from './storage'
 
-/** How many ids to remember. Twice the six Quick log shows, so the visible row
+/** How many ids to remember. Twice the six Saved meals shows, so the visible row
  *  keeps settling as habits change instead of being pinned by one busy week,
  *  without the list growing without bound. */
 const REMEMBERED = 12
 
 /** Keyed by account id. localStorage is per-device and shared by every account
  *  signed in on it, and template ids are small integers assigned per user -- so
- *  an unkeyed list would let one account float a template in another's Quick log
+ *  an unkeyed list would let one account float a template in another's Saved meals
  *  purely because the two ids collided. */
 const keyFor = (userId: number) => `macros_recent_templates:${userId}`
 
