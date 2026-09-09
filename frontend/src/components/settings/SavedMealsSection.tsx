@@ -7,9 +7,9 @@ import TextInput from '../ui/TextInput'
 import ShowAllToggle, { COLLAPSED_ROWS } from '../ShowAllToggle'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
 
-/** The saved meals behind Quick log: see them, share one, remove one.
+/** The saved meals behind Saved meals: see them, share one, remove one.
  *
- * This is where template management moved to when the dashboard's Quick log
+ * This is where template management moved to when the dashboard's Saved meals
  * became a grid of plain buttons. On the dashboard a template is a thing you
  * tap, and a delete control sitting beside it -- under the minimum touch target,
  * and reflowing the whole row when it expanded to confirm -- was a hazard next
@@ -94,7 +94,7 @@ export default function SavedMealsSection() {
     <Card as="section">
       <h2 className="mb-1 font-semibold"><span aria-hidden="true">🍽️</span> Saved meals</h2>
       <p className="mb-4 text-sm text-slate-400">
-        The one-tap entries in <strong className="text-slate-300">Quick log</strong> on
+        The one-tap entries in <strong className="text-slate-300">Saved meals</strong> on
         your dashboard. They are saved when you tick “Save as template” while
         logging a meal. Tapping one there logs it again; this is where you share
         or remove one. Changes here save straight away.
@@ -130,7 +130,7 @@ export default function SavedMealsSection() {
       ) : items.length === 0 ? (
         <p className="text-sm text-slate-400">
           Nothing saved yet. Tick “Save as template” while logging a meal and it
-          will show up here, and in Quick log on your dashboard.
+          will show up here, and in Saved meals on your dashboard.
         </p>
       ) : shown.length === 0 ? (
         <p className="text-sm text-slate-400">Nothing matches “{filter.trim()}”.</p>

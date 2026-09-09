@@ -125,7 +125,7 @@ export default function SupplementsCard({ date }: Props) {
   // Nothing scheduled and nothing ticked: no card at all. The entry point is
   // Settings, and a permanent "add some supplements" card would spend prime
   // dashboard space explaining a feature once — the same argument that keeps
-  // the Quick log panel hidden until a template exists. Distinct from the
+  // the Saved meals panel hidden until a template exists. Distinct from the
   // error branch above, which is why that one comes first.
   if (!day || day.slots.length === 0) return null
 

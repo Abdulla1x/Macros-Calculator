@@ -242,7 +242,7 @@ export default function LogMeal() {
   // meal typed by hand. A date in the address has neither problem, and it means
   // a half-finished entry survives a refresh on the day it was meant for.
   const logDate = useSearchParams()[0].get('date')
-  // Set when a Quick log template was tapped on the dashboard.
+  // Set when a Saved meals template was tapped on the dashboard.
   const template =
     (location.state as { template?: MealTemplate } | null)?.template ?? null
   // Set when a recently-logged meal was tapped on the dashboard's "Log it

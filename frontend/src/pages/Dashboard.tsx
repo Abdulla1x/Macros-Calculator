@@ -17,6 +17,10 @@ import {
   tooltipLabelStyle,
   tooltipStyle,
 } from '../lib/chartTheme'
+import {
+  isSectionExpanded,
+  setSectionExpanded,
+} from '../lib/dashboardSections'
 import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
@@ -80,20 +84,22 @@ function relativeDayLabel(iso: string, today: string): string {
   })
 }
 
-// How many quick-log buttons show before the rest are folded away. Six fills
-// three rows of two on a phone and two rows of three from `sm` up, which is
-// about as much as can sit above the fold without pushing the trackers off it.
-// The server caps a listing at 50 and nothing caps how many you can create, so
-// without a limit here one prolific week buries the whole page.
-const QUICK_LOG_VISIBLE = 6
+// How many saved-meal buttons show before the rest are folded away. Six fills
+// three rows of two on a phone and two rows of three from `sm` up.
+//
+// This is no longer a fold budget -- the card is collapsed by default, so
+// nothing here is competing with the meal list for the first screen. It is what
+// an OPENED card shows before asking, which is still worth bounding: the server
+// caps a listing at 50 and nothing caps how many you can create.
+const SAVED_MEALS_VISIBLE = 6
 
-// How many recently-logged meals are offered. Matches QUICK_LOG_VISIBLE because
+// How many recently-logged meals are offered. Matches SAVED_MEALS_VISIBLE because
 // the two grids are stacked and one breaking at six while the next breaks at
 // eight would read as a bug in whichever you saw second -- the same reason
 // ShowAllToggle's COLLAPSED_ROWS is shared by the two library lists. No "browse
 // all" here: the server has already reduced a whole history to one row per
 // name, so this list is short by construction rather than capped.
-const LOG_AGAIN_VISIBLE = 6
+const RECENTLY_LOGGED_VISIBLE = 6
 
 export default function Dashboard() {
   const { settings } = useSettings()
@@ -105,6 +111,15 @@ export default function Dashboard() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [browsingTemplates, setBrowsingTemplates] = useState(false)
   const [templateFilter, setTemplateFilter] = useState('')
+  // Read once on mount rather than on every render: localStorage is a
+  // synchronous disk read, and the value only ever changes through the two
+  // toggles below, which write it back themselves.
+  const [savedMealsOpen, setSavedMealsOpen] = useState(() =>
+    isSectionExpanded('savedMeals'),
+  )
+  const [recentlyLoggedOpen, setRecentlyLoggedOpen] = useState(() =>
+    isSectionExpanded('recentlyLogged'),
+  )
   // Lifted here rather than held per-row so only one panel is ever open,
   // the same reason confirmDelete above is a single id and not a set.
   const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(
@@ -182,16 +197,16 @@ export default function Dashboard() {
         setPlanDay(null)
         setPlanFailed(true)
       })
-    // Quick log is a shortcut, not content: if it fails to load the panel is
+    // Saved meals is a shortcut, not content: if it fails to load the panel is
     // simply absent, the same way a failed trend leaves the chart out. Raising
     // an error banner for it would be louder than the feature is important.
     api.getMealTemplates().then(setTemplates).catch(() => setTemplates([]))
-    // Same reasoning as Quick log above, and the same failure mode: this is a
+    // Same reasoning as Saved meals above, and the same failure mode: this is a
     // shortcut, so if it fails to load the card is simply absent. Asked for by
     // count rather than trimmed here -- the server has already collapsed the
     // history to one row per name, so there is nothing to fold away.
     api
-      .getRecentMeals(LOG_AGAIN_VISIBLE)
+      .getRecentMeals(RECENTLY_LOGGED_VISIBLE, viewedDate)
       .then(setRecent)
       .catch(() => setRecent([]))
   }, [viewedDate])
@@ -254,7 +269,7 @@ export default function Dashboard() {
   // Collapsing clears the filter too, so reopening never presents a list
   // mysteriously shorter than the count printed on the button that opened it.
   const shownTemplates = useMemo(() => {
-    if (!browsingTemplates) return ordered.slice(0, QUICK_LOG_VISIBLE)
+    if (!browsingTemplates) return ordered.slice(0, SAVED_MEALS_VISIBLE)
     const needle = templateFilter.trim().toLowerCase()
     if (needle === '') return ordered
     return ordered.filter((template) => template.name.toLowerCase().includes(needle))
@@ -264,6 +279,21 @@ export default function Dashboard() {
     setTemplateFilter('')
     setBrowsingTemplates((open) => !open)
   }
+
+  const toggleSavedMeals = () => {
+    setSavedMealsOpen((open) => {
+      setSectionExpanded('savedMeals', !open)
+      return !open
+    })
+  }
+
+  const toggleRecentlyLogged = () => {
+    setRecentlyLoggedOpen((open) => {
+      setSectionExpanded('recentlyLogged', !open)
+      return !open
+    })
+  }
+
 
   return (
     <div className="space-y-6">
@@ -382,9 +412,13 @@ export default function Dashboard() {
           the "Save as template" button on Log Meal; a permanent empty-state
           card would spend prime screen space explaining a feature once.
 
-          ABOVE the tracker grid, which is where this comment always claimed it
-          was while the code put it below. On a phone, re-logging yesterday's
-          breakfast belongs above three progress bars.
+          Collapsed by default, and above the meal list rather than below it.
+          Both halves of that are the same judgement: this card is a shortcut,
+          so it should be reachable without scrolling and should not cost a
+          screen to skip. Expanded it is twelve cells with Recently logged
+          below, which is what put today's meals five screens down a 390px
+          phone -- the tracker grid is `sm:grid-cols-2`, so under 640px those
+          three "columns" are three full-width cards too.
 
           A grid of plain buttons, not the segmented pill this used to be. That
           pill welded a share and a delete onto the thing you were trying to
@@ -401,67 +435,85 @@ export default function Dashboard() {
           already in memory, so the filter costs no round trip. */}
       {templates.length > 0 && (
         <Card as="section">
-          <h2 className="mb-3 font-semibold">Quick log</h2>
-
-          {browsingTemplates && (
-            <TextInput
-              value={templateFilter}
-              onChange={(event) => setTemplateFilter(event.target.value)}
-              placeholder="Filter by name…"
-              aria-label="Filter saved meals"
-              className="mb-3 w-full"
-            />
-          )}
-
-          {shownTemplates.length === 0 ? (
-            <p className="text-sm text-ink-faint">
-              Nothing matches “{templateFilter.trim()}”.
-            </p>
-          ) : (
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {shownTemplates.map((template) => (
-                <li key={template.id}>
-                  {/* Carries the viewed date, not today's: a template tapped
-                      while looking at yesterday must land on yesterday. */}
-                  <Link
-                    to={`/log?date=${viewedDate}`}
-                    state={{ template }}
-                    onClick={() => user && rememberTemplate(user.id, template.id)}
-                    className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
-                  >
-                    <span className="truncate text-sm font-medium text-slate-200">
-                      {template.name}
-                    </span>
-                    <span className="mt-0.5 truncate text-xs text-ink-faint">
-                      {Math.round(template.calories)} kcal ·{' '}
-                      {Math.round(template.protein)} g
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {templates.length > QUICK_LOG_VISIBLE && (
+          <h2>
             <button
-              onClick={toggleBrowsing}
-              aria-expanded={browsingTemplates}
-              className="mt-3 w-full rounded-lg px-3 py-2 text-center text-xs text-ink-faint hover:bg-slate-800 hover:text-slate-300"
+              type="button"
+              onClick={toggleSavedMeals}
+              aria-expanded={savedMealsOpen}
+              className="flex w-full items-center justify-between gap-3 text-left font-semibold"
             >
-              {browsingTemplates
-                ? 'Show fewer ▴'
-                : `Browse all (${templates.length}) ▾`}
+              Saved meals
+              <span className="text-xs font-normal text-ink-muted">
+                {templates.length}{' '}
+                <span aria-hidden="true">{savedMealsOpen ? '▴' : '▾'}</span>
+              </span>
             </button>
+          </h2>
+
+          {savedMealsOpen && (
+            <div className="mt-3">
+            {browsingTemplates && (
+              <TextInput
+                value={templateFilter}
+                onChange={(event) => setTemplateFilter(event.target.value)}
+                placeholder="Filter by name…"
+                aria-label="Filter saved meals"
+                className="mb-3 w-full"
+              />
+            )}
+
+            {shownTemplates.length === 0 ? (
+              <p className="text-sm text-ink-faint">
+                Nothing matches “{templateFilter.trim()}”.
+              </p>
+            ) : (
+              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {shownTemplates.map((template) => (
+                  <li key={template.id}>
+                    {/* Carries the viewed date, not today's: a template tapped
+                        while looking at yesterday must land on yesterday. */}
+                    <Link
+                      to={`/log?date=${viewedDate}`}
+                      state={{ template }}
+                      onClick={() => user && rememberTemplate(user.id, template.id)}
+                      className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                    >
+                      <span className="truncate text-sm font-medium text-slate-200">
+                        {template.name}
+                      </span>
+                      <span className="mt-0.5 truncate text-xs text-ink-faint">
+                        {Math.round(template.calories)} kcal ·{' '}
+                        {Math.round(template.protein)} g
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {templates.length > SAVED_MEALS_VISIBLE && (
+              <button
+                onClick={toggleBrowsing}
+                aria-expanded={browsingTemplates}
+                className="mt-3 w-full rounded-lg px-3 py-2 text-center text-xs text-ink-faint hover:bg-slate-800 hover:text-slate-300"
+              >
+                {browsingTemplates
+                  ? 'Show fewer ▴'
+                  : `Browse all (${templates.length}) ▾`}
+              </button>
+            )}
+            </div>
           )}
         </Card>
       )}
 
-      {/* "Log it again" -- the meal you ate on Tuesday and did not think to
-          save. Directly below Quick log because the two are the same gesture
+      {/* "Recently logged" -- the meal you ate on Tuesday and did not think to
+          save. Directly below Saved meals, and collapsed by default for the
+          same reason, because the two are the same gesture
           from opposite directions, and NOT merged into it because they answer
           different questions: a template is "I eat this often" and had to be
           saved in advance, while this is "I ate this recently" and needs no
-          forethought at all. Quick log is also hidden until an account has a
+          forethought at all. Saved meals is also hidden until an account has a
           template, so before this card someone who had logged twenty meals and
           saved none had no one-tap path to any of them.
 
@@ -472,80 +524,69 @@ export default function Dashboard() {
           was not Tuesday's -- the label is what stops that being a silent
           substitution.
 
-          Same grid and same cell as Quick log above, deliberately: two
+          Same grid and same cell as Saved meals above, deliberately: two
           different-looking lists of tappable meals stacked on one screen would
           imply a difference that is not there. */}
       {recent.length > 0 && (
         <Card as="section">
-          <h2 className="font-semibold">Log it again</h2>
-          <p className="mb-3 mt-0.5 text-xs text-ink-faint">
-            Opens the form filled in, so you can change the portion before saving.
-          </p>
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {recent.map((meal) => (
-              <li key={meal.id}>
-                {/* The viewed date, not today's, for the reason the Quick log
-                    link above carries: a meal copied while looking at yesterday
-                    must land on yesterday. The source meal's own date is never
-                    used -- a copy is a new meal eaten on the day you are
-                    looking at, and `created_at` is stamped by the server. */}
-                <Link
-                  to={`/log?date=${viewedDate}`}
-                  state={{ copyMeal: meal }}
-                  className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
-                >
-                  <span className="truncate text-sm font-medium text-slate-200">
-                    {meal.name}
-                  </span>
-                  <span className="mt-0.5 truncate text-xs text-ink-faint">
-                    {Math.round(meal.calories)} kcal · {Math.round(meal.protein)} g
-                  </span>
-                  {/* The day gets its own line rather than joining the macros
-                      above. At 390 px a two-column cell has about 150 px of
-                      text, and "430 kcal · 23 g · Yesterday" truncated to
-                      "· Ye…" there -- losing the one word that says these
-                      numbers belong to a particular day. It costs a third line
-                      against Quick log's two, which is the right trade: the
-                      label is what stops the newest meal under a name being
-                      presented as the name's. */}
-                  <span className="truncate text-xs text-ink-faint">
-                    {relativeDayLabel(meal.date, realToday)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <h2>
+            <button
+              type="button"
+              onClick={toggleRecentlyLogged}
+              aria-expanded={recentlyLoggedOpen}
+              className="flex w-full items-center justify-between gap-3 text-left font-semibold"
+            >
+              Recently logged
+              <span className="text-xs font-normal text-ink-muted">
+                {recent.length}{' '}
+                <span aria-hidden="true">{recentlyLoggedOpen ? '▴' : '▾'}</span>
+              </span>
+            </button>
+          </h2>
+
+          {recentlyLoggedOpen && (
+            <div className="mt-3">
+              <p className="mb-3 text-xs text-ink-faint">
+                Opens the form filled in, so you can change the portion before saving.
+              </p>
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {recent.map((meal) => (
+                <li key={meal.id}>
+                  {/* The viewed date, not today's, for the reason the Saved meals
+                      link above carries: a meal copied while looking at yesterday
+                      must land on yesterday. The source meal's own date is never
+                      used -- a copy is a new meal eaten on the day you are
+                      looking at, and `created_at` is stamped by the server. */}
+                  <Link
+                    to={`/log?date=${viewedDate}`}
+                    state={{ copyMeal: meal }}
+                    className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                  >
+                    <span className="truncate text-sm font-medium text-slate-200">
+                      {meal.name}
+                    </span>
+                    <span className="mt-0.5 truncate text-xs text-ink-faint">
+                      {Math.round(meal.calories)} kcal · {Math.round(meal.protein)} g
+                    </span>
+                    {/* The day gets its own line rather than joining the macros
+                        above. At 390 px a two-column cell has about 150 px of
+                        text, and "430 kcal · 23 g · Yesterday" truncated to
+                        "· Ye…" there -- losing the one word that says these
+                        numbers belong to a particular day. It costs a third line
+                        against Saved meals's two, which is the right trade: the
+                        label is what stops the newest meal under a name being
+                        presented as the name's. */}
+                    <span className="truncate text-xs text-ink-faint">
+                      {relativeDayLabel(meal.date, realToday)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            </div>
+          )}
         </Card>
       )}
-
-      {/* The three daily trackers.
-
-          One section holding a grid, not a stack of full-width cards — this is
-          where steps and supplements landed, and three trackers each taking a
-          full row would push the meal list off the first screen on a phone.
-          Adding another is adding a child here.
-
-          It sits below the rings because those are the primary targets, and
-          below Quick log because that is a tap you came here to make while
-          these three are a glance.
-
-          NOTE this block used to describe itself as "the daily quick-logs",
-          one word away from the Quick log section directly above it — two
-          different features with nearly the same name in one file. These are
-          trackers; Quick log is meals.
-
-          `viewedDate`, not today: the header's ◀ ▶ already move the whole page
-          through time, and a tracker that ignored them would be the only part
-          of this screen showing a different day from the rest. */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <WaterCard date={viewedDate} />
-        <StepsCard date={viewedDate} />
-        {/* Renders nothing until there is a supplement to tick, so the grid is
-            two cards wide for an account that has not set any up. The entry
-            point is Settings; a permanent empty card would spend prime space
-            explaining a feature once. */}
-        <SupplementsCard date={viewedDate} />
-      </section>
 
       {/* Directly above the meal list, which is now its only trigger on this
           page: template sharing moved to Settings -> Library along with the
@@ -713,6 +754,38 @@ export default function Dashboard() {
             </p>
           )}
         </Card>
+      </section>
+
+      {/* The three daily trackers.
+
+          One section holding a grid, not a stack of full-width cards — this is
+          where steps and supplements landed, and three trackers each taking a
+          full row would push the meal list off the first screen on a phone.
+          Adding another is adding a child here.
+
+          It sits below the rings because those are the primary targets, and
+          below the meal list because that is what you came to read. These three
+          are a glance, and a glance is what goes last. It used to sit ABOVE the
+          meal list, which is how a phone ended up asking for five screens of
+          scrolling before it would show you what you had eaten.
+
+          NOTE this block used to describe itself as "the daily quick-logs",
+          one word away from a dashboard card then called "Quick log" — two
+          different features with nearly the same name in one file. That card is
+          now "Saved meals", which settles it from the other end: these are
+          trackers, and the thing that logs meals is named after meals.
+
+          `viewedDate`, not today: the header's ◀ ▶ already move the whole page
+          through time, and a tracker that ignored them would be the only part
+          of this screen showing a different day from the rest. */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <WaterCard date={viewedDate} />
+        <StepsCard date={viewedDate} />
+        {/* Renders nothing until there is a supplement to tick, so the grid is
+            two cards wide for an account that has not set any up. The entry
+            point is Settings; a permanent empty card would spend prime space
+            explaining a feature once. */}
+        <SupplementsCard date={viewedDate} />
       </section>
     </div>
   )
