@@ -261,10 +261,10 @@ const SEED_MEAL_NAMES = [
 ]
 
 /** Meals and weigh-ins for the last SEED_DAYS days, so every chart has
- *  something to draw, plus saved meals so the dashboard's Quick log renders.
+ *  something to draw, plus saved meals so the dashboard's Saved meals renders.
  *  Values are a deterministic ramp, not random.
  *
- *  The templates matter as much as the charts: Quick log is hidden entirely
+ *  The templates matter as much as the charts: Saved meals is hidden entirely
  *  until an account has one, so before this the whole section -- and every
  *  change ever made to it -- was outside the comparison.
  *
@@ -274,7 +274,7 @@ const SEED_MEAL_NAMES = [
  *  water has been logged, the profile is complete enough to derive a burn -- so
  *  seeding meals alone left four of its eight checks permanently outside the
  *  comparison. That is the third time this harness has had a hole of this
- *  shape: Quick log (meal templates) and the AI panel (collapsed by default)
+ *  shape: Saved meals (meal templates) and the AI panel (collapsed by default)
  *  were the first two. **A default state that renders nothing does not make a
  *  section inert, it makes it unwatched.** */
 export async function seed(token) {
@@ -384,6 +384,18 @@ export async function seed(token) {
 // state has hidden a section here, and it was found the same way as the other
 // five: by noticing after the fact that a change had produced no diff.
 export const EXPAND_ON = {
+  // Both dashboard shortcut cards -- Saved meals and Recently logged -- collapse
+  // by default, so without these two clicks twelve tappable cells drop out of
+  // every snapshot and every axe run, and the a11y report comes back clean
+  // because it never saw them. Written in the same commit that collapsed them:
+  // the first entry in this map added BEFORE a missing diff pointed at it
+  // rather than after, which is the whole lesson the six above recorded.
+  //
+  // Matched on the headings, which carry a count that moves with the seed.
+  '/': [
+    'button:has-text("Saved meals")',
+    'button:has-text("Recently logged")',
+  ],
   '/log': [
     'button:has-text("Estimate macros with AI")',
     // "egg" matches exactly the two seeded egg rows, in a fixed order (neither
