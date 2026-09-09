@@ -66,7 +66,7 @@ def test_a_template_can_have_no_items(client):
 
 
 def test_unreadable_items_do_not_break_the_list(client):
-    """One corrupt row must not take the whole Quick log panel down with it."""
+    """One corrupt row must not take the whole Saved meals panel down with it."""
     client.post("/api/meal-templates", json=_template())
     with Session(get_engine()) as session:
         session.scalars(select(MealTemplate)).one().items_json = "{not json"

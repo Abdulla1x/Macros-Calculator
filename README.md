@@ -420,7 +420,7 @@ Or start both at once, with a throwaway database:
 
 | Gate | Command |
 |---|---|
-| backend tests | `venv/bin/python -m pytest -q` — 725 tests |
+| backend tests | `venv/bin/python -m pytest -q` — 801 tests |
 | backend lint | `ruff check app tests scripts` |
 | frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
 | frontend lint | `npm run lint` (oxlint) |
@@ -431,7 +431,7 @@ frontend is also broken once the backend fails, turning one fix-and-rerun cycle 
 three; every gate runs, then a summary says which failed.
 
 **Cross-tenant isolation is tested twice, deliberately.** `tests/test_isolation.py`
-asserts it in-process (49 tests). `backend/scripts/smoke_multiuser.py` asserts it
+asserts it in-process (51 tests). `backend/scripts/smoke_multiuser.py` asserts it
 against a *running* server — over a hundred live checks that sign up two accounts and
 fire every verb at the other account's concrete row ids, which is the only version
 that also covers routing, auth middleware and the deployed database:
