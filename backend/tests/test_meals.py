@@ -148,7 +148,7 @@ def test_undated_list_is_capped_and_newest_first(client):
 
 # --- /api/meals/recent -------------------------------------------------------
 #
-# "Log it again": the most recent meal under each distinct name. Saved meals
+# "Recently logged": the most recent meal under each distinct name. Saved meals
 # cover the meal you thought to store in advance; this covers the one you ate on
 # Tuesday and did not.
 
