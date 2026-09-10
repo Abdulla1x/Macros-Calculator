@@ -304,6 +304,161 @@ function AILatencyCard({ stats }: { stats: AdminStats }) {
   )
 }
 
+/** A whole-number percentage, or null when there is nothing to divide by.
+ *
+ * Null rather than 0: "no data" and "zero percent" are different claims, and
+ * this page has already been wrong in that direction once — a retention figure
+ * derived from live rows reads as a real number while being an artefact. */
+function percent(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null
+  return Math.round((numerator / denominator) * 100)
+}
+
+/** Where accounts stop: created -> logged once -> came back and logged again.
+ *
+ * The card this app most needed and did not have. On 2026-09-08 three
+ * strangers had signed up and none had written a single row, and there was no
+ * figure anywhere that said so — it had to be counted off the accounts table
+ * by eye.
+ */
+function FunnelCard({ stats }: { stats: AdminStats }) {
+  const activation = stats.activation
+  const ttfm = stats.time_to_first_meal
+  const retention = stats.retention
+  const total = activation?.total_users ?? 0
+  const logged = activation?.logged_a_meal ?? 0
+  const twice = activation?.logged_on_two_days ?? 0
+
+  const d7 = percent(retention?.d7_retained ?? 0, retention?.d7_cohort_size ?? 0)
+  const d30 = percent(retention?.d30_retained ?? 0, retention?.d30_cohort_size ?? 0)
+  const d7Cohorts = retention?.d7_cohorts ?? 0
+  const d30Cohorts = retention?.d30_cohorts ?? 0
+
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">Funnel</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Fact label="Accounts" value={String(total)} />
+        <Fact
+          label="Logged a meal"
+          value={String(logged)}
+          note={`${percent(logged, total) ?? 0}% of accounts`}
+        />
+        <Fact
+          label="Logged on 2+ days"
+          value={String(twice)}
+          note={`${percent(twice, total) ?? 0}% of accounts`}
+        />
+        <Fact
+          label="Time to first meal"
+          value={
+            (ttfm?.count ?? 0) === 0 ? '—' : `${ttfm?.median_hours ?? 0} h`
+          }
+          note={
+            (ttfm?.count ?? 0) === 0
+              ? 'Nobody has logged one yet'
+              : `median · p90 ${ttfm?.p90_hours ?? 0} h · n=${ttfm?.count ?? 0}`
+          }
+        />
+      </dl>
+
+      <h3 className="mt-5 text-xs font-semibold text-slate-400">Retention</h3>
+      <dl className="mt-2 grid grid-cols-2 gap-4">
+        <Fact
+          label={`D${retention?.d7_window_days ?? 7}`}
+          value={d7Cohorts === 0 ? 'Not measurable yet' : `${d7}%`}
+          note={
+            d7Cohorts === 0
+              ? 'No cohort has finished its window'
+              : `${retention?.d7_retained ?? 0} of ${retention?.d7_cohort_size ?? 0} · ${d7Cohorts} cohorts`
+          }
+        />
+        <Fact
+          label={`D${retention?.d30_window_days ?? 30}`}
+          value={d30Cohorts === 0 ? 'Not measurable yet' : `${d30}%`}
+          note={
+            d30Cohorts === 0
+              ? 'No cohort has finished its window'
+              : `${retention?.d30_retained ?? 0} of ${retention?.d30_cohort_size ?? 0} · ${d30Cohorts} cohorts`
+          }
+        />
+      </dl>
+      <p className="mt-3 text-xs text-ink-faint">
+        Retention is the one figure on this page that is <em>not</em> derived
+        from live rows. Everything else here recounts the accounts that exist
+        right now, so deleting one rewrites the past — which would make
+        retention read higher the more people quit. These two come from frozen
+        daily snapshots instead, and a cohort still inside its window counts as
+        nothing rather than as zero.
+      </p>
+    </Card>
+  )
+}
+
+/** Who arrives, when they arrive, and what they end up using.
+ *
+ * The hour histogram is here for the cold start, not for a body clock: the
+ * free instance sleeps outside the ping window, so a signup at 02:00 met a
+ * ~52 s boot on its very first request and one at noon did not.
+ */
+function ReachCard({ stats }: { stats: AdminStats }) {
+  const hours = stats.signup_hours
+  const adoption = stats.feature_adoption ?? {}
+  const adopted = Object.entries(adoption).sort((a, b) => b[1] - a[1])
+  const outside = hours?.outside_window ?? 0
+  const totalSignups = (hours?.by_hour ?? []).reduce((sum, n) => sum + n, 0)
+
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">Reach</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <Fact
+          label="Signed up while asleep"
+          value={`${outside} of ${totalSignups}`}
+          note={
+            outside === 0
+              ? 'Everyone arrived inside the ping window'
+              : `Met a cold start · window is ${hours?.timezone ?? 'Asia/Dubai'}`
+          }
+        />
+        <Fact
+          label="AI spend, 30 days"
+          value={`$${(stats.ai_spend_30d_usd ?? 0).toFixed(2)}`}
+          note="Estimated at $0.01 per call"
+        />
+        <Fact
+          label="Per active account"
+          value={`$${(stats.ai_spend_30d_usd_per_active ?? 0).toFixed(2)}`}
+          note="What a subscription has to clear"
+        />
+      </dl>
+
+      <h3 className="mt-5 text-xs font-semibold text-slate-400">
+        Ever used, by account
+      </h3>
+      {adopted.length === 0 ? (
+        <p className="mt-2 text-xs text-ink-faint">No adoption data yet.</p>
+      ) : (
+        <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+          {adopted.map(([feature, count]) => (
+            <li key={feature} className="flex justify-between text-xs">
+              <span className="text-slate-400">{feature.replace(/_/g, ' ')}</span>
+              <span className="font-semibold" data-live={`adoption ${feature}`}>
+                {count}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-ink-faint">
+        Distinct accounts that have <em>ever</em> used each feature, so one
+        enthusiast cannot make a feature look adopted. Worth as much for what it
+        says to remove as for what it says to build.
+      </p>
+    </Card>
+  )
+}
+
 export default function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -390,6 +545,8 @@ export default function Admin() {
             ))}
           </section>
 
+          <FunnelCard stats={stats} />
+          <ReachCard stats={stats} />
           {keepWarm && <KeepWarmCard status={keepWarm} />}
           <AILatencyCard stats={stats} />
 

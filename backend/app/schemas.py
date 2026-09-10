@@ -1242,6 +1242,60 @@ class AILatency(BaseModel):
     p95_ms: int
 
 
+class Activation(BaseModel):
+    """The funnel: created an account -> logged once -> came back and logged."""
+
+    total_users: int = 0
+    logged_a_meal: int = 0
+    # Distinct DAYS with a meal, not distinct meals. Three meals on one Tuesday
+    # is one session, not a habit.
+    logged_on_two_days: int = 0
+
+
+class TimeToFirstMeal(BaseModel):
+    """Hours from signup to first meal, over accounts that logged one.
+
+    `count` is not decoration: it says how many accounts the two percentiles
+    were computed over, and at this app's size that is often small enough to
+    make them anecdotes rather than statistics.
+    """
+
+    count: int = 0
+    median_hours: int = 0
+    p90_hours: int = 0
+
+
+class SignupHours(BaseModel):
+    """Signups bucketed by local hour, against the keep-warm window.
+
+    `outside_window` is the number that matters: those accounts met a sleeping
+    free instance and a ~52 s cold start on their very first request.
+    """
+
+    timezone: str = ""
+    by_hour: list[int] = []
+    outside_window: int = 0
+
+
+class Retention(BaseModel):
+    """D7/D30 over MATURED cohorts only, read from frozen snapshot rows.
+
+    Sent as numerator, denominator and cohort count rather than a percentage,
+    so the client can refuse to draw a ratio that rests on two signups. A zero
+    `*_cohorts` means "no cohort has finished its window yet" and must render
+    as *not measurable*, never as 0%.
+    """
+
+    d7_window_days: int = 7
+    d30_window_days: int = 30
+    d7_cohort_size: int = 0
+    d7_retained: int = 0
+    d7_cohorts: int = 0
+    d30_cohort_size: int = 0
+    d30_retained: int = 0
+    d30_cohorts: int = 0
+
+
 class AdminStats(BaseModel):
     """App-wide usage: how many accounts exist, and how much they are used."""
 
@@ -1272,19 +1326,38 @@ class AdminStats(BaseModel):
     window_days: int
     signups: list[AdminDailyCount] = []
     activity: list[AdminDailyActivity] = []
+    # The funnel figures. All computed from rows that already existed -- none of
+    # these needed a column, only somebody to ask.
+    activation: Activation = Activation()
+    time_to_first_meal: TimeToFirstMeal = TimeToFirstMeal()
+    signup_hours: SignupHours = SignupHours()
+    # {feature: accounts that have ever used it}. Says what to cut.
+    feature_adoption: dict[str, int] = {}
+    # ⚠️ The one figure NOT derived from live rows -- see DailyStat. Everything
+    # else on this page moves when an account is deleted; retention must not.
+    retention: Retention = Retention()
+    # Estimated, at a committed per-call constant. G3 prices against this.
+    ai_spend_30d_usd: float = 0.0
+    ai_spend_30d_usd_per_active: float = 0.0
 
 
 class AdminUserRow(BaseModel):
     """One account's metrics — counts and timestamps, never content.
 
     `last_active_at` is None for an account that has signed up and done
-    nothing, which is a genuinely useful thing to be able to see.
+    nothing, which is a genuinely useful thing to be able to see — and
+    `last_seen_at` is what says whether that account is still turning up.
     """
 
     id: int
     email: str
     created_at: datetime
     last_active_at: datetime | None = None
+    # When the account last made ANY authenticated request, including one that
+    # only read. Date precision -- written once a UTC day. The pair with
+    # last_active_at is the diagnosis: present but writing nothing is an
+    # onboarding failure, absent entirely is a bounce.
+    last_seen_at: datetime | None = None
     meals: int = 0
     weights: int = 0
     foods: int = 0
