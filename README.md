@@ -100,6 +100,14 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Averages are **per day you logged**, not per day in the range — a day with nothing recorded is missing data, not a day of zero intake
 - **CSV export/import** with duplicate detection and date normalization
 
+### 🔭 Operator metrics
+- **A funnel, not a headcount.** `/admin` reports how far accounts actually get: how many ever logged a meal, how many logged on two separate days, and the median hours from signing up to the first meal. Three strangers once signed up and none of them wrote a single row, and there was no figure anywhere that said so — it had to be counted off a table by eye
+- **Presence and activity are separate columns**, because they answer different questions. "Last active" derives from rows an account *wrote*, so it cannot see a visit that only read; "Last seen" records that the account turned up at all. Someone who keeps opening the app and never logs anything is an onboarding failure, someone who never returns is a bounce, and until both columns existed the two were indistinguishable
+- **Retention is frozen, not derived.** Every other figure on the page recounts the accounts that exist right now, so deleting one rewrites the past — which would make D7/D30 read *higher* the more people quit. A daily snapshot row carrying no `user_id` freezes each finished day instead, so a cohort's size is fixed while it was still whole and churn counts against retention rather than vanishing from it. A cohort still inside its window counts as nothing rather than as zero
+- **Signups are bucketed by local hour against the keep-warm window**, which is the only way to tell whether someone's first request met a sleeping free instance and a ~52 s cold start
+- **Feature adoption by distinct account** — how many people have *ever* used water, steps, supplements, plans, the library or AI. Worth as much for what it says to remove as for what it says to build
+- Still counts and dates only: no meal, food, weight or supplement content ever reaches the page, and the snapshot table holds nothing that belongs to a person
+
 ### ♿ Accessibility
 - **The food search works without a mouse.** Typing a name used to bring up a list of matches that arrow keys could not reach and Escape could not dismiss. It is a proper combobox: arrows move through the suggestions, Enter picks one, Escape closes it
 - **Everything the app tells you reaches a screen reader.** A save that failed, an import that was rejected, a password that changed — all of it used to appear as coloured text and be announced nowhere. Every one of those messages is now spoken
@@ -514,8 +522,9 @@ server boots, so the schema is created/updated on deploy. In the Render dashboar
   [`GET /api/ai/status`](docs/runbook-ai-provider.md)
 - `CORS_ORIGINS` — your exact frontend origin (scheme included, no trailing slash)
 - `ADMIN_EMAILS` — optional, comma-separated addresses allowed to read
-  `/api/admin` (usage metrics: signups, active accounts, per-account counts and
-  AI consumption). Case- and whitespace-insensitive, re-read on every request.
+  `/api/admin` (usage metrics: signups, active accounts, per-account counts,
+  the activation/retention funnel and AI consumption). Case- and
+  whitespace-insensitive, re-read on every request.
   **Unset means nobody is an admin** — there is no role column and no promotion
   endpoint, so this variable is the only way to grant it. Admins see counts and
   timestamps only, never meal, food or weight content
@@ -674,8 +683,8 @@ only on the caller's data, except these public ones: `/api/health`,
 | GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 | GET | `/api/announcements` | Committed release notes + the status banner (public) |
 | GET | `/api/health` | Liveness check (public). `?src=keepwarm` marks a request as the keep-warm scheduler's |
-| GET | `/api/admin/stats` | Usage metrics, behind the `ADMIN_EMAILS` allowlist |
-| GET | `/api/admin/users` | Per-account counts and AI consumption; never meal or weight content |
+| GET | `/api/admin/stats` | Usage metrics, the funnel and frozen retention, behind the `ADMIN_EMAILS` allowlist |
+| GET | `/api/admin/users` | Per-account counts, presence and AI consumption; never meal or weight content |
 | GET | `/api/admin/keep-warm` | Uptime, scheduler-ping counts and the ping window; in-memory, wiped at spin-down |
 
 ---
