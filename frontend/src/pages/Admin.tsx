@@ -661,6 +661,7 @@ export default function Admin() {
                     <tr>
                       <th scope="col" className="pb-2 pr-4 font-medium">Email</th>
                       <th scope="col" className="pb-2 pr-4 font-medium">Joined</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Last seen</th>
                       <th scope="col" className="pb-2 pr-4 font-medium">Last active</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Meals</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
@@ -668,34 +669,43 @@ export default function Admin() {
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Foods</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Templates</th>
-                      {/* The daily trackers, by their dashboard icons. Counts
-                          only, never contents — a supplement name can disclose
-                          a prescription, and a plan's date discloses a
-                          calendar, so these columns say how many and never
-                          which.
+                      {/* The daily trackers. Counts only, never contents — a
+                          supplement name can disclose a prescription, and a
+                          plan's date discloses a calendar, so these columns say
+                          how many and never which.
 
-                          ⚠ The name is the sr-only span, not the `title` these
-                          carried before. A cell's CONTENTS are its accessible
-                          name whenever they are non-empty, so each of these
-                          announced as its emoji and the title was never read --
-                          and every data cell under them inherits that name once
-                          scope="col" is doing its job. axe cannot catch it: an
-                          emoji is a non-empty name. */}
+                          ⚠ The visible word IS the accessible name, and that is
+                          the whole point of it. A cell's CONTENTS are its
+                          accessible name whenever they are non-empty, so when
+                          these were an emoji plus a `title` each announced as
+                          its emoji and the title was never read — which is why
+                          the title was removed and an sr-only span used
+                          instead. axe could not catch either version: an emoji
+                          is a non-empty name.
+
+                          The sr-only span is now redundant and gone: the label
+                          is on screen, so a sighted reader stops having to
+                          guess what 💊 counts, and a screen reader reads the
+                          same word rather than a parallel one that could drift
+                          out of step with it. The icon is aria-hidden so it is
+                          decoration on both sides. This fits because /admin is
+                          the one genuinely desktop-only route and now takes the
+                          width — see Layout.tsx. */}
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">💧</span>
-                        <span className="sr-only">Water logs</span>
+                        <span aria-hidden="true">💧</span>{' '}
+                        <span>Water</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">👟</span>
-                        <span className="sr-only">Days of steps logged</span>
+                        <span aria-hidden="true">👟</span>{' '}
+                        <span>Step days</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">💊</span>
-                        <span className="sr-only">Supplement doses ticked</span>
+                        <span aria-hidden="true">💊</span>{' '}
+                        <span>Doses</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">📅</span>
-                        <span className="sr-only">Days adjusted by a calorie plan</span>
+                        <span aria-hidden="true">📅</span>{' '}
+                        <span>Plan days</span>
                       </th>
                       <th scope="col" className="pb-2 text-right font-medium">AI</th>
                     </tr>
@@ -706,6 +716,15 @@ export default function Admin() {
                         <td className="py-2 pr-4">{row.email}</td>
                         <td className="py-2 pr-4 text-slate-400">
                           {row.created_at.slice(0, 10)}
+                        </td>
+                        {/* Seen before active, deliberately: read left to
+                            right the pair is a diagnosis. Seen with no
+                            activity is someone who keeps turning up and never
+                            logs — an onboarding failure. Neither is a bounce.
+                            Until 2026-09-10 only the second column existed and
+                            the two were indistinguishable. */}
+                        <td className="py-2 pr-4 text-slate-400">
+                          {relativeDay(row.last_seen_at ?? null)}
                         </td>
                         <td className="py-2 pr-4 text-slate-400">
                           {relativeDay(row.last_active_at)}
@@ -731,6 +750,20 @@ export default function Admin() {
               </div>
             )}
           </Card>
+
+          {/* ⚠️ Without this, the day after deploy reads as an alarm. Every
+              account that existed before the column shipped has an empty
+              "Last seen" while showing real activity in the column beside it —
+              a combination that is impossible from here on, since writing
+              anything requires an authenticated request and that is what sets
+              it. The cells fill themselves in as people return. Saying so is
+              cheaper than the fifteen minutes spent wondering. */}
+          <p className="text-xs text-ink-faint">
+            "Last seen" only starts recording from the deploy that added it, so
+            an account that has not visited since then shows{' '}
+            <span className="font-medium">Never</span> even where "Last active"
+            does not. It fills itself in on that account's next visit.
+          </p>
 
           <p className="text-xs text-ink-faint">
             AI calls today: {stats.ai_calls_today} of{' '}

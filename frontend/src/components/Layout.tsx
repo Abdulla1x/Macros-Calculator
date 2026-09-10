@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import { useSettings } from '../settings/SettingsContext'
@@ -26,6 +26,15 @@ const links = [
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  // /admin is the one route in this app that is genuinely desktop-only — a
+  // twelve-column table of per-account counts, read by one person on a big
+  // screen. Every other page is designed phone-first and 5xl is right for it,
+  // but at that width the admin table was crammed into ~640px in the middle of
+  // a 2000px display and had to scroll sideways to be read at all. This is the
+  // one place the extra width is clearly correct rather than a preference, and
+  // it is what makes the tracker columns affordable as words instead of bare
+  // emoji.
+  const wide = useLocation().pathname === '/admin'
   // One fetch feeds both the banner and the modal.
   const announcements = useAnnouncements()
   // The shared settings fetch doubles as the cold-start probe: it is the first
@@ -140,7 +149,7 @@ export default function Layout() {
       {/* The bottom padding clears the fixed tab bar and its safe-area inset, so
           the last card on a page is never trapped underneath it. */}
       <main id="main" tabIndex={-1} className="flex-1 px-4 py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pb-8">
-        <div className="mx-auto max-w-5xl">
+        <div className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
           <StatusBanner banner={announcements?.banner ?? null} />
           {/* Below the status banner on purpose: an outage notice outranks a
               reminder. Above the outlet so it reaches someone who never
