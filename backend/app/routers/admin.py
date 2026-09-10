@@ -32,15 +32,23 @@ from datetime import date as date_type
 from datetime import datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..activity import TIMESTAMPED, daily_activity
 from ..auth.deps import require_admin
 from ..db import get_db
-from ..keep_warm import COLD_START_SUSPECT_S, snapshot
+from ..keep_warm import (
+    COLD_START_SUSPECT_S,
+    WINDOW_TZ,
+    in_window_at,
+    snapshot,
+    window_tz,
+)
 from ..models import (
     AIAnalysis,
     CaloriePlanDay,
+    DailyStat,
     Food,
     Meal,
     MealTemplate,
@@ -51,13 +59,18 @@ from ..models import (
     WaterLog,
     WeightEntry,
 )
+from ..snapshots import D7, D30, ensure_snapshots
 from ..schemas import (
+    Activation,
     AdminDailyActivity,
     AdminDailyCount,
     AdminStats,
     AILatency,
     AdminUserRow,
     KeepWarmStatus,
+    Retention,
+    SignupHours,
+    TimeToFirstMeal,
 )
 from .ai import calls_today, global_daily_limit
 
@@ -73,6 +86,14 @@ CHART_DAYS = 30
 # "the most recent N timed calls" rather than to a wrong answer.
 LATENCY_SAMPLE_LIMIT = 10_000
 ACTIVE_WINDOW_DAYS = 7
+
+# What one Gemini call costs, in US dollars. A committed constant rather than a
+# setting: it is an estimate from the roadmap's unit-economics work (~$0.01 per
+# meal analysis), it changes only when the provider's pricing does, and a value
+# that looks configurable while governing nothing is worse than one you have to
+# edit. ⚠️ Every row in ai_analyses is one billable call, transcriptions
+# included -- that is what makes multiplying by a row count honest.
+AI_CALL_COST_USD = 0.01
 
 
 def _percentile(sorted_values: list[int], q: float) -> int:
@@ -93,60 +114,158 @@ def _percentile(sorted_values: list[int], q: float) -> int:
 # limited, because everything else already requires a valid token — and this
 # one additionally requires being on the allowlist.
 
-# Tables that record a real creation timestamp, so activity can be read off
-# them directly. Meals are handled separately: see _meal_activity_at.
-#
-# Membership is not "never upserted" -- WeightEntry and StepEntry both upsert.
-# The rule that actually holds is what the common write *does*: where it adds a
-# new row for a new date, created_at is a fresh timestamp and means what this
-# tuple assumes. Weigh-ins, step counts, foods, water and AI calls are all that
-# shape. WaterLog is the purest case, every row an insert, and the truest
-# engagement signal the app has -- someone tapping "+250" four times a day is
-# using it on days they may not log a single meal.
-#
-# MealTemplate is counted per user below but deliberately NOT listed, because
-# its common write rewrites an *old* row: re-saving Breakfast from the log-meal
-# footer leaves created_at on the day the template was first made, so today's
-# use would register as activity months ago. That is the same backwards reading
-# _meal_activity_at exists to prevent, and no signal is lost -- the button
-# lives in the log-meal footer, so a template save always rides along with a
-# meal write in the same session.
-#
-# The residual, accepted knowingly: correcting a *past* day's count on a later
-# day does not move last_active_at, because the row it rewrites already exists.
-# That undercounts a session spent only fixing history, for steps exactly as it
-# already does for a re-logged weigh-in. Logging the current day -- the common
-# case for both -- is a fresh row and reads correctly.
-#
-# Supplement follows MealTemplate out of this tuple for the same reason and
-# is counted below without joining it: the list is written once and then
-# edited by PUT, so a rename today would register as activity on the day it
-# was first added. Its check-offs are the signal instead, and they are the
-# WaterLog shape exactly -- a fresh row every time a box is ticked.
-#
-# CaloriePlanDay joins the tuple and passes the rule cleanly, which is worth
-# saying because the other per-date tables here needed an argument. There is no
-# update path at all: the unique index on (user_id, date) means a plan cannot
-# be edited in place, only cancelled and made again, so every row's created_at
-# is the moment a plan was actually made. Making one is also about as deliberate
-# an act as this app has -- nobody plans a Saturday by accident.
-_TIMESTAMPED = (
-    WeightEntry, Food, AIAnalysis, WaterLog, StepEntry, SupplementLog,
-    CaloriePlanDay,
-)
 
+def _activation(db: Session, total_users: int) -> Activation:
+    """How far accounts get, not how many exist.
 
-def _meal_activity_at(created_at: datetime | None, eaten_on: date_type) -> datetime:
-    """When a meal row counts as *app usage*.
+    The number this app most needed and did not have. On 2026-09-08 three
+    strangers had signed up and none had written a single row, and there was no
+    figure anywhere that said so -- it had to be read off a table of accounts by
+    eye. "Signed up" is not a funnel; "signed up, logged once, came back and
+    logged again" is.
 
-    `created_at` where we have it; the eaten date at midnight where we don't.
-    Rows written before migration 0006 land in the second case, so history
-    still charts — just at eat-date precision instead of vanishing.
+    Two steps rather than one because they fail for different reasons. Never
+    logging a meal is an onboarding failure -- the person never understood what
+    to do or never got far enough to try. Logging on exactly one day is a
+    retention failure: they did the thing once and it was not worth repeating.
     """
-    if created_at is not None:
-        return created_at
-    return datetime.combine(eaten_on, time.min)
+    with_meal = db.scalar(
+        select(func.count(func.distinct(Meal.user_id)))
+    ) or 0
+    # Distinct DAYS, not distinct meals: three meals on one Tuesday is one
+    # session with a good appetite, not a habit.
+    per_user_days = db.execute(
+        select(Meal.user_id, func.count(func.distinct(Meal.date)))
+        .group_by(Meal.user_id)
+    ).all()
+    on_two_days = sum(1 for _, day_count in per_user_days if day_count >= 2)
+    return Activation(
+        total_users=total_users,
+        logged_a_meal=with_meal,
+        logged_on_two_days=on_two_days,
+    )
 
+
+def _time_to_first_meal(db: Session) -> TimeToFirstMeal:
+    """Median and p90 hours from signing up to logging the first meal.
+
+    Separates "left immediately" from "started slowly", which look identical in
+    an activation percentage and want opposite responses: the first is a
+    first-run problem, the second is a reason to be patient.
+
+    Only accounts that HAVE logged a meal are in here. Including the ones that
+    never did -- as an infinity, or as time-since-signup -- would make the
+    median a statement about how long the app has been live.
+    """
+    first_meal = (
+        select(Meal.user_id, func.min(Meal.created_at).label("first_at"))
+        .where(Meal.created_at.is_not(None))
+        .group_by(Meal.user_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(User.created_at, first_meal.c.first_at)
+        .join(first_meal, first_meal.c.user_id == User.id)
+    ).all()
+    hours = sorted(
+        max(0, int((first_at - created_at).total_seconds() // 3600))
+        for created_at, first_at in rows
+        if first_at is not None and first_at >= created_at
+    )
+    return TimeToFirstMeal(
+        count=len(hours),
+        median_hours=_percentile(hours, 0.5),
+        p90_hours=_percentile(hours, 0.9),
+    )
+
+
+def _signup_hours(db: Session) -> SignupHours:
+    """When accounts are created, in the keep-warm window's own timezone.
+
+    ⚠️ The point is not a body-clock chart, it is the cold start. Render's free
+    instance sleeps outside 05:00-21:00 Asia/Dubai, so a signup at 02:00 met a
+    52 s boot and one at noon did not -- and "was the cold start what lost
+    them" has been an open question since the first real signups, answerable
+    only from this column. Local hours rather than UTC because the window is
+    defined in local hours; a UTC histogram would have to be re-read against
+    the offset every time anyone looked at it.
+    """
+    tz = window_tz()
+    by_hour = [0] * 24
+    outside = 0
+    for created_at in db.scalars(select(User.created_at)).all():
+        # Stored naive-UTC (models.utcnow), so it must be told it is UTC before
+        # it can be converted -- otherwise astimezone would read it as local
+        # server time, which is UTC on Render today and a silent four-hour
+        # error the day it is not.
+        local = created_at.replace(tzinfo=timezone.utc).astimezone(tz)
+        by_hour[local.hour] += 1
+        if not in_window_at(local):
+            outside += 1
+    return SignupHours(timezone=WINDOW_TZ, by_hour=by_hour, outside_window=outside)
+
+
+def _feature_adoption(db: Session) -> dict[str, int]:
+    """Accounts that have EVER used each feature.
+
+    Ever, not recently: this answers "is anyone using this at all", which is a
+    question about whether a feature earns its place in the UI. Distinct
+    accounts, so one enthusiast cannot make a feature look adopted.
+
+    Worth as much for what it says to CUT as for what it says to build -- the
+    dashboard declutter was argued from screenshots, and this is the version of
+    that argument with numbers behind it.
+    """
+    sources = {
+        "meals": Meal,
+        "weights": WeightEntry,
+        "foods": Food,
+        "meal_templates": MealTemplate,
+        "water": WaterLog,
+        "steps": StepEntry,
+        "supplements": SupplementLog,
+        "calorie_plans": CaloriePlanDay,
+        "ai": AIAnalysis,
+    }
+    return {
+        name: db.scalar(select(func.count(func.distinct(model.user_id)))) or 0
+        for name, model in sources.items()
+    }
+
+
+def _retention(db: Session) -> Retention:
+    """D7/D30 from frozen cohorts only -- the one figure that must not derive.
+
+    Summed across matured cohorts rather than averaged across them: a week with
+    one signup and a week with fifty are not equally strong evidence, and
+    averaging the two ratios would treat them as if they were.
+
+    A cohort still inside its window contributes NOTHING, not a zero. Counting
+    an unfinished cohort would make retention appear to collapse every time
+    somebody new signed up, which is the opposite of what the number means.
+    """
+    def summed(column) -> tuple[int, int, int]:
+        row = db.execute(
+            select(
+                func.coalesce(func.sum(DailyStat.signups), 0),
+                func.coalesce(func.sum(column), 0),
+                func.count(),
+            ).where(column.is_not(None))
+        ).one()
+        return int(row[0]), int(row[1]), int(row[2])
+
+    d7_size, d7_kept, d7_cohorts = summed(DailyStat.cohort_d7_retained)
+    d30_size, d30_kept, d30_cohorts = summed(DailyStat.cohort_d30_retained)
+    return Retention(
+        d7_window_days=D7,
+        d30_window_days=D30,
+        d7_cohort_size=d7_size,
+        d7_retained=d7_kept,
+        d7_cohorts=d7_cohorts,
+        d30_cohort_size=d30_size,
+        d30_retained=d30_kept,
+        d30_cohorts=d30_cohorts,
+    )
 
 def _count_by_user(db: Session, model, user_ids: list[int]) -> dict[int, int]:
     """{user_id: row count} for one table, in one grouped query.
@@ -167,9 +286,20 @@ def _count_by_user(db: Session, model, user_ids: list[int]) -> dict[int, int]:
 def _last_active_by_user(db: Session, user_ids: list[int]) -> dict[int, datetime]:
     """{user_id: latest activity timestamp} across every table that records one.
 
-    Derived rather than stored. A `last_seen` column would be more direct, but
-    keeping it accurate means a write on every authenticated request — turning
-    every read into a write for a number nobody reads in real time.
+    ⚠️ THIS IS "LAST WROTE SOMETHING", NOT "LAST HERE", and the difference is
+    the point of the column beside it. Derived from rows the account created,
+    so a session spent reading the dashboard and logging nothing leaves no
+    trace here at all. `users.last_seen_at` is the other half: written once a
+    UTC day by auth/deps.py, it says the account was present. Read together,
+    `seen but never active` is an onboarding failure and `neither` is a bounce
+    -- opposite problems, and until 2026-09-10 this app could not tell them
+    apart, which is exactly the ambiguity the first three real signups landed
+    in.
+
+    This docstring used to reject a `last_seen` column on the grounds that
+    keeping it accurate "means a write on every authenticated request". True at
+    timestamp precision. **False at date precision**, which is what shipped:
+    at most one UPDATE per account per day, and nothing reads below the day.
 
     Meals contribute `max(created_at)` and `max(date)` as two separate
     aggregates combined in Python, not a SQL COALESCE. COALESCE of a DateTime
@@ -186,7 +316,7 @@ def _last_active_by_user(db: Session, user_ids: list[int]) -> dict[int, datetime
         if current is None or value > current:
             latest[user_id] = value
 
-    for model in _TIMESTAMPED:
+    for model in TIMESTAMPED:
         rows = db.execute(
             select(model.user_id, func.max(model.created_at))
             .where(model.user_id.in_(user_ids))
@@ -214,7 +344,13 @@ def list_users(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Per-account metrics, newest signups first."""
+    """Per-account metrics, newest signups first.
+
+    `last_active_at` and `last_seen_at` are deliberately BOTH here. One says
+    when the account last wrote something, the other when it was last present
+    at all; the pair is what turns "signed up and did nothing" from a dead end
+    into a diagnosis. See _last_active_by_user.
+    """
     users = db.scalars(
         select(User).order_by(User.created_at.desc(), User.id.desc()).limit(limit)
     ).all()
@@ -240,6 +376,7 @@ def list_users(
             email=u.email,
             created_at=u.created_at,
             last_active_at=last_active.get(u.id),
+            last_seen_at=u.last_seen_at,
             meals=meals.get(u.id, 0),
             weights=weights.get(u.id, 0),
             foods=foods.get(u.id, 0),
@@ -260,8 +397,20 @@ def stats(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """App-wide totals plus the two daily series the dashboard charts."""
+    """App-wide totals, the two charted series, and the funnel figures.
+
+    ⚠️ The series here are DERIVED FROM LIVE ROWS and therefore move when an
+    account is deleted -- see the DailyStat docstring. That is acceptable for a
+    30-day chart and NOT acceptable for retention, which is why `retention`
+    below is read from frozen snapshot rows and everything else is not.
+    """
     today = datetime.now(timezone.utc).date()
+
+    # Bring frozen history up to date while an admin is looking at it. Cheap
+    # when there is nothing to do, and this is one of only two triggers -- see
+    # app/snapshots.py for why neither /api/health nor a cron can be the other.
+    ensure_snapshots(db, today)
+
     first_day = today - timedelta(days=CHART_DAYS - 1)
     window_start = datetime.combine(first_day, time.min)
     days = [first_day + timedelta(days=offset) for offset in range(CHART_DAYS)]
@@ -275,43 +424,10 @@ def stats(
     ).all():
         signups_per_day[created_at.date()] += 1
 
-    # Bucketing by day happens in Python, not SQL, for the same reason the
-    # COALESCE above does: SQLite has no real date type, so func.date() and
-    # CAST(x AS DATE) do not agree across the two backends this app runs on.
-    # calls_today set that precedent — its UTC midnight is computed in Python
-    # precisely so SQLite and Postgres behave identically. At a 30-day window
-    # and this app's volume the fetched rows number in the thousands, which is
-    # nothing; if that ever stops being true, the fix is a dialect-aware
-    # expression, not an untested one.
-    meals_per_day: dict[date_type, int] = defaultdict(int)
-    active_per_day: dict[date_type, set[int]] = defaultdict(set)
-
-    # `or_` because the two columns answer different questions and either can
-    # put a row in the window: a NULL created_at row is only reachable by its
-    # date, and a row created recently but backdated far away is only reachable
-    # by created_at. Over-fetching slightly is fine — _meal_activity_at decides
-    # the real day and anything outside the window is dropped below.
-    meal_rows = db.execute(
-        select(Meal.user_id, Meal.created_at, Meal.date).where(
-            or_(Meal.created_at >= window_start, Meal.date >= first_day)
-        )
-    ).all()
-    for user_id, created_at, eaten_on in meal_rows:
-        day = _meal_activity_at(created_at, eaten_on).date()
-        if first_day <= day <= today:
-            meals_per_day[day] += 1
-            active_per_day[day].add(user_id)
-
-    for model in _TIMESTAMPED:
-        rows = db.execute(
-            select(model.user_id, model.created_at).where(
-                model.created_at >= window_start
-            )
-        ).all()
-        for user_id, created_at in rows:
-            day = created_at.date()
-            if day <= today:
-                active_per_day[day].add(user_id)
+    # app/activity.py, not an expression here: daily_stats freezes the same
+    # figure, and a chart that disagreed with the frozen history about what
+    # "active" means would leave no way to tell which of the two was right.
+    active_per_day, meals_per_day = daily_activity(db, first_day, today)
 
     def distinct_active(window: list[date_type]) -> int:
         """Distinct accounts active across a window — not the sum of daily
@@ -363,9 +479,25 @@ def stats(
             p95_ms=_percentile(values, 0.95),
         )
 
+    ai_calls_30d = sum(calls_by_kind.values())
+
     return AdminStats(
         total_users=total_users,
         total_meals=total_meals,
+        activation=_activation(db, total_users or 0),
+        time_to_first_meal=_time_to_first_meal(db),
+        signup_hours=_signup_hours(db),
+        feature_adoption=_feature_adoption(db),
+        retention=_retention(db),
+        ai_spend_30d_usd=round(ai_calls_30d * AI_CALL_COST_USD, 2),
+        # Per ACTIVE account, not per account. Dividing by every account ever
+        # created would make the figure fall every time somebody signed up and
+        # left, which is the direction that flatters and the opposite of what a
+        # cost-per-user number is for: G3 has to price against the people who
+        # actually use it.
+        ai_spend_30d_usd_per_active=round(
+            ai_calls_30d * AI_CALL_COST_USD / max(1, distinct_active(days)), 2
+        ),
         signups_7d=sum(signups_per_day.get(day, 0) for day in recent),
         signups_30d=sum(signups_per_day.get(day, 0) for day in days),
         active_7d=distinct_active(recent),

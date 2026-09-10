@@ -602,6 +602,53 @@ export interface AILatency {
   p95_ms: number
 }
 
+/** The funnel: created an account -> logged once -> came back and logged. */
+export interface Activation {
+  total_users: number
+  logged_a_meal: number
+  /** Distinct DAYS with a meal. Three meals on one Tuesday is one session. */
+  logged_on_two_days: number
+}
+
+/** Hours from signup to first meal, over accounts that logged one.
+ *
+ * `count` is not decoration — at this app's size it is often small enough to
+ * make the two percentiles anecdotes rather than statistics, and the page says
+ * so rather than drawing them as though they were. */
+export interface TimeToFirstMeal {
+  count: number
+  median_hours: number
+  p90_hours: number
+}
+
+/** Signups by local hour, against the keep-warm window.
+ *
+ * `outside_window` is the number that matters: those accounts met a sleeping
+ * free instance and a ~52 s cold start on their very first request. */
+export interface SignupHours {
+  timezone: string
+  by_hour: number[]
+  outside_window: number
+}
+
+/** D7/D30 over matured cohorts only, read from frozen snapshot rows.
+ *
+ * Sent as numerator, denominator and cohort count rather than a percentage, so
+ * this client can refuse to draw a ratio resting on two signups. A zero
+ * `*_cohorts` means "no window has closed yet" and must render as *not
+ * measurable* — never as 0%, which would report a catastrophe with no evidence
+ * behind it. */
+export interface Retention {
+  d7_window_days: number
+  d30_window_days: number
+  d7_cohort_size: number
+  d7_retained: number
+  d7_cohorts: number
+  d30_cohort_size: number
+  d30_retained: number
+  d30_cohorts: number
+}
+
 export interface AdminStats {
   total_users: number
   total_meals: number
@@ -624,6 +671,22 @@ export interface AdminStats {
   window_days: number
   signups: AdminDailyCount[]
   activity: AdminDailyActivity[]
+  /** The funnel figures. Every one is computed from rows that already existed —
+   *  none of them needed a column, only somebody to ask.
+   *
+   *  ⚠️ All optional, because Vercel and Render deploy independently: for a few
+   *  minutes after every deploy this page runs against the previous API and
+   *  every field here is undefined. */
+  activation?: Activation
+  time_to_first_meal?: TimeToFirstMeal
+  signup_hours?: SignupHours
+  /** {feature: accounts that have ever used it}. Says what to cut. */
+  feature_adoption?: Record<string, number>
+  /** ⚠️ The one figure NOT derived from live rows. Everything else on this page
+   *  moves when an account is deleted; retention must not. */
+  retention?: Retention
+  ai_spend_30d_usd?: number
+  ai_spend_30d_usd_per_active?: number
 }
 
 /** One day's effective calorie and macro targets — what its rings are drawn
@@ -693,8 +756,15 @@ export interface AdminUserRow {
   id: number
   email: string
   created_at: string
-  /** Null for an account that signed up and never logged anything. */
+  /** Null for an account that signed up and never logged anything.
+   *
+   *  ⚠️ Derived from rows the account WROTE, so it cannot see a visit that only
+   *  read. `last_seen_at` below is the other half, and the pair is the
+   *  diagnosis: present but writing nothing is an onboarding failure, absent
+   *  entirely is a bounce. */
   last_active_at: string | null
+  /** When the account last made any authenticated request. Date precision. */
+  last_seen_at?: string | null
   meals: number
   weights: number
   foods: number

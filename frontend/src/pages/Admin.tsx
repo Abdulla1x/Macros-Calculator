@@ -304,6 +304,161 @@ function AILatencyCard({ stats }: { stats: AdminStats }) {
   )
 }
 
+/** A whole-number percentage, or null when there is nothing to divide by.
+ *
+ * Null rather than 0: "no data" and "zero percent" are different claims, and
+ * this page has already been wrong in that direction once — a retention figure
+ * derived from live rows reads as a real number while being an artefact. */
+function percent(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null
+  return Math.round((numerator / denominator) * 100)
+}
+
+/** Where accounts stop: created -> logged once -> came back and logged again.
+ *
+ * The card this app most needed and did not have. On 2026-09-08 three
+ * strangers had signed up and none had written a single row, and there was no
+ * figure anywhere that said so — it had to be counted off the accounts table
+ * by eye.
+ */
+function FunnelCard({ stats }: { stats: AdminStats }) {
+  const activation = stats.activation
+  const ttfm = stats.time_to_first_meal
+  const retention = stats.retention
+  const total = activation?.total_users ?? 0
+  const logged = activation?.logged_a_meal ?? 0
+  const twice = activation?.logged_on_two_days ?? 0
+
+  const d7 = percent(retention?.d7_retained ?? 0, retention?.d7_cohort_size ?? 0)
+  const d30 = percent(retention?.d30_retained ?? 0, retention?.d30_cohort_size ?? 0)
+  const d7Cohorts = retention?.d7_cohorts ?? 0
+  const d30Cohorts = retention?.d30_cohorts ?? 0
+
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">Funnel</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Fact label="Accounts" value={String(total)} />
+        <Fact
+          label="Logged a meal"
+          value={String(logged)}
+          note={`${percent(logged, total) ?? 0}% of accounts`}
+        />
+        <Fact
+          label="Logged on 2+ days"
+          value={String(twice)}
+          note={`${percent(twice, total) ?? 0}% of accounts`}
+        />
+        <Fact
+          label="Time to first meal"
+          value={
+            (ttfm?.count ?? 0) === 0 ? '—' : `${ttfm?.median_hours ?? 0} h`
+          }
+          note={
+            (ttfm?.count ?? 0) === 0
+              ? 'Nobody has logged one yet'
+              : `median · p90 ${ttfm?.p90_hours ?? 0} h · n=${ttfm?.count ?? 0}`
+          }
+        />
+      </dl>
+
+      <h3 className="mt-5 text-xs font-semibold text-slate-400">Retention</h3>
+      <dl className="mt-2 grid grid-cols-2 gap-4">
+        <Fact
+          label={`D${retention?.d7_window_days ?? 7}`}
+          value={d7Cohorts === 0 ? 'Not measurable yet' : `${d7}%`}
+          note={
+            d7Cohorts === 0
+              ? 'No cohort has finished its window'
+              : `${retention?.d7_retained ?? 0} of ${retention?.d7_cohort_size ?? 0} · ${d7Cohorts} cohorts`
+          }
+        />
+        <Fact
+          label={`D${retention?.d30_window_days ?? 30}`}
+          value={d30Cohorts === 0 ? 'Not measurable yet' : `${d30}%`}
+          note={
+            d30Cohorts === 0
+              ? 'No cohort has finished its window'
+              : `${retention?.d30_retained ?? 0} of ${retention?.d30_cohort_size ?? 0} · ${d30Cohorts} cohorts`
+          }
+        />
+      </dl>
+      <p className="mt-3 text-xs text-ink-faint">
+        Retention is the one figure on this page that is <em>not</em> derived
+        from live rows. Everything else here recounts the accounts that exist
+        right now, so deleting one rewrites the past — which would make
+        retention read higher the more people quit. These two come from frozen
+        daily snapshots instead, and a cohort still inside its window counts as
+        nothing rather than as zero.
+      </p>
+    </Card>
+  )
+}
+
+/** Who arrives, when they arrive, and what they end up using.
+ *
+ * The hour histogram is here for the cold start, not for a body clock: the
+ * free instance sleeps outside the ping window, so a signup at 02:00 met a
+ * ~52 s boot on its very first request and one at noon did not.
+ */
+function ReachCard({ stats }: { stats: AdminStats }) {
+  const hours = stats.signup_hours
+  const adoption = stats.feature_adoption ?? {}
+  const adopted = Object.entries(adoption).sort((a, b) => b[1] - a[1])
+  const outside = hours?.outside_window ?? 0
+  const totalSignups = (hours?.by_hour ?? []).reduce((sum, n) => sum + n, 0)
+
+  return (
+    <Card as="section">
+      <h2 className="text-sm font-semibold">Reach</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <Fact
+          label="Signed up while asleep"
+          value={`${outside} of ${totalSignups}`}
+          note={
+            outside === 0
+              ? 'Everyone arrived inside the ping window'
+              : `Met a cold start · window is ${hours?.timezone ?? 'Asia/Dubai'}`
+          }
+        />
+        <Fact
+          label="AI spend, 30 days"
+          value={`$${(stats.ai_spend_30d_usd ?? 0).toFixed(2)}`}
+          note="Estimated at $0.01 per call"
+        />
+        <Fact
+          label="Per active account"
+          value={`$${(stats.ai_spend_30d_usd_per_active ?? 0).toFixed(2)}`}
+          note="What a subscription has to clear"
+        />
+      </dl>
+
+      <h3 className="mt-5 text-xs font-semibold text-slate-400">
+        Ever used, by account
+      </h3>
+      {adopted.length === 0 ? (
+        <p className="mt-2 text-xs text-ink-faint">No adoption data yet.</p>
+      ) : (
+        <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+          {adopted.map(([feature, count]) => (
+            <li key={feature} className="flex justify-between text-xs">
+              <span className="text-slate-400">{feature.replace(/_/g, ' ')}</span>
+              <span className="font-semibold" data-live={`adoption ${feature}`}>
+                {count}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-ink-faint">
+        Distinct accounts that have <em>ever</em> used each feature, so one
+        enthusiast cannot make a feature look adopted. Worth as much for what it
+        says to remove as for what it says to build.
+      </p>
+    </Card>
+  )
+}
+
 export default function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -390,6 +545,8 @@ export default function Admin() {
             ))}
           </section>
 
+          <FunnelCard stats={stats} />
+          <ReachCard stats={stats} />
           {keepWarm && <KeepWarmCard status={keepWarm} />}
           <AILatencyCard stats={stats} />
 
@@ -504,6 +661,7 @@ export default function Admin() {
                     <tr>
                       <th scope="col" className="pb-2 pr-4 font-medium">Email</th>
                       <th scope="col" className="pb-2 pr-4 font-medium">Joined</th>
+                      <th scope="col" className="pb-2 pr-4 font-medium">Last seen</th>
                       <th scope="col" className="pb-2 pr-4 font-medium">Last active</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Meals</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
@@ -511,34 +669,43 @@ export default function Admin() {
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Foods</th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">Templates</th>
-                      {/* The daily trackers, by their dashboard icons. Counts
-                          only, never contents — a supplement name can disclose
-                          a prescription, and a plan's date discloses a
-                          calendar, so these columns say how many and never
-                          which.
+                      {/* The daily trackers. Counts only, never contents — a
+                          supplement name can disclose a prescription, and a
+                          plan's date discloses a calendar, so these columns say
+                          how many and never which.
 
-                          ⚠ The name is the sr-only span, not the `title` these
-                          carried before. A cell's CONTENTS are its accessible
-                          name whenever they are non-empty, so each of these
-                          announced as its emoji and the title was never read --
-                          and every data cell under them inherits that name once
-                          scope="col" is doing its job. axe cannot catch it: an
-                          emoji is a non-empty name. */}
+                          ⚠ The visible word IS the accessible name, and that is
+                          the whole point of it. A cell's CONTENTS are its
+                          accessible name whenever they are non-empty, so when
+                          these were an emoji plus a `title` each announced as
+                          its emoji and the title was never read — which is why
+                          the title was removed and an sr-only span used
+                          instead. axe could not catch either version: an emoji
+                          is a non-empty name.
+
+                          The sr-only span is now redundant and gone: the label
+                          is on screen, so a sighted reader stops having to
+                          guess what 💊 counts, and a screen reader reads the
+                          same word rather than a parallel one that could drift
+                          out of step with it. The icon is aria-hidden so it is
+                          decoration on both sides. This fits because /admin is
+                          the one genuinely desktop-only route and now takes the
+                          width — see Layout.tsx. */}
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">💧</span>
-                        <span className="sr-only">Water logs</span>
+                        <span aria-hidden="true">💧</span>{' '}
+                        <span>Water</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">👟</span>
-                        <span className="sr-only">Days of steps logged</span>
+                        <span aria-hidden="true">👟</span>{' '}
+                        <span>Step days</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">💊</span>
-                        <span className="sr-only">Supplement doses ticked</span>
+                        <span aria-hidden="true">💊</span>{' '}
+                        <span>Doses</span>
                       </th>
                       <th scope="col" className="pb-2 pr-4 text-right font-medium">
-                        <span aria-hidden="true">📅</span>
-                        <span className="sr-only">Days adjusted by a calorie plan</span>
+                        <span aria-hidden="true">📅</span>{' '}
+                        <span>Plan days</span>
                       </th>
                       <th scope="col" className="pb-2 text-right font-medium">AI</th>
                     </tr>
@@ -549,6 +716,15 @@ export default function Admin() {
                         <td className="py-2 pr-4">{row.email}</td>
                         <td className="py-2 pr-4 text-slate-400">
                           {row.created_at.slice(0, 10)}
+                        </td>
+                        {/* Seen before active, deliberately: read left to
+                            right the pair is a diagnosis. Seen with no
+                            activity is someone who keeps turning up and never
+                            logs — an onboarding failure. Neither is a bounce.
+                            Until 2026-09-10 only the second column existed and
+                            the two were indistinguishable. */}
+                        <td className="py-2 pr-4 text-slate-400">
+                          {relativeDay(row.last_seen_at ?? null)}
                         </td>
                         <td className="py-2 pr-4 text-slate-400">
                           {relativeDay(row.last_active_at)}
@@ -574,6 +750,20 @@ export default function Admin() {
               </div>
             )}
           </Card>
+
+          {/* ⚠️ Without this, the day after deploy reads as an alarm. Every
+              account that existed before the column shipped has an empty
+              "Last seen" while showing real activity in the column beside it —
+              a combination that is impossible from here on, since writing
+              anything requires an authenticated request and that is what sets
+              it. The cells fill themselves in as people return. Saying so is
+              cheaper than the fifteen minutes spent wondering. */}
+          <p className="text-xs text-ink-faint">
+            "Last seen" only starts recording from the deploy that added it, so
+            an account that has not visited since then shows{' '}
+            <span className="font-medium">Never</span> even where "Last active"
+            does not. It fills itself in on that account's next visit.
+          </p>
 
           <p className="text-xs text-ink-faint">
             AI calls today: {stats.ai_calls_today} of{' '}

@@ -1,12 +1,12 @@
 """Admin metrics: who may read them, and what they must never contain."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app import keep_warm
 from app.db import get_engine
-from app.models import AIAnalysis, Meal, utcnow
+from app.models import AIAnalysis, Meal, User, utcnow
 from app.routers import admin as admin_router
 from app.routers.admin import CHART_DAYS
 from conftest import utc_today
@@ -748,3 +748,128 @@ def test_the_latency_panel_is_empty_rather_than_zero_when_nothing_is_timed(
     body = client.get("/api/admin/stats").json()
     assert body["ai_latency_30d_by_kind"] == {}
     assert body["ai_calls_30d_on_cold_server"] == 0
+
+
+# --- The funnel figures ------------------------------------------------------
+
+
+def test_activation_counts_two_steps_not_one(client, client_b, monkeypatch):
+    """Never logged and logged-once fail for different reasons.
+
+    Never logging is an onboarding failure -- the person never got far enough
+    to try. Logging on exactly one day is a retention failure: they did it once
+    and it was not worth repeating. An activation percentage that collapsed the
+    two would point at the wrong fix.
+    """
+    client_b.post(
+        "/api/meals",
+        json={"date": TODAY.isoformat(), "name": "One", "calories": 500,
+              "protein": 40},
+    )
+    client_b.post(
+        "/api/meals",
+        json={"date": TODAY.isoformat(), "name": "Two", "calories": 300,
+              "protein": 20},
+    )
+
+    make_admin(client, monkeypatch)
+    activation = client.get("/api/admin/stats").json()["activation"]
+    assert activation["total_users"] == 2
+    assert activation["logged_a_meal"] == 1
+    # Two meals, one day. A habit is days, not helpings.
+    assert activation["logged_on_two_days"] == 0
+
+    client_b.post(
+        "/api/meals",
+        json={"date": YESTERDAY.isoformat(), "name": "Three", "calories": 400,
+              "protein": 30},
+    )
+    activation = client.get("/api/admin/stats").json()["activation"]
+    assert activation["logged_on_two_days"] == 1
+
+
+def test_time_to_first_meal_ignores_accounts_that_never_logged(
+    client, client_b, monkeypatch
+):
+    """Including them -- as an infinity, or as time-since-signup -- would turn
+    the median into a statement about how long the app has been live."""
+    client_b.post(
+        "/api/meals",
+        json={"date": TODAY.isoformat(), "name": "First", "calories": 500,
+              "protein": 40},
+    )
+    make_admin(client, monkeypatch)
+    ttfm = client.get("/api/admin/stats").json()["time_to_first_meal"]
+    assert ttfm["count"] == 1
+    assert ttfm["median_hours"] == 0
+
+
+def test_signup_hours_are_local_and_flag_the_cold_start(client, monkeypatch):
+    """⚠️ The point is the cold start, not a body-clock chart.
+
+    Render's free instance sleeps outside 05:00-21:00 Asia/Dubai, so a signup
+    at 02:00 met a ~52 s boot on its very first request and one at noon did
+    not. "Was the cold start what lost them" has been unanswerable since the
+    first real signups; this is the column that answers it.
+    """
+    with Session(get_engine()) as db_session:
+        user = db_session.scalars(select(User)).one()
+        # 22:00 UTC is 02:00 the next day in Asia/Dubai -- outside the window,
+        # and it only reads that way if the conversion actually happens.
+        user.created_at = datetime.combine(TODAY, time(22, 0))
+        db_session.commit()
+
+    make_admin(client, monkeypatch)
+    hours = client.get("/api/admin/stats").json()["signup_hours"]
+    assert hours["timezone"] == "Asia/Dubai"
+    assert sum(hours["by_hour"]) == 1
+    assert hours["by_hour"][2] == 1, "UTC 22:00 should bucket as local 02:00"
+    assert hours["outside_window"] == 1
+
+
+def test_feature_adoption_counts_accounts_not_rows(client, client_b, monkeypatch):
+    """Distinct accounts, so one enthusiast cannot make a feature look adopted."""
+    for _ in range(3):
+        client_b.post("/api/water", json={"date": TODAY.isoformat(), "ml": 250})
+
+    make_admin(client, monkeypatch)
+    adoption = client.get("/api/admin/stats").json()["feature_adoption"]
+    assert adoption["water"] == 1, "three logs by one account is one adopter"
+    assert adoption["steps"] == 0
+
+
+def test_ai_spend_is_per_active_account(client, monkeypatch):
+    """Dividing by every account ever created would make the figure fall each
+    time somebody signed up and left -- the direction that flatters, and the
+    opposite of what a cost-per-user number is for."""
+    make_admin(client, monkeypatch)
+    stats = client.get("/api/admin/stats").json()
+    assert stats["ai_spend_30d_usd"] == 0.0
+    assert stats["ai_spend_30d_usd_per_active"] == 0.0
+
+
+def test_retention_reports_absence_rather_than_zero(client, monkeypatch):
+    """⚠️ No matured cohort must NOT read as 0% retention.
+
+    A fresh app has no closed window, and a page that drew 0% would be
+    reporting a catastrophe it has no evidence for. The client is sent
+    numerator, denominator and cohort count so it can refuse to draw a ratio.
+    """
+    make_admin(client, monkeypatch)
+    retention = client.get("/api/admin/stats").json()["retention"]
+    assert retention["d7_cohorts"] == 0
+    assert retention["d7_cohort_size"] == 0
+    assert retention["d7_window_days"] == 7
+    assert retention["d30_window_days"] == 30
+
+
+def test_user_rows_carry_both_presence_and_activity(client, monkeypatch):
+    """The pair is the diagnosis. `last_active_at` derives from rows the
+    account WROTE, so it cannot see a visit that only read; `last_seen_at`
+    can. Present but writing nothing is an onboarding failure; absent
+    entirely is a bounce."""
+    make_admin(client, monkeypatch)
+    rows = client.get("/api/admin/users").json()
+    mine = next(row for row in rows if row["email"] == email_of(client))
+    assert mine["last_seen_at"] is not None
+    assert mine["last_active_at"] is None, "no rows written, so no activity"

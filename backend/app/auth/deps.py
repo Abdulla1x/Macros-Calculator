@@ -1,4 +1,6 @@
+import logging
 import os
+from datetime import datetime, timezone
 
 import jwt
 from fastapi import Depends, HTTPException
@@ -6,8 +8,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import User
+from ..models import User, utcnow
+from ..snapshots import ensure_snapshots_quietly
 from .security import decode_token
+
+logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -42,7 +47,48 @@ def get_current_user(
     # Changing the password revokes every token issued before the change.
     if user.password_changed_at is not None and issued_at < user.password_changed_at:
         raise _unauthorized()
+    _mark_seen(db, user)
     return user
+
+
+def _mark_seen(db: Session, user: User) -> None:
+    """Record that this account was here today, at most once per UTC day.
+
+    ⚠️ THIS RUNS ON EVERY AUTHENTICATED REQUEST IN THE APP, which is what
+    dictates the shape. The date comparison comes first and is free; on all but
+    one request per account per day the function does nothing at all and issues
+    no SQL. The user row is already loaded and the session already open, so the
+    one day it does write, it costs a single UPDATE on a primary key.
+
+    That bound is the whole argument for the column existing. `admin.py`'s
+    `_last_active_by_user` rejected a `last_seen` column because keeping it
+    accurate "means a write on every authenticated request" -- true at
+    timestamp precision, false at date precision, and nothing reads below the
+    day.
+
+    Piggy-backing the daily snapshot here is deliberate: it needs a trigger
+    that fires about once a day on a request that has already opened a database
+    session, and app/snapshots.py explains at length why neither /api/health
+    nor a GitHub Actions cron can be that trigger.
+
+    ⚠️ EVERYTHING HERE IS GUARDED. A failure writing a metric must never fail
+    the request that carried it -- an exception raised in this dependency would
+    500 the dashboard, the log form and every other authenticated route, for an
+    account that merely visited. The rollback is as load-bearing as the except:
+    Postgres aborts the whole transaction on error, so leaving it would poison
+    the session the handler is about to use.
+    """
+    today = datetime.now(timezone.utc).date()
+    if user.last_seen_at is not None and user.last_seen_at.date() >= today:
+        return
+    try:
+        user.last_seen_at = utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("last_seen_at write failed")
+        return
+    ensure_snapshots_quietly(db, today)
 
 
 def admin_emails() -> set[str]:
