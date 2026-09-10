@@ -40,6 +40,24 @@ class User(Base):
     # because JWT `iat` is a whole-second claim: change-password mints a fresh
     # token in the same request and it must not read as older than the change.
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # The last day this account made an authenticated request -- ANY request,
+    # including one that only reads.
+    #
+    # This is the one signal the app had no way to record. admin.py's
+    # `last_active_at` is derived from rows the account WROTE, so an account
+    # that signs up, opens the dashboard every day for a week and logs nothing
+    # is indistinguishable there from one that closed the tab and never came
+    # back. Those are opposite problems with opposite fixes -- onboarding
+    # versus acquisition -- and on 2026-09-08 three real signups sat in exactly
+    # that ambiguity.
+    #
+    # Written at most ONCE PER UTC DAY per account (auth/deps.py), which is why
+    # a column is affordable at all: `_last_active_by_user` rejected a
+    # `last_seen` column on the grounds that keeping it accurate means a write
+    # on every authenticated request, and at date precision it does not.
+    # Stored as a timestamp rather than a date only because the rest of this
+    # schema is; nothing reads below the day.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class PasswordReset(Base):
@@ -609,3 +627,86 @@ class AIAnalysis(Base):
     # runs, so a slow first analysis of the evening is invisible in provider_ms
     # and visible here as an uptime of a few seconds.
     server_uptime_s: Mapped[int | None] = mapped_column(Integer)
+
+
+class DailyStat(Base):
+    """One frozen row per past UTC day. **There is no `user_id` in this table.**
+
+    WHY THIS EXISTS. Every other number on /admin is *derived from live rows* --
+    `signups_per_day` selects `User.created_at` from `users` on every request --
+    so **deleting an account silently rewrites the past**. That was proved by
+    accident on 2026-09-08: removing three test accounts turned "4 signups · 4
+    accounts active" into "3 · 3" and erased the 08-27 bar. Nothing was broken;
+    that is what deriving from live rows means.
+
+    ⚠️ For a *retention* figure that behaviour is not a cosmetic problem, it is
+    a wrong answer in the flattering direction. Someone who signs up, uses the
+    app for a month and then deletes their account leaves the denominator as
+    well as the numerator, so D30 gets measured only over accounts that still
+    exist -- exactly the population that did not churn. **The number would read
+    higher the more people quit.** Account deletion is a real, encouraged path
+    here, and D7/D30 is the number the monetization gate turns on.
+
+    So: the live charts may keep deriving, and retention must not.
+
+    HOW RETENTION IS COMPUTED. `signups` is the cohort size for `date`, frozen
+    the day after. The two `cohort_*_retained` columns stay NULL until their
+    window closes, and are then filled once and never revisited -- of the
+    accounts created on `date`, how many were active on any later day inside
+    the window. An account that signed up and then deleted is gone from the
+    numerator (it was not retained) while remaining in the frozen denominator,
+    which is the entire point: churn counts against retention instead of
+    disappearing from the arithmetic.
+
+    A matured cohort is therefore an immutable historical fact, and the ratio
+    is summed across matured cohorts only -- never over a partial window, which
+    would read as a collapse in retention every time a fresh cohort appeared.
+
+    ⚠️ THE RESIDUAL, ACCEPTED KNOWINGLY. A day is frozen the first time
+    anything runs after it ends, so an account created *and* deleted before
+    that first run never enters the denominator at all. The window is at most
+    about a day (see snapshots.py for what triggers a freeze) and closing it
+    completely would mean writing history on every signup -- a write per
+    account created, to defend against a case this app has never seen.
+
+    PRIVACY. Counts only, no identifiers, no dates that belong to a person.
+    That is what keeps /admin's "usage metrics only" banner literally true even
+    though this is the one table on the page that outlives its subjects, and it
+    is why history here survives a deletion request without holding anything a
+    deletion request covers.
+    """
+
+    __tablename__ = "daily_stats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Unique, not merely indexed: the backfill is idempotent BECAUSE the
+    # database refuses a second row for a day, and app/upsert.py turns the
+    # resulting race into a retry rather than a 500.
+    date: Mapped[date_type] = mapped_column(Date, unique=True, index=True)
+
+    # Accounts created on `date`. Doubles as the cohort size below -- one
+    # number, so the denominator can never drift from the signup count.
+    signups: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Distinct accounts that wrote anything at all that day. Computed by
+    # app/activity.py, the same function the live chart uses, so the frozen
+    # history and the derived chart cannot disagree about what "active" means.
+    active_users: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    meals: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Running totals as of the end of `date`. Cheap to store and impossible to
+    # reconstruct afterwards once accounts start being deleted.
+    total_users: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    total_meals: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # NULL means "this cohort has not matured yet", never "nobody came back".
+    # A zero here is a measured zero and enters the ratio; a NULL is excluded
+    # from it entirely. Same rule as AIAnalysis.provider_ms, and for the same
+    # reason -- an absent measurement that reads as a bad measurement is worse
+    # than no column at all.
+    cohort_d7_retained: Mapped[int | None] = mapped_column(Integer)
+    cohort_d30_retained: Mapped[int | None] = mapped_column(Integer)
+
+    # When the row was frozen, NOT the day it describes. The gap between the
+    # two is the width of the residual described above, so it is worth being
+    # able to read it back.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

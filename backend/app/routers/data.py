@@ -120,7 +120,16 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
 
     return {
         "exported_at": datetime.now(timezone.utc).isoformat(),
-        "user": {"email": user.email, "created_at": user.created_at.isoformat()},
+        # last_seen_at is a fact the app records ABOUT you, so a portability
+        # export that omitted it would be an incomplete answer to "give me
+        # everything you hold". Date-precision presence, nothing finer.
+        "user": {
+            "email": user.email,
+            "created_at": user.created_at.isoformat(),
+            "last_seen_at": (
+                None if user.last_seen_at is None else user.last_seen_at.isoformat()
+            ),
+        },
         "settings": None if setting is None else {
             "calorie_goal": setting.calorie_goal,
             "protein_goal": setting.protein_goal,
