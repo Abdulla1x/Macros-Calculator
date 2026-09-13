@@ -428,7 +428,7 @@ Or start both at once, with a throwaway database:
 
 | Gate | Command |
 |---|---|
-| backend tests | `venv/bin/python -m pytest -q` — 801 tests |
+| backend tests | `venv/bin/python -m pytest -q` — 826 tests |
 | backend lint | `ruff check app tests scripts` |
 | frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
 | frontend lint | `npm run lint` (oxlint) |
