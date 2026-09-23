@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from .auth import router as auth_router
 from .auth.security import get_jwt_secret, token_lifetime
 from .db import get_engine
-from .keep_warm import SCHEDULER_MARKER, mark_boot, record_health_check
+from .keep_warm import mark_boot, record_health_check
 from .models import Base
 from .rate_limit import limiter
 from .routers import (
@@ -154,13 +154,16 @@ def health(src: str | None = None):
     billing period. See app/keep_warm.py. The counter below is a lock and an
     integer; it adds nothing this endpoint has to wait for.
 
-    `src` is how the scheduler identifies itself: it calls
-    /api/health?src=keepwarm, and only those requests count as scheduler pings.
-    Render's own platform monitor hits the bare path about every 4 seconds --
-    render.yaml points healthCheckPath here -- so without the marker the two are
+    `src` is how a pinger identifies itself: cron-job.org calls
+    /api/health?src=keepwarm and the home-machine cron calls ?src=homecron, and
+    only requests carrying one of those count as keep-warm pings. Render's own
+    platform monitor hits the bare path about every 4 seconds -- render.yaml
+    points healthCheckPath here -- so without a marker the two are
     indistinguishable and the count means nothing. Optional and unvalidated on
-    purpose: an unrecognised value is simply not a scheduler ping, and a health
-    check must never be able to fail on its query string.
+    purpose: an unrecognised value is simply not a keep-warm ping, and a health
+    check must never be able to fail on its query string. The allowlist that
+    decides which values are recognised lives in app/keep_warm.py, so an open
+    endpoint cannot be made to grow a counter per arbitrary string.
     """
-    record_health_check(from_scheduler=src == SCHEDULER_MARKER)
+    record_health_check(src)
     return {"status": "ok"}

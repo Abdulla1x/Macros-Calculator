@@ -1378,6 +1378,25 @@ class AdminUserRow(BaseModel):
     calorie_plan_days: int = 0
 
 
+class PingSource(BaseModel):
+    """One keep-warm pinger's own tally.
+
+    Two pingers run against this service from different networks and clients --
+    see app/keep_warm.py for why -- and a single combined counter cannot say
+    which of them is actually landing. That question is the reason this panel
+    exists, so each source reports separately as well as into the union.
+
+    A source with `pings == 0` is reported rather than omitted: a zero beside a
+    name is the signal, and a row that disappeared when its pinger stopped
+    would hide exactly the failure being looked for.
+    """
+
+    source: str
+    pings: int
+    last_ping_at: datetime | None = None
+    seconds_since_last_ping: int | None = None
+
+
 class KeepWarmStatus(BaseModel):
     """Whether the keep-warm pinger is landing, as far as this process can tell.
 
@@ -1402,9 +1421,14 @@ class KeepWarmStatus(BaseModel):
     # deriving anything about the scheduler from it is the bug this field's
     # first version shipped with.
     health_checks: int
-    # The subset carrying ?src=keepwarm, which only the cron-job.org job sends.
-    # This is the number the verdict is computed from.
+    # The subset carrying a recognised ?src= marker, counted across every
+    # pinger. This is the number the verdict is computed from, and a union on
+    # purpose: "is anything keeping this awake" does not care which one managed
+    # it. Which one did is ping_sources, below.
     scheduler_pings: int
+    # The same pings split per pinger, one row per known source whether or not
+    # it has ever been seen. Added 2026-09-23 with the second pinger.
+    ping_sources: list[PingSource] = []
     last_scheduler_ping_at: datetime | None = None
     seconds_since_scheduler_ping: int | None = None
     # None until two scheduler pings have arrived -- there is no gap before then,
