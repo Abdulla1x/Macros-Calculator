@@ -33,6 +33,19 @@ connections dropped, new ones refused, until the next billing period. A
 multi-day outage caused entirely by the monitoring, with zero users. Accept that
 every counter below is wiped at spin-down; uptime still answers the question.
 
+⚠ TWO PINGERS SINCE 2026-09-23, AND THE PANEL HAS TO SAY WHICH ONE LANDED.
+cron-job.org's pings used to wake a sleeping instance: measured 2026-09-04, a
+request abandoned at its 30 s cap still started the boot, and a request 60 s
+later answered in 0.89 s. Since 2026-09-11 the same job is refused with a ~1.3 s
+503 that starts nothing -- while an ordinary browser from a home connection
+still wakes it. On 2026-09-16 pings had been failing since 05:03 and the owner's
+own page load woke the service at 08:05: same sleep duration, opposite outcome,
+so the discriminator is the CLIENT and not the waiting. A second pinger with a
+different client profile (`homecron`, a cron on an always-on home machine)
+therefore runs alongside the first. Counting both against one number would make
+it impossible to say which of them is keeping the service up, and that is now
+the whole question -- hence PING_SOURCES and the per-source rows below.
+
 Durations come from time.monotonic() and only the display timestamps come from
 the wall clock. A container's clock can step -- an NTP correction just after
 boot is exactly when it does -- and an uptime that jumped backwards would
@@ -44,7 +57,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .schemas import KeepWarmStatus
+from .schemas import KeepWarmStatus, PingSource
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +78,22 @@ WINDOW_TZ = "Asia/Dubai"
 # keep-warm.yml's own zone check exists to prevent.
 WINDOW_TZ_FALLBACK_OFFSET_HOURS = 4
 
-# The query marker the cron-job.org job must carry: /api/health?src=keepwarm.
+# The query markers a recognised pinger carries: /api/health?src=<marker>.
+#
+#   keepwarm   the cron-job.org job
+#   homecron   a cron on the owner's always-on home machine, added 2026-09-23
+#
+# An ALLOWLIST rather than "count whatever src happens to say". /api/health is
+# public and unauthenticated and `src` is deliberately unvalidated, so a dict
+# keyed on the raw value would grow one entry per distinct string anybody sent
+# it -- an unbounded map behind an open endpoint. Two names are the whole set.
+#
 # Deliberately NOT applied to keep-warm.yml's manual wake button -- pressing that
-# is a person keeping the server up, not the scheduler doing its job, and letting
-# it inflate this count would mask exactly the failure the count exists to find.
+# is a person keeping the server up, not a scheduler doing its job, and letting
+# it inflate these counts would mask exactly the failure they exist to find.
 SCHEDULER_MARKER = "keepwarm"
+HOME_CRON_MARKER = "homecron"
+PING_SOURCES = (SCHEDULER_MARKER, HOME_CRON_MARKER)
 
 # Render stops a free service after 15 minutes without inbound traffic. Surviving
 # longer than that means *something* kept it alive.
@@ -85,11 +109,20 @@ _booted_monotonic: float | None = None
 # Every request to /api/health, whoever made it. Kept only so the panel can say
 # out loud that most of them are Render's monitor -- it is context, not a signal.
 _checks = 0
-# The subset carrying SCHEDULER_MARKER. This is the number that means something.
+# The subset carrying any marker in PING_SOURCES, counted TOGETHER. This is the
+# number the verdict is computed from, and a union on purpose: the verdict
+# answers "is anything keeping this awake", which does not care which pinger
+# managed it. Which one is landing is the per-source detail below.
 _scheduler_pings = 0
 _last_scheduler_at: datetime | None = None
 _last_scheduler_monotonic: float | None = None
 _longest_scheduler_gap_s: float | None = None
+# The same pings split by source, because two pingers answering to one counter
+# are indistinguishable -- and once one of them is the suspect, "something is
+# warming it" stops being the question. Keys are only ever PING_SOURCES.
+_pings_by_source: dict[str, int] = {}
+_last_at_by_source: dict[str, datetime] = {}
+_last_monotonic_by_source: dict[str, float] = {}
 
 
 def _display_now() -> datetime:
@@ -120,6 +153,12 @@ def mark_boot() -> None:
         _last_scheduler_at = None
         _last_scheduler_monotonic = None
         _longest_scheduler_gap_s = None
+        # Cleared rather than rebuilt with zero values: snapshot() fills a row
+        # for every name in PING_SOURCES regardless, so an absent key and a
+        # zero already mean the same thing to the only reader there is.
+        _pings_by_source.clear()
+        _last_at_by_source.clear()
+        _last_monotonic_by_source.clear()
 
 
 def uptime_s() -> float:
@@ -138,13 +177,17 @@ def uptime_s() -> float:
     return 0.0 if booted is None else time.monotonic() - booted
 
 
-def record_health_check(from_scheduler: bool = False) -> None:
+def record_health_check(src: str | None = None) -> None:
     """One more /api/health request. The whole write path of this module.
 
-    `from_scheduler` is whether the URL carried SCHEDULER_MARKER. Only those
-    move the numbers the verdict is computed from; everything else -- Render's
-    platform monitor every ~4 s, a logged-out page's warm-up ping, the manual
-    wake button -- lands in the raw total and nothing more.
+    `src` is the request's raw query marker, counted only when it is one of
+    PING_SOURCES. Everything else -- Render's platform monitor every ~4 s, a
+    logged-out page's warm-up ping, the manual wake button, an arbitrary string
+    from the open internet -- lands in the raw total and nothing more.
+
+    A recognised ping moves the union counters the verdict reads AND its own
+    source's, under one lock, so the two can never disagree about a ping that
+    arrived while the panel was being rendered.
 
     Under a lock because FastAPI runs sync endpoints in a threadpool, so two
     requests can land at once, and `+= 1` is a read, an add and a store -- not
@@ -156,15 +199,19 @@ def record_health_check(from_scheduler: bool = False) -> None:
     now = time.monotonic()
     with _lock:
         _checks += 1
-        if not from_scheduler:
+        if src is None or src not in PING_SOURCES:
             return
         if _last_scheduler_monotonic is not None:
             gap = now - _last_scheduler_monotonic
             if _longest_scheduler_gap_s is None or gap > _longest_scheduler_gap_s:
                 _longest_scheduler_gap_s = gap
+        stamped = _display_now()
         _scheduler_pings += 1
-        _last_scheduler_at = _display_now()
+        _last_scheduler_at = stamped
         _last_scheduler_monotonic = now
+        _pings_by_source[src] = _pings_by_source.get(src, 0) + 1
+        _last_at_by_source[src] = stamped
+        _last_monotonic_by_source[src] = now
 
 
 def window_tz() -> timezone | ZoneInfo:
@@ -251,6 +298,9 @@ def snapshot() -> KeepWarmStatus:
         last_scheduler_at = _last_scheduler_at
         last_scheduler_monotonic = _last_scheduler_monotonic
         longest_gap = _longest_scheduler_gap_s
+        pings_by_source = dict(_pings_by_source)
+        last_at_by_source = dict(_last_at_by_source)
+        last_monotonic_by_source = dict(_last_monotonic_by_source)
 
     # mark_boot() runs in the lifespan handler, so this is only reachable if a
     # request somehow arrived before it did. Reporting zero uptime is honest in
@@ -264,6 +314,26 @@ def snapshot() -> KeepWarmStatus:
         else now_monotonic - last_scheduler_monotonic
     )
 
+    # A row for every name in PING_SOURCES, including one that has never been
+    # seen. A zero beside a pinger's name is exactly the signal the operator
+    # wants, and a row that simply vanished while that pinger was down would
+    # hide the only thing this panel exists to show.
+    ping_sources = []
+    for name in PING_SOURCES:
+        last_monotonic = last_monotonic_by_source.get(name)
+        ping_sources.append(
+            PingSource(
+                source=name,
+                pings=pings_by_source.get(name, 0),
+                last_ping_at=last_at_by_source.get(name),
+                seconds_since_last_ping=(
+                    None
+                    if last_monotonic is None
+                    else int(now_monotonic - last_monotonic)
+                ),
+            )
+        )
+
     local_now = now_utc.astimezone(window_tz())
     in_window = in_window_at(local_now)
 
@@ -272,6 +342,7 @@ def snapshot() -> KeepWarmStatus:
         uptime_seconds=int(uptime_s),
         health_checks=checks,
         scheduler_pings=scheduler_pings,
+        ping_sources=ping_sources,
         last_scheduler_ping_at=last_scheduler_at,
         seconds_since_scheduler_ping=None if since_last is None else int(since_last),
         longest_scheduler_gap_seconds=None if longest_gap is None else int(longest_gap),

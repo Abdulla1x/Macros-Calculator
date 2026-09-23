@@ -14,13 +14,17 @@
 # every constraint the pinging has to respect, which belongs in the repository
 # and not in a third party's dashboard.
 #
-# Five things that are true and worth knowing before changing anything here:
+# Six things that are true and worth knowing before changing anything here:
 #
 #  1. It pings /api/health and NOTHING else, ever. That endpoint increments an
 #     in-memory counter -- which /admin reads back to say whether these pings
 #     are landing -- and never touches Postgres.
 #
-#     THE SCHEDULED JOB MUST CALL /api/health?src=keepwarm, NOT THE BARE PATH.
+#     A SCHEDULED JOB MUST CALL /api/health?src=<marker>, NOT THE BARE PATH.
+#     cron-job.org sends ?src=keepwarm and the home-machine cron sends
+#     ?src=homecron -- point 6. Only those two values are recognised, because
+#     the route is public and counting whatever `src` says would let anybody
+#     grow a counter per arbitrary string.
 #     Render's own platform monitor hits this same route about every 4 seconds,
 #     because healthCheckPath in render.yaml points at it: 2,714 requests in
 #     3h12m of uptime, measured in production 2026-09-04, against the 19 that
@@ -44,12 +48,19 @@
 #
 #  3. Every 10 minutes, not every 15, wherever the pings run from. A cadence
 #     equal to the 15-minute spin-down is a coin flip on every tick; 10 minutes
-#     leaves five minutes of slack and survives one lost ping. cron-job.org
-#     abandons a request after 30 seconds, so the first ping of the day is
-#     recorded as a failure -- and still starts the boot, which Render finishes
-#     whether or not anyone is listening. Measured 2026-09-04: a request
-#     abandoned at 30 s against a sleeping server, then a second request 60 s
-#     later answered HTTP 200 in 0.89 s.
+#     leaves five minutes of slack and survives one lost ping.
+#
+#     cron-job.org abandons a request after 30 seconds, and that USED to be
+#     harmless: the first ping of the day was recorded as a failure and still
+#     started the boot, which Render finished whether or not anyone was
+#     listening. Measured 2026-09-04: a request abandoned at 30 s against a
+#     sleeping server, then a second request 60 s later answered HTTP 200 in
+#     0.89 s.
+#
+#     ⚠ THAT STOPPED BEING TRUE ON 2026-09-11 -- see point 6. The morning
+#     failure is no longer a clipped boot, so raising the cap would fix nothing.
+#     The free tier caps it at 30 s regardless; tested 2026-09-13, the field
+#     refuses anything higher.
 #
 #  4. GitHub's cron does not work on this repository, which is why the schedule
 #     below is commented out. Measured 2026-09-03/04: of the 114 runs a day this
@@ -69,6 +80,46 @@
 #     no commit and no deploy. A manual run skips the check -- pressing the
 #     button means "wake it now", and a button that refuses at midnight is
 #     useless on the one night anybody needs it.
+#
+#  6. ⚠ SINCE 2026-09-11 CRON-JOB.ORG'S PINGS DO NOT WAKE THE SERVICE, WHICH IS
+#     WHY A SECOND PINGER EXISTS.
+#     The morning failure is a ~1.3 s 503 with no container start in Render's
+#     logs -- not a timeout. The job has auto-disabled itself twice over it
+#     (2026-09-11 and 2026-09-19, both at 26 consecutive failures, both starting
+#     at the window's first ping), and production then cold-starts every visitor
+#     until someone re-enables it by hand. The auto-disable threshold is not
+#     exposed anywhere in the cron-job.org UI, so that is unavoidable on the free
+#     plan. Keep the disable NOTIFICATION on: it is the only thing that has ever
+#     reported this.
+#
+#     What separates a client that wakes the service from one that does not is
+#     the CLIENT, not the waiting. On 2026-09-16 pings had been failing since
+#     05:03 and an ordinary browser woke it at 08:05 -- same sleep duration,
+#     opposite outcome. A patient curl from a home connection did the same on
+#     2026-09-21: HTTP 200 in 53.09 s.
+#
+#     So a second pinger runs from an always-on machine on a home connection,
+#     calling /api/health?src=homecron on the same window and cadence, with a
+#     120 s budget. Patient on purpose: THE PING DOES NOT NEED TO SUCCEED, ONLY
+#     TO BE ACCEPTED FAR ENOUGH TO START THE BOOT. One that then times out is
+#     still a win -- the boot finishes ~53 s later and the next ping lands warm.
+#
+#     /admin counts the two markers separately. If one row is moving and the
+#     other is not, that is the answer to which client is being refused.
+#
+#     The crontab line it runs, recorded here because this file is the written
+#     record and a home machine's crontab is no more inspectable than a third
+#     party's dashboard. Hours are the machine's own local time, so it only
+#     matches the window if that machine is on Asia/Dubai:
+#
+#       3,13,23,33,43,53 5-20 * * * curl -sS -o /dev/null \
+#         -w '\%{http_code} \%{time_total}\n' --max-time 120 --retry 2 \
+#         --retry-delay 20 --retry-all-errors \
+#         'https://macros-calculator-api-us.onrender.com/api/health?src=homecron' \
+#         >> ~/keep-warm.log 2>&1
+#
+#     The log is the point: cron-job.org's history is the only record of the
+#     other pinger, and it is what vanished when the job was auto-disabled.
 #
 # Configuration -- repository variables, all optional
 # (Settings -> Secrets and variables -> Actions -> Variables):

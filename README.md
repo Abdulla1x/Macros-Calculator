@@ -428,7 +428,7 @@ Or start both at once, with a throwaway database:
 
 | Gate | Command |
 |---|---|
-| backend tests | `venv/bin/python -m pytest -q` — 826 tests |
+| backend tests | `venv/bin/python -m pytest -q` — 829 tests |
 | backend lint | `ruff check app tests scripts` |
 | frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
 | frontend lint | `npm run lint` (oxlint) |
@@ -582,6 +582,14 @@ to anything else. That failure looks like a network error and never reaches the 
 > allows 750 instance-hours per workspace per month and a 24/7 ping would spend all but six
 > of them.
 >
+> **A second pinger runs alongside it, and the reason is worth reading before copying any
+> of this.** Since 2026-09-11 the cron-job.org pings have been refused with a ~1.3 s 503
+> that starts no boot at all, every morning, until an ordinary visitor arrives and wakes
+> the service — the discriminator is the client making the request, not how long it waits.
+> The job has auto-disabled itself twice over the resulting failure streaks. So a cron on
+> an always-on home machine pings the same window with a 120 s budget, and `/admin` counts
+> the two separately: if one is landing and the other is not, that is the diagnosis.
+>
 > **While a cold start is happening you get a progress bar, not just a spinner.** It is
 > calibrated on those measurements — a straight line to 90% across the 52.3 s that eight
 > of ten boots take, then a creep toward 99% covering the ~10 s extra step the other two
@@ -589,10 +597,13 @@ to anything else. That failure looks like a network error and never reaches the 
 > shows the same thing from the operator's side: uptime, how many health pings have
 > arrived since boot, and whether that adds up to the scheduler actually landing.
 >
-> The scheduled job calls `/api/health?src=keepwarm`, and the marker matters: Render's own
-> platform monitor hits the bare route every few seconds, so without a way to tell the two
-> apart the "are the pings landing" answer on `/admin` counts the platform's traffic as the
-> scheduler's and can never report a problem.
+> Each pinger calls `/api/health` with its own marker — `?src=keepwarm` and
+> `?src=homecron` — and the markers matter twice over. Render's own platform monitor hits
+> the bare route every few seconds, so without a way to tell them apart the "are the pings
+> landing" answer on `/admin` counts the platform's traffic as a scheduler's and can never
+> report a problem; and with two pingers, one combined counter could not say which of them
+> was actually working. The recognised values are an allowlist, because the route is public
+> and unauthenticated.
 >
 > The ping targets `/api/health` and must keep doing so: it is the one route that never
 > touches Postgres. Pointing it at anything that queries the database would hold Neon awake
@@ -682,7 +693,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | POST | `/api/data/import` | Restore meals from CSV, with duplicate detection |
 | GET | `/api/data/export/all` | Full JSON export of everything the account owns |
 | GET | `/api/announcements` | Committed release notes + the status banner (public) |
-| GET | `/api/health` | Liveness check (public). `?src=keepwarm` marks a request as the keep-warm scheduler's |
+| GET | `/api/health` | Liveness check (public). `?src=keepwarm` (cron-job.org) or `?src=homecron` (the home-machine cron) marks a request as a keep-warm ping |
 | GET | `/api/admin/stats` | Usage metrics, the funnel and frozen retention, behind the `ADMIN_EMAILS` allowlist |
 | GET | `/api/admin/users` | Per-account counts, presence and AI consumption; never meal or weight content |
 | GET | `/api/admin/keep-warm` | Uptime, scheduler-ping counts and the ping window; in-memory, wiped at spin-down |

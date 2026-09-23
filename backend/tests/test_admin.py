@@ -524,6 +524,75 @@ def test_an_unrecognised_src_is_not_a_scheduler_ping(client, monkeypatch):
     assert body["scheduler_pings"] == 0
 
 
+HOME_HEALTH = f"/api/health?src={keep_warm.HOME_CRON_MARKER}"
+
+
+def test_each_pinger_is_counted_separately_and_in_the_union(client, monkeypatch):
+    """Two pingers, one verdict, two tallies.
+
+    `scheduler_pings` stays a union because the verdict asks "is anything
+    keeping this awake", which does not care who managed it. But once one
+    pinger is the suspect -- cron-job.org has been refused with a fast 503
+    every morning since 2026-09-11 -- "something warmed it" stops being an
+    answer, so each source also reports on its own.
+    """
+    make_admin(client, monkeypatch)
+    keep_warm.mark_boot()
+
+    for _ in range(2):
+        assert client.get(MARKED_HEALTH).status_code == 200
+    for _ in range(3):
+        assert client.get(HOME_HEALTH).status_code == 200
+
+    body = client.get("/api/admin/keep-warm").json()
+    assert body["scheduler_pings"] == 5, "the union counts every recognised ping"
+
+    rows = {row["source"]: row for row in body["ping_sources"]}
+    assert rows[keep_warm.SCHEDULER_MARKER]["pings"] == 2
+    assert rows[keep_warm.HOME_CRON_MARKER]["pings"] == 3
+    for marker in (keep_warm.SCHEDULER_MARKER, keep_warm.HOME_CRON_MARKER):
+        assert rows[marker]["last_ping_at"] is not None
+        assert rows[marker]["seconds_since_last_ping"] is not None
+
+
+def test_a_pinger_that_has_never_pinged_still_gets_a_row(client, monkeypatch):
+    """A zero beside a name IS the signal.
+
+    If a source only appeared once it had been seen, a pinger that stopped --
+    or never started -- would simply be absent from the panel, which is
+    indistinguishable from one that is working. That is the failure this whole
+    module exists to make visible, so the row is always rendered.
+    """
+    make_admin(client, monkeypatch)
+    keep_warm.mark_boot()
+
+    assert client.get(MARKED_HEALTH).status_code == 200
+
+    body = client.get("/api/admin/keep-warm").json()
+    rows = {row["source"]: row for row in body["ping_sources"]}
+    assert set(rows) == set(keep_warm.PING_SOURCES)
+    assert rows[keep_warm.HOME_CRON_MARKER]["pings"] == 0
+    assert rows[keep_warm.HOME_CRON_MARKER]["last_ping_at"] is None
+    assert rows[keep_warm.HOME_CRON_MARKER]["seconds_since_last_ping"] is None
+
+
+def test_an_arbitrary_src_cannot_add_a_row(client, monkeypatch):
+    """/api/health is public and `src` is unvalidated, so the set of sources
+    has to be an allowlist. Keying a map on the raw value would let anybody
+    grow this process's memory one entry per distinct string."""
+    make_admin(client, monkeypatch)
+    keep_warm.mark_boot()
+
+    for src in ("hacker", "homecron2", "x" * 500, ""):
+        assert client.get(f"/api/health?src={src}").status_code == 200
+
+    body = client.get("/api/admin/keep-warm").json()
+    assert [row["source"] for row in body["ping_sources"]] == list(
+        keep_warm.PING_SOURCES
+    )
+    assert body["scheduler_pings"] == 0
+
+
 def test_longest_gap_is_none_until_two_scheduler_pings_have_arrived(
     client, monkeypatch
 ):

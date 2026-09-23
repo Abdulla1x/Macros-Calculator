@@ -25,7 +25,12 @@ import {
   tooltipStyle,
   activeDot,
 } from '../lib/chartTheme'
-import type { AdminStats, AdminUserRow, KeepWarmStatus } from '../types'
+import type {
+  AdminStats,
+  AdminUserRow,
+  KeepWarmStatus,
+  PingSource,
+} from '../types'
 import Card from '../components/ui/Card'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
@@ -169,6 +174,21 @@ function Fact({
 }
 
 
+/** One pinger's line on the keep-warm card.
+ *
+ * Reuses the Scheduler-pings note's own rule that "0s ago" reads like a bug
+ * rather than like a ping that has just landed.
+ */
+function lastPingLabel(row: PingSource): string {
+  if (row.pings === 0) return 'nothing since boot'
+  if (row.seconds_since_last_ping === null) return `${row.pings.toLocaleString()} pings`
+  const ago =
+    row.seconds_since_last_ping < 10
+      ? 'seconds ago'
+      : `${duration(row.seconds_since_last_ping)} ago`
+  return `${row.pings.toLocaleString()} · last ${ago}`
+}
+
 /** The operator half of the cold-start work: is the pinger actually landing.
  *
  * Its own component so the verdict is computed once rather than per element,
@@ -176,6 +196,10 @@ function Fact({
  */
 function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
   const verdict = verdictCopy(status)
+  // `?? []` for the reason AILatencyCard gives at length: Vercel and Render
+  // deploy independently, so for a few minutes after any release this page
+  // runs against an API that predates the field.
+  const sources = status.ping_sources ?? []
   return (
     <Card as="section">
       <h2 className="text-sm font-semibold">Keep-warm</h2>
@@ -221,23 +245,42 @@ function KeepWarmCard({ status }: { status: KeepWarmStatus }) {
           note={`${status.window_tz} · now ${status.window_local_time} there`}
         />
       </dl>
+      {sources.length > 0 && (
+        <dl className="mt-4 space-y-1 text-xs">
+          {sources.map((row) => (
+            <div key={row.source} className="flex items-baseline gap-2">
+              <dt className="text-ink-muted">
+                <code>?src={row.source}</code>
+              </dt>
+              <dd
+                className="text-slate-400"
+                data-live={`${row.source} pings`}
+              >
+                {lastPingLabel(row)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <p className="mt-3 text-xs text-ink-faint">
-        Only pings to{' '}
-        <code className="text-ink-muted">/api/health?src=keepwarm</code> are
-        counted above. Render&apos;s own monitor hits the bare route roughly
-        every four seconds and has done so{' '}
+        Only pings carrying a recognised{' '}
+        <code className="text-ink-muted">?src=</code> marker are counted above.
+        Render&apos;s own monitor hits the bare route roughly every four seconds
+        and has done so{' '}
         <span data-live="total checks">
           {status.health_checks.toLocaleString()}
         </span>{' '}
-        times since boot — counting those as scheduler pings is what made this
+        times since boot — counting those as keep-warm pings is what made this
         panel&apos;s first version unable to detect anything at all.
       </p>
       <p className="mt-2 text-xs text-ink-faint">
-        The window above is what this repository records. The schedule
-        itself lives at cron-job.org and is the thing to edit — pings run
-        every 10 minutes and its 30-second timeout means the first one
-        each morning is logged as a failure while still starting the
-        boot.
+        The window above is what this repository records; the schedules
+        themselves live at cron-job.org and in the home machine&apos;s crontab,
+        and those are the things to edit. Two pingers because one stopped being
+        enough — since 2026-09-11 cron-job.org has been refused every morning
+        with a fast 503 that starts no boot, while an ordinary browser still
+        wakes the service. If one row above is counting and the other is not,
+        that is the answer.
       </p>
     </Card>
   )

@@ -837,6 +837,19 @@ export interface ReviewSummary {
  * Mirrors KeepWarmStatus in backend/app/schemas.py. Every counter is in-memory
  * on the API process and resets at spin-down — which is not a defect: a process
  * that has been up long enough to have history is itself the answer. */
+/** One keep-warm pinger's own tally. Mirrors PingSource in
+ * backend/app/schemas.py.
+ *
+ * A source with `pings: 0` is reported rather than omitted — a zero beside a
+ * name is the signal, and a row that vanished when its pinger stopped would
+ * hide the exact failure the panel exists to show. */
+export interface PingSource {
+  source: string
+  pings: number
+  last_ping_at: string | null
+  seconds_since_last_ping: number | null
+}
+
 export interface KeepWarmStatus {
   booted_at: string
   uptime_seconds: number
@@ -844,9 +857,17 @@ export interface KeepWarmStatus {
    * platform monitor hits this route about every 4 seconds. Context only —
    * never derive anything about the scheduler from it. */
   health_checks: number
-  /** The subset carrying ?src=keepwarm, which only cron-job.org sends. This is
-   * the number the verdict is computed from. */
+  /** The subset carrying a recognised ?src= marker, across every pinger. This
+   * is the number the verdict is computed from, and a union on purpose — "is
+   * anything keeping this awake" does not care which one managed it. */
   scheduler_pings: number
+  /** The same pings split per pinger, one row per known source whether or not
+   * it has ever been seen.
+   *
+   * ⚠️ Optional because Vercel and Render deploy independently: the frontend
+   * ships first and runs for a few minutes against an API that does not send
+   * this yet. Read it with `?? []`. */
+  ping_sources?: PingSource[]
   last_scheduler_ping_at: string | null
   seconds_since_scheduler_ping: number | null
   /** null until two scheduler pings have arrived; 0 would read as "perfect"
