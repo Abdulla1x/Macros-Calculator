@@ -107,19 +107,34 @@
 #     /admin counts the two markers separately. If one row is moving and the
 #     other is not, that is the answer to which client is being refused.
 #
-#     The crontab line it runs, recorded here because this file is the written
-#     record and a home machine's crontab is no more inspectable than a third
-#     party's dashboard. Hours are the machine's own local time, so it only
-#     matches the window if that machine is on Asia/Dubai:
+#     What it runs, recorded here because this file is the written record and a
+#     home machine's crontab is no more inspectable than a third party's
+#     dashboard. ~/keep-warm.sh on that machine:
 #
-#       3,13,23,33,43,53 5-20 * * * curl -sS -o /dev/null \
-#         -w '\%{http_code} \%{time_total}\n' --max-time 120 --retry 2 \
-#         --retry-delay 20 --retry-all-errors \
-#         'https://macros-calculator-api-us.onrender.com/api/health?src=homecron' \
-#         >> ~/keep-warm.log 2>&1
+#       #!/bin/sh
+#       URL='https://macros-calculator-api-us.onrender.com/api/health?src=homecron'
+#       out=$(curl -sS -o /dev/null -w '%{http_code} %{time_total}' \
+#         --max-time 120 --retry 2 --retry-delay 20 --retry-all-errors \
+#         "$URL" 2>&1)
+#       printf '%s %s\n' "$(date '+%F %T')" "$out" >> "$HOME/keep-warm.log"
 #
-#     The log is the point: cron-job.org's history is the only record of the
-#     other pinger, and it is what vanished when the job was auto-disabled.
+#     and the crontab entry, where HOURS ARE THE MACHINE'S OWN LOCAL TIME -- it
+#     only matches the window if that machine is on Asia/Dubai:
+#
+#       3,13,23,33,43,53 5-20 * * * /home/<user>/keep-warm.sh
+#
+#     ⚠ A SCRIPT RATHER THAN THE CURL INLINE, AND NOT FOR TIDINESS. cron turns
+#     an unescaped % into a NEWLINE, so an inline `-w '%{http_code}'` silently
+#     truncates the command mid-line. Escaping it as \% works and is the
+#     standard fix, but a crontab full of \% is the kind of thing that gets
+#     mistyped once and then fails in a way that looks exactly like the fault
+#     this pinger exists to diagnose: no wake at 05:03. Moving the command into
+#     a file removes the whole class -- there is no % left in the crontab.
+#
+#     The log carries a timestamp for the same reason: "did the 05:03 ping
+#     land" is the only question it is ever read to answer, and a bare
+#     "200 0.4" cannot answer it. cron-job.org's history was the only record of
+#     the other pinger, and it is what vanished when that job auto-disabled.
 #
 # Configuration -- repository variables, all optional
 # (Settings -> Secrets and variables -> Actions -> Variables):
