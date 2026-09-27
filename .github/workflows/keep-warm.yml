@@ -116,12 +116,28 @@
 #       out=$(curl -sS -o /dev/null -w '%{http_code} %{time_total}' \
 #         --max-time 120 --retry 2 --retry-delay 20 --retry-all-errors \
 #         "$URL" 2>&1)
-#       printf '%s %s\n' "$(date '+%F %T')" "$out" >> "$HOME/keep-warm.log"
+#       printf '%s %s\n' "$(TZ=Asia/Dubai date '+%F %T %z')" "$out" \
+#         >> "$HOME/keep-warm.log"
 #
-#     and the crontab entry, where HOURS ARE THE MACHINE'S OWN LOCAL TIME -- it
-#     only matches the window if that machine is on Asia/Dubai:
+#     and the crontab entry. ⚠ HOURS ARE THE MACHINE'S OWN CLOCK, and that
+#     machine runs on UTC -- as a server should. Dubai is UTC+4 with no DST, so
+#     01:03-16:53 UTC is EXACTLY 05:03-20:53 Asia/Dubai, same width, no drift
+#     ever. The same reasoning as WINDOW_TZ_FALLBACK_OFFSET_HOURS in
+#     app/keep_warm.py, and as the commented GitHub cron above:
 #
-#       3,13,23,33,43,53 5-20 * * * /home/<user>/keep-warm.sh
+#       # Hours are UTC: 01:03-16:53 UTC == 05:03-20:53 Asia/Dubai (UTC+4, no
+#       # DST). Do NOT "fix" these to 5-20 -- this box runs on UTC.
+#       3,13,23,33,43,53 1-16 * * * /home/<user>/keep-warm.sh
+#
+#     ⚠ On a box that is genuinely on Asia/Dubai the hours are 5-20 instead.
+#     Read the machine's `date` before copying either one; the likeliest
+#     mistake here is matching the hours to the documented window rather than
+#     to the clock the cron daemon actually reads.
+#
+#     Setting the machine's timezone to Asia/Dubai instead was considered and
+#     rejected 2026-09-27: it shifts every OTHER schedule on that host -- its
+#     nightly backup and a panel restart, both belonging to a different
+#     project -- to pay for one foreign cron entry.
 #
 #     ⚠ A SCRIPT RATHER THAN THE CURL INLINE, AND NOT FOR TIDINESS. cron turns
 #     an unescaped % into a NEWLINE, so an inline `-w '%{http_code}'` silently
