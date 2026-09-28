@@ -6,7 +6,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
 ![Postgres](https://img.shields.io/badge/Database-PostgreSQL-4169e1?logo=postgresql&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-725%20pytest-brightgreen)
+![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 **🔗 Live app: [macros-calculator-mu.vercel.app](https://macros-calculator-mu.vercel.app)** — sign up and start logging. (Free-tier hosting: the first request after idle can take ~30–60 s.)
@@ -428,7 +428,7 @@ Or start both at once, with a throwaway database:
 
 | Gate | Command |
 |---|---|
-| backend tests | `venv/bin/python -m pytest -q` — 829 tests |
+| backend tests | `venv/bin/python -m pytest -q` |
 | backend lint | `ruff check app tests scripts` |
 | frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
 | frontend lint | `npm run lint` (oxlint) |
