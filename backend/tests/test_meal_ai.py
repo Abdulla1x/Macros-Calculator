@@ -1,6 +1,8 @@
 import asyncio
+import gc
 import io
 import json
+import weakref
 from datetime import date, datetime
 from types import SimpleNamespace
 
@@ -585,14 +587,31 @@ def test_build_contents_omits_the_block_when_nothing_is_attached():
 
 # --- analyze_meal's response handling (fake genai client, no network) -------
 
+class _FakeAio:
+    """The `client.aio` surface meal_ai uses: an async context manager with models."""
+
+    def __init__(self, generate_content, closed):
+        self.models = SimpleNamespace(generate_content=generate_content)
+        self._closed = closed
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        self._closed.append(True)
+
+
+def _fake_client_factory(generate_content, closed=None):
+    """Stands in for genai.Client; `closed` gets one entry per client closed."""
+    closed = [] if closed is None else closed
+    return lambda api_key=None: SimpleNamespace(aio=_FakeAio(generate_content, closed))
+
+
 def _install_fake_provider(monkeypatch, response):
     async def generate_content(**_kwargs):
         return response
 
-    fake_client = SimpleNamespace(
-        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
-    )
-    monkeypatch.setattr(meal_ai.genai, "Client", lambda api_key=None: fake_client)
+    monkeypatch.setattr(meal_ai.genai, "Client", _fake_client_factory(generate_content))
 
 
 def test_analyze_meal_uses_sdk_parsed_object(monkeypatch):
@@ -623,10 +642,7 @@ def _install_failing_provider(monkeypatch, exc):
     async def generate_content(**_kwargs):
         raise exc
 
-    fake_client = SimpleNamespace(
-        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
-    )
-    monkeypatch.setattr(meal_ai.genai, "Client", lambda api_key=None: fake_client)
+    monkeypatch.setattr(meal_ai.genai, "Client", _fake_client_factory(generate_content))
 
 
 @pytest.mark.parametrize(
@@ -712,7 +728,7 @@ def _install_scripted_provider(monkeypatch, outcomes):
     Faked at the same seam as every other provider test — the SDK boundary —
     so the retry logic is exercised without a network call.
     """
-    calls = {"n": 0, "models": [], "configs": []}
+    calls = {"n": 0, "models": [], "configs": [], "closed": []}
 
     async def generate_content(**kwargs):
         calls["models"].append(kwargs.get("model"))
@@ -726,11 +742,7 @@ def _install_scripted_provider(monkeypatch, outcomes):
     monkeypatch.setattr(
         meal_ai.genai,
         "Client",
-        lambda api_key=None: SimpleNamespace(
-            aio=SimpleNamespace(
-                models=SimpleNamespace(generate_content=generate_content)
-            )
-        ),
+        _fake_client_factory(generate_content, calls["closed"]),
     )
     return calls
 
@@ -827,6 +839,54 @@ def test_an_unusable_response_is_not_retried(monkeypatch):
     with pytest.raises(meal_ai.MealAIBadResponse):
         asyncio.run(meal_ai.analyze_meal([], "chicken"))
     assert calls["n"] == 1
+
+
+def test_every_attempt_closes_its_client_including_the_failed_ones(monkeypatch):
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_server_error(), _server_error(), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert len(calls["closed"]) == calls["n"] == 3
+
+
+class _Payload:
+    """Stands in for an attempt's encoded request body. Weak-referenceable."""
+
+
+def test_an_attempts_cyclic_garbage_is_freed_before_the_next_attempt(monkeypatch):
+    """The 2026-09-29 outage, pinned at the seam that caused it.
+
+    Each real attempt leaves an httpx Response in a cycle with its stream, with
+    the whole encoded request hanging off it. Refcounting never frees a cycle,
+    and the automatic collector counts objects rather than bytes, so in
+    production it never ran and the payloads piled up until the instance was
+    killed. The automatic collector is switched off here so the only thing that
+    can free the cycle is the collection meal_ai does itself.
+    """
+    alive_at_next_attempt: list[bool] = []
+    previous: list = []
+
+    async def generate_content(**_kwargs):
+        if previous:
+            alive_at_next_attempt.append(previous[-1]() is not None)
+        payload = _Payload()
+        payload.cycle = payload  # unreachable once this returns: cycle only
+        previous.append(weakref.ref(payload))
+        del payload
+        if len(previous) < 3:
+            raise _server_error()
+        return SimpleNamespace(parsed=SAMPLE, text=None)
+
+    monkeypatch.setattr(meal_ai.genai, "Client", _fake_client_factory(generate_content))
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    finally:
+        if was_enabled:
+            gc.enable()
+    assert alive_at_next_attempt == [False, False]
 
 
 def test_backoff_grows_but_is_capped_and_jittered(monkeypatch, virtual_clock):
