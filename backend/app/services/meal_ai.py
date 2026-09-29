@@ -7,6 +7,7 @@ vars, nothing else. services/email.py holds the other end of the same contract
 for the email provider.
 """
 import asyncio
+import gc
 import logging
 import os
 import random
@@ -286,6 +287,51 @@ def is_configured() -> bool:
     return bool(_env(API_KEY_ENV))
 
 
+def _rss_mb() -> int | None:
+    """This process's resident memory in MB, or None where /proc doesn't exist.
+
+    Logged beside every provider outcome because the free plan's memory graph
+    is coarse and averaged, and the 2026-09-29 restart was a ratchet across
+    attempts: a figure per call is what shows whether it is climbing again.
+    """
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
+
+
+async def _generate(model: str, contents: list, config: types.GenerateContentConfig):
+    """One generate_content call, on a client closed when it returns.
+
+    Built per call, not hoisted: a key or model changed in the dashboard is
+    meant to take effect without a restart, and that only holds while the
+    client is constructed from the env every time. Closed explicitly because
+    the SDK otherwise defers that to __del__, which schedules it as a task on
+    whatever loop happens to be running.
+
+    ⚠️ **The gc.collect() is the fix for an outage, not tidiness.** Every
+    attempt leaves an httpx Response in a reference cycle with its own stream,
+    and hanging off it is the Request carrying the whole encoded body -- about
+    1.3x the photos in base64, plus the base64 strings themselves. Only the
+    cyclic collector can free that, and it triggers on *object counts*: a few
+    objects holding tens of megabytes never trip it. So each photo attempt
+    ratcheted the process up by roughly its payload and never came back, and on
+    2026-09-29 a Gemini overload (2-4 attempts per analysis) took the 512 MB
+    instance over its limit in five minutes. Collecting before each attempt
+    bounds what is outstanding to the last attempt's garbage. Measured locally:
+    a full collection on the loaded app is ~20 ms, against a call of seconds.
+    """
+    gc.collect()
+    async with genai.Client(api_key=_env(API_KEY_ENV)).aio as client:
+        return await client.models.generate_content(
+            model=model, contents=contents, config=config
+        )
+
+
 def _models() -> list[str]:
     """The model chain: preferred first, fallback second.
 
@@ -364,15 +410,22 @@ async def _call_with_retry(
 
         try:
             with _provider_errors(model, final=final):
-                return model, await operation(model, http_options)
+                response = await operation(model, http_options)
         except _RETRYABLE as exc:
             last = exc
+        else:
+            logger.info(
+                "Gemini answered (model=%s, attempts=%d, rss_mb=%s)",
+                model, attempt, _rss_mb(),
+            )
+            return model, response
 
         elapsed = _now() - started
         if final or elapsed + delay >= deadline_s:
             logger.warning(
-                "Giving up on Gemini after %.1fs and %d attempts (deadline=%.0fs)",
-                elapsed, attempt, deadline_s,
+                "Giving up on Gemini after %.1fs and %d attempts (deadline=%.0fs, "
+                "rss_mb=%s)",
+                elapsed, attempt, deadline_s, _rss_mb(),
             )
             raise last
         logger.info(
@@ -493,17 +546,13 @@ async def analyze_meal(
     library_foods: Sequence[Food] | None = None,
 ) -> MealAnalysis:
     async def call(model: str, http_options: types.HttpOptions):
-        # Built per attempt, not hoisted: a key or model changed in the
-        # dashboard is meant to take effect without a restart, and that only
-        # holds while the client is constructed from the env on every call.
-        client = genai.Client(api_key=_env(API_KEY_ENV))
-        return await client.aio.models.generate_content(
-            model=model,
-            contents=_build_contents(
+        return await _generate(
+            model,
+            _build_contents(
                 images, text, prior_analysis, audio_bytes, audio_mime,
                 library_foods,
             ),
-            config=types.GenerateContentConfig(
+            types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
                 response_schema=MealAnalysis,
@@ -553,19 +602,16 @@ async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
     user fixes, rather than a wrong number they have to notice afterwards.
     """
     async def call(model: str, http_options: types.HttpOptions):
-        client = genai.Client(api_key=_env(API_KEY_ENV))
-        return await client.aio.models.generate_content(
-            model=model,
-            contents=[
+        return await _generate(
+            model,
+            [
                 types.Part.from_bytes(
                     data=audio_bytes, mime_type=audio_mime or "audio/webm"
                 ),
                 TRANSCRIPTION_PROMPT,
             ],
             # Transcription has one right answer; don't let it paraphrase.
-            config=types.GenerateContentConfig(
-                temperature=0.0, http_options=http_options
-            ),
+            types.GenerateContentConfig(temperature=0.0, http_options=http_options),
         )
 
     model, response = await _call_with_retry(
@@ -612,13 +658,10 @@ async def phrase_review(facts: Sequence[str]) -> str:
     almost verbatim, which buys nothing over rendering the sentences directly.
     """
     async def call(model: str, http_options: types.HttpOptions):
-        client = genai.Client(api_key=_env(API_KEY_ENV))
-        return await client.aio.models.generate_content(
-            model=model,
-            contents=[REVIEW_PROMPT + "\n".join(f"- {fact}" for fact in facts)],
-            config=types.GenerateContentConfig(
-                temperature=0.2, http_options=http_options
-            ),
+        return await _generate(
+            model,
+            [REVIEW_PROMPT + "\n".join(f"- {fact}" for fact in facts)],
+            types.GenerateContentConfig(temperature=0.2, http_options=http_options),
         )
 
     model, response = await _call_with_retry(
@@ -672,12 +715,11 @@ async def probe() -> str:
     broken whenever a thinking model spent its budget on thoughts.
     """
     model = _models()[0]
-    client = genai.Client(api_key=_env(API_KEY_ENV))
     with _provider_errors(model):
-        await client.aio.models.generate_content(
-            model=model,
-            contents=[PROBE_PROMPT],
-            config=types.GenerateContentConfig(
+        await _generate(
+            model,
+            [PROBE_PROMPT],
+            types.GenerateContentConfig(
                 temperature=0.0,
                 http_options=types.HttpOptions(timeout=PROBE_TIMEOUT_MS),
             ),
