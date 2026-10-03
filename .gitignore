@@ -31,3 +31,6 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Local design-tool working files (direction briefs, review captures)
+.impeccable/
