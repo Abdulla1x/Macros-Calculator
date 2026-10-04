@@ -1,0 +1,25 @@
+{
+  // The unit tests, compiled by the project's own tsc and then run by Node's
+  // built-in runner (`npm test`). Compiled rather than type-stripped because
+  // Node only strips types when it was built with TypeScript support, and the
+  // distro builds are not -- this way the tests run on any Node 22 and are
+  // type-checked in the same step, with no test framework to install.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "module": "nodenext",
+    "rootDir": ".",
+    "outDir": "./dist-tests",
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["tests"]
+}

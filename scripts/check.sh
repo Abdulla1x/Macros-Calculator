@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Run every pre-commit gate in one pass: backend tests and lint, frontend
-# typecheck, lint and build.
+# typecheck, unit tests, lint and build.
 #
 # Deliberately does not stop at the first failure. `a && b && c` hides whether
 # the frontend is also broken once the backend fails, which turns one fix-and-
@@ -10,7 +10,7 @@
 #
 #   ./scripts/check.sh              # everything
 #   ./scripts/check.sh --backend    # pytest + ruff only
-#   ./scripts/check.sh --frontend   # tsc + lint + build only
+#   ./scripts/check.sh --frontend   # tsc + tests + lint + build only
 #
 set -uo pipefail
 
@@ -68,8 +68,10 @@ if [[ $want_backend == 1 ]]; then
 fi
 
 if [[ $want_frontend == 1 ]]; then
-  # Matches CI: typecheck the app project explicitly, then lint, then build.
+  # Matches CI: typecheck the app project explicitly, then the unit tests,
+  # then lint, then build.
   run "frontend: tsc" "cd frontend && npx tsc --noEmit -p tsconfig.app.json"
+  run "frontend: test" "cd frontend && npm test"
   run "frontend: lint" "cd frontend && npm run lint"
   run "frontend: build" "cd frontend && npm run build"
 fi
