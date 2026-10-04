@@ -353,7 +353,8 @@ Macros-Calculator
 │       │                        #   photoSize + photoDownscale (shrink photos before upload)
 │       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Review, Admin,
 │                                #   WhatsNew, settings/ (five tab panels), and the four auth pages
-├── docs/                        # AI provider runbook + the Gemini EEA-region incident write-up
+├── docs/                        # AI provider runbook, the Gemini EEA-region incident write-up,
+│                                #   and the photo-size A/B note
 ├── scripts/                     # check.sh (all six gates), dev.sh, review-changes.sh,
 │                                #   dom-snapshot.mjs (the refactor DOM-diff harness)
 ├── screenshots/                 # desktop/ and mobile/ captures used by this README
@@ -737,6 +738,12 @@ only on the caller's data, except these public ones: `/api/health`,
   real one: Gemini's free tier is geo-blocked in the EEA, and the backend was hosted in
   Frankfurt. Covers the diagnosis, the region migration, what remains unproven, and the two
   further failures the migration caused.
+- [**Picking a photo size with an A/B instead of a hunch**](docs/photo-size-ab-2026-10.md) —
+  the plan was to shrink photos to 1024 px because "the model downsamples anyway". Measured
+  first: the AI bill turned out not to depend on photo size at all, and 1024 px shifted the
+  model's estimates upward on every plate it changed. Covers the experiment design (run
+  against the model's own run-to-run noise), why 1536 px shipped instead, and exactly what
+  the numbers can and cannot claim.
 
 ---
 
