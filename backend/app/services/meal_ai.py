@@ -536,6 +536,22 @@ def _build_contents(
     return parts
 
 
+def analysis_config(http_options: types.HttpOptions) -> types.GenerateContentConfig:
+    """The request settings every meal analysis is sent with.
+
+    Its own function so scripts/compare_estimates.py sends exactly what the app
+    sends: an A/B of photo sizes or models is only evidence about production if
+    the prompt, schema and temperature cannot drift between the two.
+    """
+    return types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
+        response_mime_type="application/json",
+        response_schema=MealAnalysis,
+        temperature=0.2,
+        http_options=http_options,
+    )
+
+
 async def analyze_meal(
     images: Sequence[tuple[bytes, str | None]],
     text: str | None,
@@ -552,13 +568,7 @@ async def analyze_meal(
                 images, text, prior_analysis, audio_bytes, audio_mime,
                 library_foods,
             ),
-            types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=MealAnalysis,
-                temperature=0.2,
-                http_options=http_options,
-            ),
+            analysis_config(http_options),
         )
 
     # Parsing stays outside the retry: a response that arrived and failed to
