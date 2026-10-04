@@ -15,6 +15,8 @@ import ssl
 import time
 from collections.abc import Sequence
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from google import genai
@@ -22,7 +24,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import ValidationError
 
-from ..env import env_float
+from ..env import env_float, env_int
 from ..schemas import Food, MealAnalysis
 
 logger = logging.getLogger(__name__)
@@ -31,14 +33,16 @@ API_KEY_ENV = "GEMINI_API_KEY"
 MODEL_ENV = "MEAL_AI_MODEL"
 FALLBACK_MODEL_ENV = "MEAL_AI_FALLBACK_MODEL"
 DEADLINE_ENV = "MEAL_AI_DEADLINE_S"
+MAX_ATTEMPTS_ENV = "MEAL_AI_MAX_ATTEMPTS"
 # Kept current deliberately: Google retires models on a schedule and a retired
 # id fails every request with a 4xx. Override with MEAL_AI_MODEL to switch
 # without a deploy.
 DEFAULT_MODEL = "gemini-3.5-flash"
 # Overload is per-model serving pool, so an older generation is usually still
 # answering while the newest one returns 503 — an estimate from a slightly
-# weaker model beats the "enter macros manually" dead end. Set
-# MEAL_AI_FALLBACK_MODEL empty to disable.
+# weaker model beats the "enter macros manually" dead end. Quotas are per model
+# too, so on the free tier every model in the chain is another day's allowance.
+# MEAL_AI_FALLBACK_MODEL takes a comma-separated list; set it empty to disable.
 DEFAULT_FALLBACK_MODEL = "gemini-2.5-flash"
 
 # Retries are bounded by the DEADLINE, not by an attempt count. Gemini's
@@ -51,11 +55,44 @@ DEFAULT_FALLBACK_MODEL = "gemini-2.5-flash"
 RETRY_BASE_DELAY = 1.0  # seconds, doubled per attempt
 RETRY_MAX_DELAY = 8.0  # ceiling, so late attempts stay frequent enough to matter
 
+# Attempts per user action, whatever the deadline still allows. Google counts a
+# refused attempt against the per-day quota exactly like an answered one
+# (measured 2026-10-04: two answers and ~12 overload failures, then refused for
+# the day), and the free tier is 20 a day per model for the whole app -- so an
+# uncapped minute of retries let one analysis on a bad Gemini day spend
+# everyone's AI. On a paid key a refused attempt costs no money, which is why
+# MEAL_AI_MAX_ATTEMPTS can raise it from the dashboard.
+ANALYZE_MAX_ATTEMPTS = 4
+TRANSCRIBE_MAX_ATTEMPTS = 3
+REVIEW_MAX_ATTEMPTS = 2
+
+# Google's per-day quotas reset at midnight Pacific -- its documented rule, and
+# measured 2026-10-04. NOT what the 429 says: its retryDelay points at 00:00 UTC,
+# and a key that trusted it got two more calls and another refusal.
+QUOTA_RESET_TZ = "America/Los_Angeles"
+# PST. Off by an hour during US daylight time, which only matters if the
+# runtime has no tzdata -- and every figure built from this says "about".
+QUOTA_RESET_FALLBACK_OFFSET_HOURS = -8
+# A model refused for the day is skipped until the reset, but asked again after
+# at most this long: switching billing on lifts the quota mid-day, and the app
+# should find that out by itself rather than at midnight Pacific or a restart.
+EXHAUSTED_RECHECK = timedelta(hours=1)
+
 # Seam for the clock the retry deadline is measured against. Named so tests can
 # swap in a virtual clock — the loop is bounded by wall time, so a stubbed sleep
 # that didn't move the clock would spin until the backoff overflowed. Patching
 # this beats patching time.monotonic globally, which the test client also uses.
 _now = time.monotonic
+# The wall clock, for the one thing that is about calendar days: the per-day
+# quota. Its own seam for the same reason as _now.
+_utcnow = lambda: datetime.now(timezone.utc)  # noqa: E731
+
+# Models Google has refused for the day, and until when to believe it. Module
+# state is a real cache here for the same reason as the probe cache in
+# routers/ai.py: Render runs one instance. A restart forgets it, which costs one
+# refused attempt per model -- this saves attempts, it is not what enforces
+# anything.
+_exhausted: dict[str, datetime] = {}
 
 # Per-attempt deadline. Without one the SDK inherits httpx's default of no
 # timeout at all, so a connection Google accepts and then never answers pins a
@@ -87,6 +124,19 @@ class MealAIError(Exception):
 
 class MealAIRateLimited(MealAIError):
     """Provider quota or per-minute rate limit exhausted."""
+
+
+class MealAIDailyQuotaExhausted(MealAIRateLimited):
+    """The provider's allowance for the DAY is spent, not the minute's.
+
+    A subclass, so everything that treats a 429 as "refused before inference"
+    -- the refund, the probe's classification -- keeps doing so. What differs
+    is what the user is told: "try again in a minute" is false for hours.
+    """
+
+    def __init__(self, message: str, resets_at: datetime):
+        super().__init__(message)
+        self.resets_at = resets_at
 
 
 class MealAIUnavailable(MealAIError):
@@ -209,6 +259,65 @@ THE FACTS:
 """
 
 
+def quota_ids(exc: Exception) -> list[str]:
+    """The quota ids a 429 names, read from its structured QuotaFailure.
+
+    ⚠️ Never from the message text. The first per-day guard (in
+    scripts/compare_estimates.py) searched the prose for "PerDay" and stopped a
+    run on what was a per-minute refusal -- the model answered again seconds
+    later. The structured id is the only signal that has never been wrong.
+    """
+    details = getattr(exc, "details", None)
+    error = details.get("error", details) if isinstance(details, dict) else {}
+    return [
+        violation.get("quotaId", "")
+        for item in (error or {}).get("details", []) or []
+        if isinstance(item, dict)
+        for violation in item.get("violations", []) or []
+        if isinstance(violation, dict)
+    ]
+
+
+def is_daily_quota(exc: Exception) -> bool:
+    """True for a per-day refusal (e.g. GenerateRequestsPerDayPerProjectPerModel-
+    FreeTier). Anything else -- including a 429 with no structure at all -- reads
+    as per-minute, the conservative answer: it is never retried on the same model.
+    """
+    return any("PerDay" in quota for quota in quota_ids(exc))
+
+
+def _quota_tz() -> timezone | ZoneInfo:
+    try:
+        return ZoneInfo(QUOTA_RESET_TZ)
+    except ZoneInfoNotFoundError:
+        return timezone(timedelta(hours=QUOTA_RESET_FALLBACK_OFFSET_HOURS))
+
+
+def next_quota_reset(now: datetime | None = None) -> datetime:
+    """The next midnight Pacific, in UTC: when Google's per-day quotas reset."""
+    now = now or _utcnow()
+    local = now.astimezone(_quota_tz())
+    midnight = datetime.combine(
+        local.date() + timedelta(days=1), datetime.min.time(), tzinfo=local.tzinfo
+    )
+    return midnight.astimezone(timezone.utc)
+
+
+def _is_exhausted(model: str) -> bool:
+    until = _exhausted.get(model)
+    if until is None:
+        return False
+    if _utcnow() >= until:
+        del _exhausted[model]
+        return False
+    return True
+
+
+def _mark_exhausted(model: str) -> None:
+    now = _utcnow()
+    _exhausted[model] = min(next_quota_reset(now), now + EXHAUSTED_RECHECK)
+
+
 @contextmanager
 def _provider_errors(model: str, *, final: bool = True):
     """Translate provider exceptions into the neutral hierarchy, logging why.
@@ -228,8 +337,18 @@ def _provider_errors(model: str, *, final: bool = True):
         # 4xx is our side: exhausted quota, or a request/config the API refuses
         # (invalid key, retired model id, a region where the free tier isn't
         # offered). Never retried, so always logged in full.
+        if exc.code == 429 and is_daily_quota(exc):
+            # Expected and frequent on the free tier, and the quota id says
+            # everything a traceback would -- so one line, not a stack.
+            resets_at = next_quota_reset()
+            logger.warning(
+                "Gemini daily quota exhausted (model=%s, quota=%s, resets_at=%s)",
+                model, ",".join(quota_ids(exc)), resets_at.isoformat(timespec="minutes"),
+            )
+            raise MealAIDailyQuotaExhausted(str(exc), resets_at) from exc
         logger.exception(
-            "Gemini rejected the request (model=%s, code=%s)", model, exc.code
+            "Gemini rejected the request (model=%s, code=%s, quota=%s)",
+            model, exc.code, ",".join(quota_ids(exc)) or None,
         )
         if exc.code == 429:
             raise MealAIRateLimited(str(exc)) from exc
@@ -263,11 +382,11 @@ def _provider_errors(model: str, *, final: bool = True):
         raise MealAIInternalError(f"{type(exc).__name__}: {exc}") from exc
 
 
-# Worth another go. Deliberately NOT MealAIRateLimited: a 429 means we are
-# already sending too much and the limit window is 60s wide, so two more
-# requests inside it make the thing we are being limited for worse — the "try
-# again in a minute" the user already sees is the correct remedy. Deliberately
-# NOT MealAIInternalError: a drifted dependency raises the same TypeError every
+# Worth another go on the SAME model. Deliberately NOT MealAIRateLimited: a
+# 429 means that model's window is full -- for the minute or for the day -- so
+# asking it again inside the window only deepens the refusal. _call_with_retry
+# moves a 429 to the next model instead, which has quotas of its own.
+# Deliberately NOT MealAIInternalError: a drifted dependency raises the same TypeError every
 # time. Deliberately NOT MealAIBadResponse: that response arrived and burned
 # tokens, and asking again bills them twice for the same garbage.
 _RETRYABLE = (MealAIUnavailable, MealAIUnreachable)
@@ -333,7 +452,7 @@ async def _generate(model: str, contents: list, config: types.GenerateContentCon
 
 
 def _models() -> list[str]:
-    """The model chain: preferred first, fallback second.
+    """The model chain: preferred first, then each fallback in order.
 
     Deduped so setting both env vars to the same id doesn't quietly double
     every request's worst-case latency for no extra chance of success.
@@ -342,11 +461,13 @@ def _models() -> list[str]:
     # os.environ rather than _env, because the distinction that matters here is
     # set-to-empty (an operator turning the fallback off) versus never set.
     if FALLBACK_MODEL_ENV in os.environ:
-        fallback = _env(FALLBACK_MODEL_ENV)
+        fallbacks = _env(FALLBACK_MODEL_ENV)
     else:
-        fallback = DEFAULT_FALLBACK_MODEL
-    if fallback and fallback not in chain:
-        chain.append(fallback)
+        fallbacks = DEFAULT_FALLBACK_MODEL
+    for fallback in fallbacks.split(","):
+        fallback = fallback.strip()
+        if fallback and fallback not in chain:
+            chain.append(fallback)
     return chain
 
 
@@ -360,6 +481,17 @@ def _deadline(default: float) -> float:
     """
     value = env_float(DEADLINE_ENV, default)
     return value if value > 0 else default
+
+
+def _max_attempts(default: int) -> int:
+    """Attempts per user action, overridable from the dashboard.
+
+    Below one means nothing an operator could want -- zero attempts would turn
+    the AI off with an outage message -- so it keeps the default, as _deadline
+    does. The kill switch for AI is AI_GLOBAL_DAILY_LIMIT=0.
+    """
+    value = env_int(MAX_ATTEMPTS_ENV, default)
+    return value if value >= 1 else default
 
 
 def _backoff(attempt: int) -> float:
@@ -376,7 +508,7 @@ def _backoff(attempt: int) -> float:
 
 
 async def _call_with_retry(
-    operation, *, timeout_ms: int, deadline_s: float
+    operation, *, timeout_ms: int, deadline_s: float, max_attempts: int
 ) -> tuple[str, object]:
     """Run one provider call, retrying only what another attempt can fix.
 
@@ -389,28 +521,58 @@ async def _call_with_retry(
     action must stay one slot. A 5xx is refused before inference, so retrying
     costs nothing billable — which is also why an arrived-but-unusable response
     is pointedly not retryable.
+
+    Two budgets bound it, whichever runs out first: the deadline (how long the
+    user waits) and max_attempts (how much of the per-day quota one action may
+    spend, since Google counts refused attempts too). A 429 takes its model out
+    of the rotation for this call and moves on at once -- no sleep, because the
+    next model's quota is its own -- and a per-day 429 also takes it out for
+    later calls, until the reset or the hourly re-check.
     """
     http_options = types.HttpOptions(timeout=timeout_ms)
-    models = _models()
+    pool = [model for model in _models() if not _is_exhausted(model)]
+    if not pool:
+        resets_at = next_quota_reset()
+        logger.warning(
+            "Every Gemini model is out of quota for the day; not calling "
+            "(resets_at=%s)", resets_at.isoformat(timespec="minutes"),
+        )
+        raise MealAIDailyQuotaExhausted("Every model's daily quota is spent.", resets_at)
     deadline_s = _deadline(deadline_s)
+    max_attempts = _max_attempts(max_attempts)
     started = _now()
-    attempt = 0
+    turn = 0
     last: MealAIError | None = None
 
-    while True:
-        attempt += 1
+    for attempt in range(1, max_attempts + 1):
         # Alternate through the chain rather than exhausting the primary first,
         # so a sustained overload reaches the other serving pool on attempt two
         # instead of after the budget is half gone.
-        model = models[(attempt - 1) % len(models)]
+        model = pool[turn % len(pool)]
+        turn += 1
         delay = _backoff(attempt)
         # Whether there is room for another attempt after this one. Decided up
         # front so the last failure is the one that pays for a full traceback.
-        final = (_now() - started) + delay >= deadline_s
+        final = attempt == max_attempts or (_now() - started) + delay >= deadline_s
 
         try:
             with _provider_errors(model, final=final):
                 response = await operation(model, http_options)
+        except MealAIRateLimited as exc:
+            last = exc
+            if isinstance(exc, MealAIDailyQuotaExhausted):
+                _mark_exhausted(model)
+            # Out of the rotation; turn steps back so the model that slid into
+            # this slot is the one asked next.
+            pool.remove(model)
+            turn -= 1
+            if not pool:
+                raise
+            logger.info(
+                "Gemini %s refused (%s); trying %s now",
+                model, type(exc).__name__, pool[turn % len(pool)],
+            )
+            continue
         except _RETRYABLE as exc:
             last = exc
         else:
@@ -422,17 +584,19 @@ async def _call_with_retry(
 
         elapsed = _now() - started
         if final or elapsed + delay >= deadline_s:
-            logger.warning(
-                "Giving up on Gemini after %.1fs and %d attempts (deadline=%.0fs, "
-                "rss_mb=%s)",
-                elapsed, attempt, deadline_s, _rss_mb(),
-            )
-            raise last
+            break
         logger.info(
-            "Retrying Gemini in %.1fs (model=%s, attempt %d, %.0fs of budget left)",
-            delay, model, attempt + 1, deadline_s - elapsed,
+            "Retrying Gemini in %.1fs (model=%s, attempt %d of %d, %.0fs of budget left)",
+            delay, model, attempt + 1, max_attempts, deadline_s - elapsed,
         )
         await asyncio.sleep(delay)
+
+    logger.warning(
+        "Giving up on Gemini after %.1fs and %d attempts (deadline=%.0fs, "
+        "max_attempts=%d, rss_mb=%s)",
+        _now() - started, attempt, deadline_s, max_attempts, _rss_mb(),
+    )
+    raise last
 
 
 def _default_instruction(image_count: int, has_audio: bool) -> str:
@@ -575,7 +739,10 @@ async def analyze_meal(
     # parse already burned tokens, and a second call bills them again for the
     # same broken output.
     model, response = await _call_with_retry(
-        call, timeout_ms=ANALYZE_TIMEOUT_MS, deadline_s=ANALYZE_DEADLINE_S
+        call,
+        timeout_ms=ANALYZE_TIMEOUT_MS,
+        deadline_s=ANALYZE_DEADLINE_S,
+        max_attempts=ANALYZE_MAX_ATTEMPTS,
     )
 
     # response.parsed is populated when the SDK validated the schema itself;
@@ -625,7 +792,10 @@ async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
         )
 
     model, response = await _call_with_retry(
-        call, timeout_ms=TRANSCRIBE_TIMEOUT_MS, deadline_s=TRANSCRIBE_DEADLINE_S
+        call,
+        timeout_ms=TRANSCRIBE_TIMEOUT_MS,
+        deadline_s=TRANSCRIBE_DEADLINE_S,
+        max_attempts=TRANSCRIBE_MAX_ATTEMPTS,
     )
 
     try:
@@ -675,7 +845,10 @@ async def phrase_review(facts: Sequence[str]) -> str:
         )
 
     model, response = await _call_with_retry(
-        call, timeout_ms=REVIEW_TIMEOUT_MS, deadline_s=REVIEW_DEADLINE_S
+        call,
+        timeout_ms=REVIEW_TIMEOUT_MS,
+        deadline_s=REVIEW_DEADLINE_S,
+        max_attempts=REVIEW_MAX_ATTEMPTS,
     )
 
     try:
@@ -704,7 +877,7 @@ def provider_info() -> dict[str, str | None]:
     chain = _models()
     return {
         "model": chain[0],
-        "fallback_model": chain[1] if len(chain) > 1 else None,
+        "fallback_model": ", ".join(chain[1:]) or None,
         "sdk_version": genai.__version__,
     }
 

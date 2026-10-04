@@ -3,7 +3,7 @@ import logging
 import os
 import time as time_module
 from collections.abc import Sequence
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import ValidationError
@@ -52,16 +52,26 @@ MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024
 # because the request is rebuilt per retry -- so ten is roughly 140 tokens
 # against a ~660-token system prompt. Raising it raises the per-analysis bill.
 MAX_ATTACHED_FOODS = 10
-DEFAULT_DAILY_LIMIT = 20
+# ⚠️ Sized for the REAL free tier: 20 requests a day per model, for the whole
+# app, failed attempts included (measured 2026-10-03/04 -- see
+# docs/ai-capacity-2026-10.md). These were 20 / 40 / 500, set for a tier ~25x
+# larger and never re-checked, which let one account's allowance equal the
+# whole app's day. Measured against the owner's own export (2026-10-04): at
+# most 10 analyses and 14 voice notes on his busiest days, so 12 and 16 leave
+# headroom without letting one account take the whole app's day.
+DEFAULT_DAILY_LIMIT = 12
 # Transcription is a cheaper call than analysis and a voice note usually
 # precedes one, so it gets its own allowance rather than eating the analysis
 # budget — otherwise speaking your meal would cost twice as much as typing it.
-DEFAULT_TRANSCRIBE_DAILY_LIMIT = 40
-# Ceiling across ALL users and both kinds of call. The per-user limits bound
-# one account; nothing bounded the total, so signing up repeatedly could drain
-# the shared provider quota (or, on a paid key, run up a bill). Sized well
-# above legitimate use and well below the free tier's ~1500/day.
-DEFAULT_GLOBAL_DAILY_LIMIT = 500
+DEFAULT_TRANSCRIBE_DAILY_LIMIT = 16
+# Ceiling across ALL users and every kind of call. The per-user limits bound
+# one account; nothing else bounds the total, and signup has no email
+# verification, so this is what stops throwaway accounts draining the shared
+# quota -- or, on a paid key, the money. It counts user actions, not provider
+# attempts: meal_ai caps attempts per action, and 40 actions leave room for
+# those retries inside a three-model chain's 60 requests a day. On a paid key
+# it is also the spend ceiling: 40 x ~2 cents is ~$0.80 a day at most.
+DEFAULT_GLOBAL_DAILY_LIMIT = 40
 
 KIND_ANALYSIS = "analysis"
 KIND_TRANSCRIPTION = "transcription"
@@ -171,7 +181,39 @@ def _probe_message(exc: Exception) -> str | None:
     return str(exc)[:300]
 
 
+def resets_in(when: datetime, now: datetime | None = None) -> str:
+    """"in about 5 hours": when a daily limit lifts, in words a user can act on.
+
+    Relative rather than a clock time, because the server cannot know the
+    reader's time zone and both reset boundaries -- Google's midnight Pacific,
+    the app's own UTC midnight -- are someone else's midnight. "About" is
+    honest: it is rounded to the hour.
+    """
+    now = now or datetime.now(timezone.utc)
+    minutes = max(0, (when - now).total_seconds() / 60)
+    if minutes < 60:
+        return "in under an hour"
+    hours = round(minutes / 60)
+    return f"in about {hours} hour{'' if hours == 1 else 's'}"
+
+
+def _next_utc_midnight() -> datetime:
+    """When calls_today's counters start again."""
+    today = datetime.now(timezone.utc).date()
+    return datetime.combine(today + timedelta(days=1), time.min, tzinfo=timezone.utc)
+
+
 def _provider_http_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, meal_ai.MealAIDailyQuotaExhausted):
+        # Ahead of the table: it is a MealAIRateLimited too, and the table's
+        # "try again in a minute" is false for hours here.
+        return HTTPException(
+            status_code=429,
+            detail=(
+                "The AI has reached its daily limit. It resets "
+                f"{resets_in(exc.resets_at)}; until then, enter macros manually."
+            ),
+        )
     for kind, status, detail in _PROVIDER_ERRORS:
         if isinstance(exc, kind):
             return HTTPException(status_code=status, detail=detail)
@@ -324,8 +366,8 @@ def _reserve_call(
         raise HTTPException(
             status_code=429,
             detail=(
-                f"Daily {noun} limit reached ({per_user_limit}/day). "
-                "Try again tomorrow or enter macros manually."
+                f"Daily {noun} limit reached ({per_user_limit}/day). It resets "
+                f"{resets_in(_next_utc_midnight())}; until then, enter macros manually."
             ),
         )
 
@@ -339,8 +381,8 @@ def _reserve_call(
         raise HTTPException(
             status_code=503,
             detail=(
-                "The app's shared daily AI quota is used up. "
-                "Try again tomorrow, or enter macros manually."
+                "The app's shared daily AI quota is used up. It resets "
+                f"{resets_in(_next_utc_midnight())}; until then, enter macros manually."
             ),
         )
 
