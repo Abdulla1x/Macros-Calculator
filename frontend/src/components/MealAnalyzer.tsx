@@ -147,8 +147,26 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   // along with the analysis: the text drops into the box below where it can be
   // corrected first, so a misheard ingredient is a typo to fix instead of a
   // wrong number to notice afterwards.
+  //
+  // ⚠️ Each recording is sent exactly ONCE, enforced here rather than trusted to
+  // the dependency list. A re-render used to re-run this effect and POST the
+  // same audio a second time; every transcription is a Gemini call against a
+  // daily quota of 20, so a duplicate is not harmless (see useAudioRecorder's
+  // `clear`). For the same reason a re-run must not cancel the call already in
+  // flight -- that would discard the one transcript that was paid for -- so the
+  // only thing that drops a result is the component going away.
+  const sentRecording = useRef<Blob | null>(null)
+  const mounted = useRef(true)
   useEffect(() => {
-    if (!recording) return
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!recording || sentRecording.current === recording) return
+    sentRecording.current = recording
 
     // An accidental tap on the mic produces a fraction of a second of silence,
     // and the model will confidently transcribe that as a stray word rather
@@ -160,8 +178,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       return
     }
 
-    let cancelled = false
-
     const transcribe = async () => {
       setTranscribing(true)
       setError(null)
@@ -169,17 +185,17 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         const form = new FormData()
         form.append('audio', recording, voiceNoteFilename(recording.type))
         const { transcript } = await api.transcribeVoiceNote(form)
-        if (cancelled) return
+        if (!mounted.current) return
         setNote((current) =>
           current.trim() ? `${current.trim()} ${transcript}` : transcript,
         )
         noteRef.current?.focus()
       } catch (err) {
-        if (!cancelled) {
+        if (mounted.current) {
           setError(err instanceof Error ? err.message : 'Could not transcribe that')
         }
       } finally {
-        if (!cancelled) {
+        if (mounted.current) {
           setTranscribing(false)
           // Either way the recording is spent — dropping it lets the user just
           // record again instead of having to discard a failed one first.
@@ -189,9 +205,6 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     }
 
     void transcribe()
-    return () => {
-      cancelled = true
-    }
   }, [recording, durationMs, clearRecording])
 
   // Appended, not replaced: on a phone the gallery picker is usually opened
