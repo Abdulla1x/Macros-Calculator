@@ -32,10 +32,10 @@ services:
       # deploy when Google retires one.
       - key: MEAL_AI_MODEL
         value: gemini-3.5-flash
-      # Tried when the model above returns 5xx on every attempt. Overload is per
-      # serving pool, so an older generation is usually still answering — an
-      # estimate from a slightly weaker model beats "enter macros manually".
-      # Set empty to disable the fallback.
+      # Tried when the model above is overloaded (5xx) or out of quota (429);
+      # comma-separated, in order. Overload is per serving pool and quotas are
+      # per model, so each one listed is another day's free allowance. Set
+      # empty to disable the fallback.
       - key: MEAL_AI_FALLBACK_MODEL
         value: gemini-2.5-flash
       # How long one analysis may keep retrying a busy provider before giving
@@ -44,6 +44,11 @@ services:
       # above it (see ANALYZE_TIMEOUT_MS in frontend/src/api/client.ts).
       - key: MEAL_AI_DEADLINE_S
         value: "60"
+      # Provider attempts per user action (in-code defaults 4 / 3 / 2 for
+      # analysis / voice note / review). Refused attempts count against the
+      # free tier's per-day quota, so this stays low until billing is on.
+      - key: MEAL_AI_MAX_ATTEMPTS
+        value: ""
       # Per-user daily cap on GET /api/ai/status?probe=true, which spends one
       # real provider call. Results are cached for 60s process-wide, so this
       # only bounds a determined caller.
@@ -56,11 +61,11 @@ services:
         value: ""
       # Per-user daily cap on AI analyses, protecting the shared Gemini quota.
       - key: AI_DAILY_LIMIT
-        value: "20"
+        value: "12"
       # Voice notes get their own allowance so speaking a meal doesn't cost
       # twice what typing it does.
       - key: AI_TRANSCRIBE_DAILY_LIMIT
-        value: "40"
+        value: "16"
       # Plain-English readings of the weekly review get their own allowance for
       # the same reason: one costs about a tenth of an analysis, and a week's
       # worth of readings should not eat the allowance for logging meals.
@@ -69,9 +74,11 @@ services:
       # Ceiling across all users and every call kind -- analyses, voice notes,
       # status probes and review summaries alike. The per-user caps bound one
       # account; this bounds the app, so mass signups can't drain the free
-      # quota. Keep below the provider's daily allowance (~1500/day free tier).
+      # quota or, on a paid key, the money. Gemini's free tier is 20 requests a
+      # day PER MODEL, failed attempts included: keep this well under 20 x the
+      # models in the chain. Read the real limits at aistudio.google.com/rate-limit.
       - key: AI_GLOBAL_DAILY_LIMIT
-        value: "500"
+        value: "40"
       # Brevo API key for password-reset email. Set in the dashboard; the
       # feature 503s without it (uniformly, for known and unknown addresses).
       - key: BREVO_API_KEY
