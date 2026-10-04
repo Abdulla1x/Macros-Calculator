@@ -81,9 +81,11 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # a local-day window with a UTC-day counter on the same screen is how two
 # numbers that should agree stop agreeing.
 CHART_DAYS = 30
-# The global cap is 500 calls/day by default, so a 30-day window has a hard
-# ceiling around 15,000 rows. This bounds the fetch under that and degrades to
-# "the most recent N timed calls" rather than to a wrong answer.
+# The global cap is 40 calls/day by default (500 until 2026-10, when the real
+# free-tier quota turned out to be 20 a day per model), so a 30-day window holds
+# ~1,200 rows. The bound stays well above that so an operator who raises the cap
+# on a paid key is not silently truncated; past it, this degrades to "the most
+# recent N timed calls" rather than to a wrong answer.
 LATENCY_SAMPLE_LIMIT = 10_000
 ACTIVE_WINDOW_DAYS = 7
 

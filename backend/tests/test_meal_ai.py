@@ -3,7 +3,7 @@ import gc
 import io
 import json
 import weakref
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httpx
@@ -796,22 +796,26 @@ def test_the_second_attempt_uses_the_other_serving_pool(monkeypatch):
     assert calls["models"] == ["gemini-3.5-flash", "gemini-2.5-flash"]
 
 
-def test_a_sustained_outage_keeps_trying_for_the_whole_budget(
-    monkeypatch, virtual_clock
-):
-    """The failure this redesign exists for: many tries spread over a minute.
+def test_a_sustained_outage_spreads_its_attempts_out(monkeypatch, virtual_clock):
+    """Retries wait between attempts rather than firing them back to back.
 
-    A fixed attempt count gave up ~1.5s in, with 98% of the budget unused —
-    indistinguishable from no retry at all when a user is pressing the button
-    for a minute and eventually getting through.
+    The original fixed count gave up ~1.5s in, with 98% of the budget unused —
+    indistinguishable from no retry at all. The count is capped again now
+    (ANALYZE_MAX_ATTEMPTS, because failed attempts spend the per-day quota), but
+    the backoff still spreads those few attempts across the outage.
+
+    ⚠️ This used to assert "at least 8 attempts". That was the behaviour which
+    let one analysis spend most of the free tier's 20-a-day; see
+    test_attempts_per_action_are_capped.
     """
     calls = _install_scripted_provider(monkeypatch, [_server_error()])
     with pytest.raises(meal_ai.MealAIUnavailable):
         asyncio.run(meal_ai.analyze_meal([], "chicken"))
 
-    # Exact count depends on jitter; the guarantee is "many, across the budget".
-    assert calls["n"] >= 8
-    # And it stops at the budget rather than retrying forever.
+    assert calls["n"] == meal_ai.ANALYZE_MAX_ATTEMPTS
+    # A sleep between every pair of attempts, none after the last...
+    assert len(virtual_clock) == calls["n"] - 1
+    # ...and never past the deadline.
     assert sum(virtual_clock) <= meal_ai.ANALYZE_DEADLINE_S
 
 
@@ -834,8 +838,10 @@ def test_the_fallback_is_deduped_against_the_primary(monkeypatch):
 @pytest.mark.parametrize(
     "exc",
     [
-        # Already sending too much: two more requests inside the same 60s window
-        # make the thing we're being limited for worse.
+        # Already sending too much: asking the same model again inside its
+        # window makes the thing we're being limited for worse. (With a fallback
+        # configured the call moves on to the other model instead; see
+        # test_a_per_minute_limit_moves_to_the_other_model_once.)
         genai_errors.ClientError(429, {"error": {"message": "slow down"}}),
         # A rejected key or retired model id fails identically every time.
         genai_errors.ClientError(400, {"error": {"message": "bad key"}}),
@@ -844,6 +850,7 @@ def test_the_fallback_is_deduped_against_the_primary(monkeypatch):
     ],
 )
 def test_failures_a_retry_cannot_fix_are_not_retried(monkeypatch, exc):
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", "")
     calls = _install_scripted_provider(monkeypatch, [exc])
     with pytest.raises(meal_ai.MealAIError):
         asyncio.run(meal_ai.analyze_meal([], "chicken"))
@@ -965,6 +972,276 @@ def test_every_provider_call_carries_a_request_deadline(monkeypatch, call, expec
     )
     asyncio.run(call())
     assert calls["configs"][0].http_options.timeout == expected_ms
+
+
+# --- 429s: a per-day quota is not a per-minute one ----------------------------
+# Google's free tier is 20 requests a day PER MODEL, counted from midnight
+# Pacific, failed attempts included. Measured 2026-10-03/04; see
+# docs/ai-capacity-2026-10.md.
+
+DAILY_QUOTA_ID = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+MINUTE_QUOTA_ID = "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+
+
+def _quota_error(quota_id=None, message="You exceeded your current quota."):
+    """A 429 in the shape Google really sends: prose plus a structured QuotaFailure.
+
+    quota_id=None leaves the structured part out entirely, the shape of a 429
+    from anything that is not the quota system.
+    """
+    details = []
+    if quota_id is not None:
+        details = [
+            {
+                "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                "violations": [
+                    {
+                        "quotaMetric": "generativelanguage.googleapis.com/"
+                        "generate_content_free_tier_requests",
+                        "quotaId": quota_id,
+                        "quotaDimensions": {"model": "gemini-3.5-flash"},
+                        "quotaValue": "20",
+                    }
+                ],
+            },
+            # Google's own retry hint. It points at 00:00 UTC, which is wrong
+            # for a per-day quota, so nothing may read it.
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "16800s"},
+        ]
+    return genai_errors.ClientError(
+        429,
+        {
+            "error": {
+                "code": 429,
+                "message": message,
+                "status": "RESOURCE_EXHAUSTED",
+                "details": details,
+            }
+        },
+    )
+
+
+@pytest.fixture(autouse=True)
+def _forget_exhausted_models():
+    """The exhausted-model memory is module state; no test may inherit another's."""
+    meal_ai._exhausted.clear()
+    yield
+    meal_ai._exhausted.clear()
+
+
+@pytest.fixture
+def wall_clock(monkeypatch):
+    """Pins meal_ai's wall clock, which the per-day memory and reset times read."""
+    now = {"t": datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr(meal_ai, "_utcnow", lambda: now["t"])
+    return now
+
+
+def _chain(monkeypatch, primary, fallback):
+    monkeypatch.setenv("MEAL_AI_MODEL", primary)
+    monkeypatch.setenv("MEAL_AI_FALLBACK_MODEL", fallback)
+
+
+def test_a_per_day_quota_raises_its_own_error(monkeypatch):
+    _chain(monkeypatch, "gemini-a", "")
+    _install_scripted_provider(monkeypatch, [_quota_error(DAILY_QUOTA_ID)])
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+
+
+def test_a_per_minute_quota_is_not_mistaken_for_the_day(monkeypatch):
+    _chain(monkeypatch, "gemini-a", "")
+    _install_scripted_provider(monkeypatch, [_quota_error(MINUTE_QUOTA_ID)])
+    with pytest.raises(meal_ai.MealAIRateLimited) as raised:
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert not isinstance(raised.value, meal_ai.MealAIDailyQuotaExhausted)
+
+
+def test_the_message_text_is_never_what_decides(monkeypatch):
+    """The first guard in compare_estimates.py matched "PerDay" in the prose and
+    stopped a run on what was a per-minute refusal. Only the quotaId counts."""
+    _chain(monkeypatch, "gemini-a", "")
+    _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(MINUTE_QUOTA_ID, message="Quota exceeded: ...PerDay... retry in 4h")],
+    )
+    with pytest.raises(meal_ai.MealAIRateLimited) as raised:
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert not isinstance(raised.value, meal_ai.MealAIDailyQuotaExhausted)
+
+
+def test_a_429_without_structured_details_is_treated_as_per_minute(monkeypatch):
+    _chain(monkeypatch, "gemini-a", "")
+    _install_scripted_provider(monkeypatch, [_quota_error(None, message="PerDay")])
+    with pytest.raises(meal_ai.MealAIRateLimited) as raised:
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert not isinstance(raised.value, meal_ai.MealAIDailyQuotaExhausted)
+
+
+def test_a_daily_limit_falls_back_to_the_next_model_at_once(monkeypatch, virtual_clock):
+    """Each model has its own 20 a day, so the fallback still has its whole
+    allowance -- and waiting first buys nothing, since the day will not end."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(DAILY_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-a", "gemini-b"]
+    assert virtual_clock == []
+
+
+def test_a_later_call_skips_a_model_already_out_for_the_day(monkeypatch):
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(DAILY_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    # Three attempts, not four: the second analysis never asked gemini-a.
+    assert calls["models"] == ["gemini-a", "gemini-b", "gemini-b"]
+
+
+def test_with_every_model_out_for_the_day_google_is_not_called(monkeypatch):
+    """Asking would spend nothing useful, and the answer is already known."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(monkeypatch, [_quota_error(DAILY_QUOTA_ID)])
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == 2
+
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm"))
+    assert calls["n"] == 2
+
+
+def test_the_memory_is_rechecked_within_the_hour(monkeypatch, wall_clock):
+    """Billing switched on mid-day lifts the quota at once; the app must notice
+    without waiting for midnight Pacific or a restart."""
+    _chain(monkeypatch, "gemini-a", "")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(DAILY_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+
+    wall_clock["t"] += timedelta(minutes=59)
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == 1
+
+    wall_clock["t"] += timedelta(minutes=2)
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["n"] == 2
+
+
+def test_the_memory_never_outlives_midnight_pacific(monkeypatch, wall_clock):
+    """06:30 UTC on 2026-10-05 is 23:30 the day before in Los Angeles (PDT): the
+    quota resets in half an hour, sooner than the hourly re-check."""
+    wall_clock["t"] = datetime(2026, 10, 5, 6, 30, tzinfo=timezone.utc)
+    _chain(monkeypatch, "gemini-a", "")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(DAILY_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    with pytest.raises(meal_ai.MealAIDailyQuotaExhausted):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+
+    wall_clock["t"] += timedelta(minutes=31)
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["n"] == 2
+
+
+@pytest.mark.parametrize(
+    "now,expected",
+    [
+        # PDT, UTC-7: midnight in Los Angeles is 07:00 UTC.
+        (datetime(2026, 10, 4, 12, 0), datetime(2026, 10, 5, 7, 0)),
+        (datetime(2026, 10, 5, 6, 59), datetime(2026, 10, 5, 7, 0)),
+        (datetime(2026, 10, 5, 7, 0), datetime(2026, 10, 6, 7, 0)),
+        # US DST ends 2026-11-01; from then midnight is 08:00 UTC.
+        (datetime(2026, 11, 1, 12, 0), datetime(2026, 11, 2, 8, 0)),
+    ],
+)
+def test_the_daily_quota_resets_at_midnight_pacific(now, expected):
+    """Google's documented reset, confirmed by measurement 2026-10-04. The 429's
+    own retryDelay points at 00:00 UTC and is wrong."""
+    got = meal_ai.next_quota_reset(now.replace(tzinfo=timezone.utc))
+    assert got == expected.replace(tzinfo=timezone.utc)
+
+
+def test_a_per_minute_limit_moves_to_the_other_model_once(monkeypatch, virtual_clock):
+    """Per-minute windows are per model too. The refusing model is never asked
+    again in the same call -- that would only deepen its window."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(MINUTE_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-a", "gemini-b"]
+    assert virtual_clock == []
+
+
+def test_a_per_minute_limit_is_not_remembered_past_the_call(monkeypatch):
+    _chain(monkeypatch, "gemini-a", "")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_quota_error(MINUTE_QUOTA_ID), SimpleNamespace(parsed=SAMPLE, text=None)],
+    )
+    with pytest.raises(meal_ai.MealAIRateLimited):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-a", "gemini-a"]
+
+
+def test_attempts_per_action_are_capped(monkeypatch):
+    """Failed attempts count against the per-day quota exactly like successful
+    ones (measured 2026-10-04: 2 answers + ~12 overload failures, then refused
+    for the day). Uncapped, one analysis in an overload could spend the whole
+    app's day."""
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == meal_ai.ANALYZE_MAX_ATTEMPTS
+
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm"))
+    assert calls["n"] == meal_ai.TRANSCRIBE_MAX_ATTEMPTS
+
+
+def test_the_attempt_cap_is_overridable_from_the_dashboard(monkeypatch):
+    """On a paid key a refused attempt costs nothing, so the cap can go up."""
+    monkeypatch.setenv("MEAL_AI_MAX_ATTEMPTS", "7")
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == 7
+
+
+@pytest.mark.parametrize("bad", ["", "0", "-2", "lots"])
+def test_an_unusable_attempt_cap_keeps_the_default(monkeypatch, bad):
+    monkeypatch.setenv("MEAL_AI_MAX_ATTEMPTS", bad)
+    calls = _install_scripted_provider(monkeypatch, [_server_error()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == meal_ai.ANALYZE_MAX_ATTEMPTS
+
+
+def test_the_fallback_can_be_a_list(monkeypatch):
+    """Every model on the free tier is another 20 a day."""
+    _chain(monkeypatch, "gemini-a", "gemini-b, gemini-c,,gemini-a")
+    assert meal_ai._models() == ["gemini-a", "gemini-b", "gemini-c"]
+
+
+def test_status_reports_every_fallback(client, monkeypatch):
+    _chain(monkeypatch, "gemini-a", "gemini-b,gemini-c")
+    body = client.get("/api/ai/status").json()
+    assert body["model"] == "gemini-a"
+    assert body["fallback_model"] == "gemini-b, gemini-c"
 
 
 # --- the router turns those into distinguishable statuses, refunding quota ---
@@ -1161,6 +1438,89 @@ def test_global_cap_does_not_fire_below_the_limit(client, monkeypatch):
     monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "500")
     configure(monkeypatch)
     assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+
+# --- what a user is told when the day's AI is gone ---------------------------
+
+
+def test_a_daily_provider_limit_never_says_try_again_in_a_minute(client, monkeypatch):
+    """The bug: every 429 said "Try again in a minute", which is false for
+    hours when it is Google's quota for the DAY that ran out."""
+    resets_at = datetime.now(timezone.utc) + timedelta(hours=5, minutes=10)
+
+    async def out_for_the_day(*_args, **_kwargs):
+        raise meal_ai.MealAIDailyQuotaExhausted("spent", resets_at)
+
+    configure(monkeypatch, out_for_the_day)
+    response = client.post("/api/ai/analyze", data={"text": "pizza"})
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert "minute" not in detail
+    assert "resets in about 5 hours" in detail
+    assert "enter macros manually" in detail
+
+
+def test_a_per_minute_limit_still_says_a_minute(client, monkeypatch):
+    async def busy(*_args, **_kwargs):
+        raise meal_ai.MealAIRateLimited("slow down")
+
+    configure(monkeypatch, busy)
+    response = client.post("/api/ai/analyze", data={"text": "pizza"})
+    assert response.status_code == 429
+    assert "in a minute" in response.json()["detail"]
+
+
+def test_a_daily_limit_refunds_the_slot(client, monkeypatch):
+    """Refused before inference, so it costs the user nothing."""
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+
+    async def out_for_the_day(*_args, **_kwargs):
+        raise meal_ai.MealAIDailyQuotaExhausted("spent", meal_ai.next_quota_reset())
+
+    configure(monkeypatch, out_for_the_day)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 429
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+
+
+def test_the_app_caps_say_when_they_reset(client, monkeypatch):
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+    configure(monkeypatch)
+    assert client.post("/api/ai/analyze", data={"text": "pizza"}).status_code == 200
+    detail = client.post("/api/ai/analyze", data={"text": "pizza"}).json()["detail"]
+    assert "resets in" in detail and "tomorrow" not in detail
+
+    monkeypatch.setenv("AI_DAILY_LIMIT", "5")
+    monkeypatch.setenv("AI_GLOBAL_DAILY_LIMIT", "1")
+    detail = client.post("/api/ai/analyze", data={"text": "pizza"}).json()["detail"]
+    assert "shared daily AI quota" in detail and "resets in" in detail
+
+
+@pytest.mark.parametrize(
+    "minutes,expected",
+    [
+        (5, "in under an hour"),
+        (59, "in under an hour"),
+        (60, "in about 1 hour"),
+        (89, "in about 1 hour"),
+        (91, "in about 2 hours"),
+        (23 * 60 + 50, "in about 24 hours"),
+    ],
+)
+def test_reset_wording(minutes, expected):
+    now = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    assert ai_router.resets_in(now + timedelta(minutes=minutes), now) == expected
+
+
+def test_the_default_caps_fit_the_real_free_tier(monkeypatch):
+    """Set for a free tier of 20 requests a day per model, measured 2026-10-03.
+    The old defaults (500 global, 20 and 40 per user) were set for a tier ~25x
+    larger and meant one account could take the whole app's day."""
+    for name in ("AI_DAILY_LIMIT", "AI_TRANSCRIBE_DAILY_LIMIT", "AI_GLOBAL_DAILY_LIMIT"):
+        monkeypatch.delenv(name, raising=False)
+    assert ai_router._daily_limit() == 12
+    assert ai_router._transcribe_daily_limit() == 16
+    assert ai_router.global_daily_limit() == 40
 
 
 # --- GET /api/ai/status: answers "is the AI down, and why" in one request ---

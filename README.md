@@ -26,7 +26,8 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 ### 🔐 Accounts & privacy
 - **Email + password auth**: Argon2id password hashing, JWT bearer tokens (7-day expiry), per-IP rate limiting on login, signup and password reset
 - **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, calorie plans, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
-- **Layered AI quotas**: 20 analyses + 40 voice notes + 3 review summaries per user per day, under a **global ceiling** of 500 calls/day across every account — the per-user caps stop one person over-using the shared Gemini quota, the global one stops mass signups draining it (or running up a bill on a paid key). All of them are env-tunable
+- **Layered AI quotas**: 12 analyses + 16 voice notes + 3 review summaries per user per day, under a **global ceiling** of 40 calls/day across every account — sized for Gemini's free tier of 20 requests a day per model, and checked against the heaviest real user's busiest days. The per-user caps stop one person using up the shared quota, the global one stops mass signups draining it (or running up a bill on a paid key). All of them are env-tunable
+- **What the AI sees**: your photos, voice note and description are sent to Google Gemini to estimate the meal, and the app says so beside the Analyze button. Photos are shrunk on your phone first, which also strips their location data, and only the text of the estimate is kept: the photo and audio are discarded. On Gemini's free tier, Google may use what it is sent to improve its products
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - **Password reset by email — built, deployed, and switched off.** The endpoints, the single-use link (hashed at rest, valid an hour, revoking every session when used) and 38 tests are all here and running in production. They answer **503 to every address**, because no email provider is configured — three free providers were tried and all three refused a domainless free account, which is the profile their fraud screening targets. Until one is wired up **a forgotten password means a lost account**, and the signup page says so rather than letting you find out later. Nothing about the feature needs a deploy to switch on; it activates on credentials alone
 
@@ -53,6 +54,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **The wait is shown as the two things it actually is.** Sending your photos depends on your connection and the model does not, so they get separate indicators — a real percentage of the bytes uploaded, then the wait for the estimate. If the free server happens to be asleep the app checks and says so rather than leaving you watching a spinner, and the "AI service is busy" message now waits until your photos have actually gone, instead of blaming the service for your own upload
 - **Photos are shrunk on your phone before they are sent.** A phone photo is a few megabytes and the model only ever looks at a much smaller version of it, so the extra size bought nothing but waiting — and most of the free server's monthly bandwidth, and a memory spike per request. Each photo now goes up at about a twelfth of the size (1536 px on the long edge), which also strips its **location and camera metadata**. The size was picked by an A/B through the real model, not by taste — 1024 px was half the bytes again but read plates measurably higher, so it was rejected — and anything the phone cannot open (HEIC on some Android browsers) is sent exactly as it was, so a photo is never refused for being unshrinkable
 - **Survives provider outages**: Gemini's "model is overloaded" 503 is retried with jittered backoff and then re-tried against a fallback model — overload is per serving pool, so an older generation is usually still answering. Every call carries an explicit deadline, and `GET /api/ai/status?probe=true` names the cause when it doesn't
+- **Spends the daily AI allowance carefully.** Google's free tier turned out to be 20 requests a day *per model* for the whole app, counting failed attempts, about 25 times less than the app had been configured for. So each action makes at most a few attempts. A model that is out for the day is skipped, by reading Google's structured quota error rather than its wording, and the next model, which has a quota of its own, is asked straight away. When the day's AI really is gone, the message says when it comes back instead of "try again in a minute"
 
 ### 🍽️ Smart meal logging
 - **Type-ahead food search**: ingredients you've logged before auto-fill their macros from your personal food library
@@ -526,13 +528,17 @@ server boots, so the schema is created/updated on deploy. In the Render dashboar
 - `DATABASE_URL` — the Neon string above
 - `GEMINI_API_KEY` — optional, enables AI meal analysis
 - `MEAL_AI_MODEL` — optional, overrides the default Gemini model without a redeploy
-- `MEAL_AI_FALLBACK_MODEL` — optional, model tried when the primary returns 5xx
-  (default `gemini-2.5-flash`; set empty to disable)
+- `MEAL_AI_FALLBACK_MODEL` — optional, comma-separated models tried in order when the
+  primary is overloaded or out of quota (default `gemini-2.5-flash`; set empty to disable)
 - `MEAL_AI_DEADLINE_S` — optional, seconds one analysis may keep retrying a busy
   provider (default `60`; the frontend timeout must stay above it)
+- `MEAL_AI_MAX_ATTEMPTS` — optional, provider attempts per user action (defaults 4 /
+  3 / 2 for analysis / voice note / review). Failed attempts count against Google's
+  per-day quota, so keep it low on the free tier
 - `AI_DAILY_LIMIT` / `AI_TRANSCRIBE_DAILY_LIMIT` / `AI_REVIEW_DAILY_LIMIT` /
   `AI_GLOBAL_DAILY_LIMIT` — optional, the per-user and app-wide AI quotas
-  (defaults 20 / 40 / 3 / 500)
+  (defaults 12 / 16 / 3 / 40, sized for Gemini's free tier of 20 requests a day per
+  model; read the real limits at [aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit))
 - `AI_PROBE_DAILY_LIMIT` / `MEAL_AI_STATUS_DETAIL` — optional, govern
   [`GET /api/ai/status`](docs/runbook-ai-provider.md)
 - `CORS_ORIGINS` — your exact frontend origin (scheme included, no trailing slash)
