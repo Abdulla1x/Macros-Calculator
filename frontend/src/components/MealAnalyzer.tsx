@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { readNoteDraft, writeNoteDraft } from '../lib/draft'
+import { downscaleForUpload } from '../lib/photoDownscale'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { matchItem, perPortion } from '../lib/libraryMatch'
 import { useAnalysisProgress } from '../hooks/useAnalysisProgress'
@@ -107,6 +108,32 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     writeNoteDraft(note)
   }, [note])
 
+  // Each photo's upload-sized copy, started the moment it is picked rather than
+  // when Analyze is pressed: the user is usually still typing or recording, so
+  // by the time they press it the work is done. Keyed by the File itself, which
+  // is also what makes a Refine re-run reuse it instead of shrinking again.
+  //
+  // Started from an effect, not from addFiles' state updater -- React runs
+  // updaters twice under StrictMode, and an updater is meant to be pure. The
+  // map makes the effect idempotent, and the same pass drops removed photos.
+  const prepared = useRef(new Map<File, Promise<File>>())
+  const preparedFor = (file: File) => {
+    let upload = prepared.current.get(file)
+    if (!upload) {
+      upload = downscaleForUpload(file)
+      prepared.current.set(file, upload)
+    }
+    return upload
+  }
+  useEffect(() => {
+    const map = prepared.current
+    for (const file of map.keys()) {
+      if (!files.includes(file)) map.delete(file)
+    }
+    files.forEach(preparedFor)
+    // preparedFor reads only the ref, so it cannot go stale.
+  }, [files])
+
   // Every object URL created here must be revoked, or each re-pick leaks a
   // blob for the lifetime of the tab. The cleanup closes over the exact array
   // it created, so a fast second pick can't revoke the new URLs by mistake.
@@ -207,11 +234,15 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     setError(null)
     // Photos are what make a body worth showing a bar for. A note-only analysis
     // uploads a few hundred bytes and goes straight to waiting on the model.
-    const hooks = progress.start(files.length > 0)
+    // Shrunk on this device first (lib/photoDownscale.ts). Usually already
+    // finished, since it started when each photo was picked; it never rejects,
+    // and anything it cannot shrink comes back as the original.
+    const uploads = await Promise.all(files.map(preparedFor))
+    const hooks = progress.start(uploads.length > 0)
     try {
       const form = new FormData()
       // Repeated under one field name — the backend reads `image` as a list.
-      files.forEach((item) => form.append('image', item))
+      uploads.forEach((item) => form.append('image', item))
       // Ids only: the server reads the macros out of the library itself, so a
       // request cannot claim a saved food has numbers it does not have.
       attached.forEach((food) => form.append('food_id', String(food.id)))

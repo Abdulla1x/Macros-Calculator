@@ -29,6 +29,30 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-10-04-smaller-photo-uploads",
+        date="2026-10-04",
+        title="Meal photos upload much faster",
+        body=(
+            "**Photos are now shrunk on your phone before they are sent.** A "
+            "phone photo is several megabytes, and the AI only ever looked at "
+            "a much smaller version of it — so the extra size bought nothing "
+            "but waiting. Each photo now goes up at about a twelfth of the "
+            "size, and on mobile data the upload is usually over before you "
+            "notice it.\n\n"
+            "**It also removes the photo's location.** Phone cameras write "
+            "where a picture was taken into the file, and until now that went "
+            "along with it. A shrunk photo carries no location or camera "
+            "details.\n\n"
+            "**The estimates should not change.** The same meal photos were "
+            "run through the AI at full size and shrunk, twice each, and the "
+            "size used here was the one whose answers matched full size — a "
+            "smaller one was tested too and rejected because it read plates "
+            "slightly high.\n\n"
+            "If your phone cannot open a photo's format, it is sent exactly as "
+            "it was, as before — nothing is ever refused for being unshrinkable."
+        ),
+    ),
+    Announcement(
         id="2026-09-09-dashboard-first-screen",
         date="2026-09-09",
         title="Today's meals are back on the first screen",
