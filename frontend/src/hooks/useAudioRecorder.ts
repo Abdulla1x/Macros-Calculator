@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Extensions that don't match their mime subtype.
 const EXTENSION_OVERRIDES: Record<string, string> = {
@@ -91,10 +91,16 @@ export function useAudioRecorder() {
     else void start()
   }
 
-  const clear = () => {
+  // Stable on purpose. MealAnalyzer's transcription effect lists this in its
+  // dependencies, and a fresh function every render re-ran that effect on the
+  // re-render its own setTranscribing(true) caused -- so every voice note was
+  // POSTed twice, the first answer discarded but already billed against the
+  // daily quota. Seen in production from the day voice notes shipped
+  // (2026-07-26): 276 of 290 transcriptions arrived in pairs ~0.3 s apart.
+  const clear = useCallback(() => {
     setBlob(null)
     setError(null)
-  }
+  }, [])
 
   return { supported, recording, blob, durationMs, error, toggle, clear }
 }
