@@ -51,6 +51,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Estimate accuracy, measured against you.** Every analysis is logged to an `ai_analyses` table (photo and audio discarded) and compared with what you actually saved: how often the true value fell inside the stated range, and whether the estimates lean high or low. Where there is not enough evidence to answer honestly it **refuses** rather than printing a reassuring number
 - Powered by **Gemini 3.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change. Google retires models on a schedule, so the id is overridable at runtime via `MEAL_AI_MODEL` (no deploy needed) and provider failures are logged with the reason
 - **The wait is shown as the two things it actually is.** Sending your photos depends on your connection and the model does not, so they get separate indicators — a real percentage of the bytes uploaded, then the wait for the estimate. If the free server happens to be asleep the app checks and says so rather than leaving you watching a spinner, and the "AI service is busy" message now waits until your photos have actually gone, instead of blaming the service for your own upload
+- **Photos are shrunk on your phone before they are sent.** A phone photo is a few megabytes and the model only ever looks at a much smaller version of it, so the extra size bought nothing but waiting — and most of the free server's monthly bandwidth, and a memory spike per request. Each photo now goes up at about a twelfth of the size (1536 px on the long edge), which also strips its **location and camera metadata**. The size was picked by an A/B through the real model, not by taste — 1024 px was half the bytes again but read plates measurably higher, so it was rejected — and anything the phone cannot open (HEIC on some Android browsers) is sent exactly as it was, so a photo is never refused for being unshrinkable
 - **Survives provider outages**: Gemini's "model is overloaded" 503 is retried with jittered backoff and then re-tried against a fallback model — overload is per serving pool, so an older generation is usually still answering. Every call carries an explicit deadline, and `GET /api/ai/status?probe=true` names the cause when it doesn't
 
 ### 🍽️ Smart meal logging
@@ -330,9 +331,12 @@ Macros-Calculator
 │   ├── alembic/                 # database migrations (Postgres)
 │   ├── scripts/                 # smoke_multiuser.py — the live two-account isolation check
 │   │                            # delete_account_by_email.py — ops: remove an account whose password is gone
+│   │                            # compare_estimates.py — same photos through the real model in
+│   │                            #   several variants (sizes, models), against its own noise
 │   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
+│   ├── tests/                   # node --test unit tests for DOM-free lib code (npm test)
 │   └── src/
 │       ├── api/client.ts        # typed API client
 │       ├── auth/                # AuthContext + token storage (guarded against blocked localStorage)
@@ -345,14 +349,15 @@ Macros-Calculator
 │       │                        #   FoodAutocomplete, WeighInNudge, ShareCodePanel
 │       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes), useWarmup, ...
 │       ├── lib/                 # dates, parse, limits (mirrors the server's bounds), units,
-│       │                        #   chartTheme (one place for every recharts colour), libraryMatch
+│       │                        #   chartTheme (one place for every recharts colour), libraryMatch,
+│       │                        #   photoSize + photoDownscale (shrink photos before upload)
 │       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Review, Admin,
 │                                #   WhatsNew, settings/ (five tab panels), and the four auth pages
 ├── docs/                        # AI provider runbook + the Gemini EEA-region incident write-up
-├── scripts/                     # check.sh (all five gates), dev.sh, review-changes.sh,
+├── scripts/                     # check.sh (all six gates), dev.sh, review-changes.sh,
 │                                #   dom-snapshot.mjs (the refactor DOM-diff harness)
 ├── screenshots/                 # desktop/ and mobile/ captures used by this README
-├── .github/workflows/           # ci.yml (the same five gates), backup.yml (daily export)
+├── .github/workflows/           # ci.yml (the same six gates), backup.yml (daily export)
 ├── legacy/                      # original Streamlit app (v1)
 ├── LICENSE                      # MIT
 └── render.yaml                  # Render blueprint — documentation of intent, NOT synced with
@@ -418,12 +423,12 @@ Or start both at once, with a throwaway database:
 
 ### Tests and gates
 
-`scripts/check.sh` runs every pre-commit gate in one pass — the same five CI runs:
+`scripts/check.sh` runs every pre-commit gate in one pass — the same six CI runs:
 
 ```bash
-./scripts/check.sh              # all five
+./scripts/check.sh              # all six
 ./scripts/check.sh --backend    # pytest + ruff only
-./scripts/check.sh --frontend   # tsc + oxlint + build only
+./scripts/check.sh --frontend   # tsc + unit tests + oxlint + build only
 ```
 
 | Gate | Command |
@@ -431,8 +436,17 @@ Or start both at once, with a throwaway database:
 | backend tests | `venv/bin/python -m pytest -q` |
 | backend lint | `ruff check app tests scripts` |
 | frontend typecheck | `npx tsc --noEmit -p tsconfig.app.json` — `strict` **and** `noUncheckedIndexedAccess` |
+| frontend unit tests | `npm test` — pure logic only, see below |
 | frontend lint | `npm run lint` (oxlint) |
 | frontend build | `npm run build` |
+
+**The frontend's unit tests need no test framework.** `npm test` compiles
+`frontend/tests/` with the project's own `tsc` (`tsconfig.test.json`) and runs the
+output with Node's built-in `node --test`. Compiled rather than run as TypeScript
+directly, because Node only strips types when it was built with TypeScript support
+and distro builds are not. The price is that only DOM-free code can be tested this
+way — which is why `lib/photoSize.ts` (the sizing decisions) is kept apart from
+`lib/photoDownscale.ts` (the canvas work, covered by browser checks instead).
 
 It deliberately does not stop at the first failure. `a && b && c` hides whether the
 frontend is also broken once the backend fails, turning one fix-and-rerun cycle into
@@ -710,7 +724,8 @@ only on the caller's data, except these public ones: `/api/health`,
 - Barcode scanning via the Open Food Facts barcode API — examined and parked
   rather than unstarted: it needs a hit-rate measurement against real shelves
   first, because a scanner that misses most products is worse than no scanner
-- Frontend component tests (Vitest + Testing Library)
+- Frontend component tests (Vitest + Testing Library) — DOM-free logic has had
+  `npm test` since the photo-downscaling work; components still have none
 
 ---
 
