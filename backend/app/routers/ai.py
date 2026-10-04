@@ -501,6 +501,18 @@ async def analyze(
                 ),
             )
         loaded_images.append((data, mime))
+    if loaded_images:
+        # What the device actually sent, beside meal_ai's rss_mb= for the same
+        # request. Photos are shrunk in the browser before upload
+        # (frontend/src/lib/photoDownscale.ts), so this should read a few hundred
+        # KB each; a multi-MB figure is an original that could not be shrunk
+        # (a format the browser cannot decode, or an old client). How often that
+        # happens is the evidence for whether a server-side resize is ever worth
+        # its memory -- which is why nothing here resizes today.
+        logger.info(
+            "analysis input: images=%d image_bytes=%d",
+            len(loaded_images), total_image_bytes,
+        )
 
     audio_bytes = audio_mime = None
     if audio is not None:

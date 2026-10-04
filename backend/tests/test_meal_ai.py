@@ -292,6 +292,25 @@ def test_analyze_accepts_several_photos(client, monkeypatch):
     assert {mime for _, mime in captured["images"]} == {"image/jpeg"}
 
 
+def test_analyze_logs_how_many_photo_bytes_arrived(client, monkeypatch, caplog):
+    """The prod check that photos arrive shrunk: count and total bytes per call."""
+    configure(monkeypatch)
+    with caplog.at_level("INFO", logger="app.routers.ai"):
+        response = client.post(
+            "/api/ai/analyze", files=image_parts(2, size=300_000)
+        )
+    assert response.status_code == 200, response.json()
+    assert "analysis input: images=2 image_bytes=600000" in caplog.text
+
+
+def test_analyze_logs_no_photo_line_for_a_text_only_call(client, monkeypatch, caplog):
+    configure(monkeypatch)
+    with caplog.at_level("INFO", logger="app.routers.ai"):
+        response = client.post("/api/ai/analyze", data={"text": "rice"})
+    assert response.status_code == 200, response.json()
+    assert "analysis input" not in caplog.text
+
+
 def test_analyze_rejects_more_photos_than_the_cap(client, monkeypatch):
     """The cap is what bounds the token bill: one call, but N images of input."""
     configure(monkeypatch)
