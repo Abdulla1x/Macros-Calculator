@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { readNoteDraft, writeNoteDraft } from '../lib/draft'
+import type { AnalysisInputs } from '../lib/analysisInputs'
+import { sameInputs } from '../lib/analysisInputs'
 import { downscaleForUpload } from '../lib/photoDownscale'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { matchItem, perPortion } from '../lib/libraryMatch'
@@ -75,6 +77,16 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [savedToLibrary, setSavedToLibrary] = useState<Record<string, string>>({})
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const libraryRequested = useRef(false)
+
+  // What the estimate on screen was built from, and -- when a button was
+  // pressed with nothing changed since -- which one, so the question below can
+  // run it anyway. A ref for the first: it is bookkeeping, nothing renders it.
+  const lastSent = useRef<AnalysisInputs<File> | null>(null)
+  const [unchangedRerun, setUnchangedRerun] = useState<'again' | 'refine' | null>(null)
+  // Any edit answers the question by itself: the next press sends something new.
+  useEffect(() => {
+    setUnchangedRerun(null)
+  }, [note, files, attached])
 
   // Owns everything about the wait: how much of the body has been sent, whether
   // the server turned out to be asleep, and when it is fair to say the model is
@@ -238,11 +250,25 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     setError(null)
   }
 
-  const analyze = async (refine: boolean) => {
+  const analyze = async (refine: boolean, evenIfUnchanged = false) => {
     if (files.length === 0 && !note.trim()) {
       setError('Describe the meal, record a voice note, or add a photo first.')
       return
     }
+    // Pressing either button with nothing changed is a re-roll: one of the
+    // day's AI calls for an answer that moves by the model's own noise (~3% in
+    // the 2026-10-05 audit). Asked, not refused -- it is the user's call.
+    const inputs = { note, photos: files, foodIds: attached.map((food) => food.id) }
+    if (
+      !evenIfUnchanged &&
+      analysis &&
+      lastSent.current &&
+      sameInputs(inputs, lastSent.current)
+    ) {
+      setUnchangedRerun(refine ? 'refine' : 'again')
+      return
+    }
+    setUnchangedRerun(null)
     setAnalyzing(true)
     setError(null)
     // Photos are what make a body worth showing a bar for. A note-only analysis
@@ -262,6 +288,9 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
       if (note.trim()) form.append('text', note.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       setAnalysis(await api.analyzeMeal(form, hooks))
+      // Only an estimate that arrived counts: after a failure, trying again
+      // with the same inputs is exactly what the user should be able to do.
+      lastSent.current = inputs
       // The items are all new, so the "saved ✓" marks against the old ones no
       // longer describe anything on screen. Refining in particular re-portions
       // and often renames, so even a name that survives is a different estimate.
@@ -445,6 +474,44 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
           Estimates are approximate — review before saving.
         </p>
       </div>
+
+      {analysis && (
+        <p className="mt-2 text-xs text-ink-faint">
+          <span className="text-slate-300">Refine</span> adjusts this estimate to your
+          note — use it after correcting an assumption.{' '}
+          <span className="text-slate-300">Analyze again</span> starts over — use it
+          after adding photos.
+        </p>
+      )}
+
+      {unchangedRerun && (
+        <div
+          role="status"
+          className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300"
+        >
+          <p>
+            Nothing has changed since this estimate: same note, photos and saved
+            foods. Running it again uses one of today's AI estimates and usually
+            moves the numbers only a few percent.
+          </p>
+          <div className="mt-2 flex gap-3">
+            <button
+              type="button"
+              onClick={() => analyze(unchangedRerun === 'refine', true)}
+              className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-amber-200 hover:bg-amber-500/10"
+            >
+              Run it anyway
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnchangedRerun(null)}
+              className="px-1 text-ink-faint hover:text-slate-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <p className="mt-2 text-xs text-ink-faint">
         Your photo, voice note, and description are sent to Google Gemini for analysis.
