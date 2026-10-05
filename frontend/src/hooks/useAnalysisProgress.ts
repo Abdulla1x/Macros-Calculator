@@ -183,6 +183,11 @@ export function useAnalysisProgress(): AnalysisProgressControls {
       try {
         await api.health(COLD_PROBE_TIMEOUT_MS)
         if (!cancelled) setPhase('thinking')
+        // Awake is final for this wait: an instance cannot spin down while our
+        // own request is still in flight on it, so asking again only adds a
+        // request every 5 s for the rest of the wait (seen in production: 5
+        // and 4 extra on two ordinary analyses). Only "not yet awake" repeats.
+        return
       } catch {
         if (cancelled) return
         // A failure too fast to have been a boot says nothing about whether the
