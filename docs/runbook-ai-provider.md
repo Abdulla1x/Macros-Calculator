@@ -49,6 +49,8 @@ Filter Application logs on `Gemini`. Every branch logs a distinct string.
 | `Gemini daily quota exhausted (model=…, quota=…, resets_at=…)` | **That model's per-day quota is spent** (free tier: 20/day per model, failed attempts included). It is skipped until `resets_at` (midnight Pacific), re-checked hourly | Nothing, if a fallback answered. If they all ran out, see the next row |
 | `Every Gemini model is out of quota for the day; not calling` | The whole chain is out; users see "resets in about N hours" | Wait for midnight Pacific (11:00 Dubai in summer time, 12:00 in winter), add a model to `MEAL_AI_FALLBACK_MODEL`, or turn billing on. **A restart clears the memory**, and so does the hourly re-check |
 | `Gemini … refused (…); trying … now` | A 429 moved the call straight to the next model | — |
+| `Gemini model not found (model=…): skipping it` | **Google no longer serves that model id to this project** (retired, or "no longer available to new users"; `gemini-2.5-flash` already is for new projects). The call carries on with the rest of the chain, and the model is re-asked hourly | Replace it in `MEAL_AI_MODEL` / `MEAL_AI_FALLBACK_MODEL`; Google's message, quoted in the line, usually names a successor |
+| `No configured Gemini model is served to this project; not calling` | **Every model in the chain 404s.** Users see "AI analysis is misconfigured" | Set `MEAL_AI_MODEL` to a served model now; no reset will fix this |
 | `Not retrying Gemini: Ns of budget left …, under the Ns an attempt needs` | Attempts to spare, but not enough time for one to answer, so none is started: it would still reach Google and spend a request. Expected on bad overload days, when refusals themselves take 2–30 s | — (the `Giving up` line follows) |
 | `Giving up on Gemini after …` | The retry budget was spent — the attempt cap (`MEAL_AI_MAX_ATTEMPTS`) or the deadline, whichever came first | On a paid key, raise `MEAL_AI_MAX_ATTEMPTS` and/or `MEAL_AI_DEADLINE_S` (and the frontend timeout with it). On the free tier, don't: refused attempts spend the per-day quota |
 
@@ -94,6 +96,9 @@ Before escalating, note these are automatic:
 - **Alternating model chain** (`MEAL_AI_FALLBACK_MODEL`, comma-separated, default
   `gemini-2.5-flash`): attempt two already lands on the other serving pool, since
   overload is per pool.
+- **A model Google no longer serves (404) leaves the chain** for the call and the next hour, and the
+  next model is asked at once. Before 2026-10-05 a 404 on the fallback ended the call as
+  "misconfigured" even while the primary was only busy.
 - **A 429 is never retried on the same model.** It moves to the next model at once,
   since quotas are per model. A per-**day** 429 (read from the structured `quotaId`,
   never the message) also skips that model for later calls until midnight Pacific. The
