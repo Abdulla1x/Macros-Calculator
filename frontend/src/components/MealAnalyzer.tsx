@@ -495,10 +495,13 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             moves the numbers only a few percent.
           </p>
           <div className="mt-2 flex gap-3">
+            {/* Same rule as the buttons above: a voice note still transcribing
+                is about to change the note, so running now would send it without. */}
             <button
               type="button"
               onClick={() => analyze(unchangedRerun === 'refine', true)}
-              className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-amber-200 hover:bg-amber-500/10"
+              disabled={analyzing || transcribing}
+              className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
             >
               Run it anyway
             </button>
