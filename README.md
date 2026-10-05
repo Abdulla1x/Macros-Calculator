@@ -53,7 +53,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - Powered by **Gemini 3.5 Flash** (free tier) — the provider is isolated in a single backend module, so swapping to another model later is a one-file change. Google retires models on a schedule, so the id is overridable at runtime via `MEAL_AI_MODEL` (no deploy needed) and provider failures are logged with the reason
 - **The wait is shown as the two things it actually is.** Sending your photos depends on your connection and the model does not, so they get separate indicators — a real percentage of the bytes uploaded, then the wait for the estimate. If the free server happens to be asleep the app checks and says so rather than leaving you watching a spinner, and the "AI service is busy" message now waits until your photos have actually gone, instead of blaming the service for your own upload
 - **Photos are shrunk on your phone before they are sent.** A phone photo is a few megabytes and the model only ever looks at a much smaller version of it, so the extra size bought nothing but waiting — and most of the free server's monthly bandwidth, and a memory spike per request. Each photo now goes up at about a twelfth of the size (1536 px on the long edge), which also strips its **location and camera metadata**. The size was picked by an A/B through the real model, not by taste — 1024 px was half the bytes again but read plates measurably higher, so it was rejected — and anything the phone cannot open (HEIC on some Android browsers) is sent exactly as it was, so a photo is never refused for being unshrinkable
-- **Survives provider outages**: Gemini's "model is overloaded" 503 is retried with jittered backoff and then re-tried against a fallback model — overload is per serving pool, so an older generation is usually still answering. Every call carries an explicit deadline, and `GET /api/ai/status?probe=true` names the cause when it doesn't
+- **Survives provider outages**: Gemini's "model is overloaded" 503 is retried with jittered backoff and then re-tried against a fallback model — overload is per serving pool, so an older generation is usually still answering. A model Google no longer serves (a 404) is skipped, not reported as a broken setup, so a busy primary is still retried Every call carries an explicit deadline, and `GET /api/ai/status?probe=true` names the cause when it doesn't
 - **Spends the daily AI allowance carefully.** Google's free tier turned out to be 20 requests a day *per model* for the whole app, counting failed attempts, about 25 times less than the app had been configured for. So each action makes at most a few attempts, and starts another only if there is still time for it to answer. A model that is out for the day is skipped, by reading Google's structured quota error rather than its wording, and the next model, which has a quota of its own, is asked straight away. When the day's AI really is gone, the message says when it comes back instead of "try again in a minute"
 
 ### 🍽️ Smart meal logging
@@ -352,7 +352,8 @@ Macros-Calculator
 │       ├── hooks/               # useAudioRecorder (MediaRecorder voice notes), useWarmup, ...
 │       ├── lib/                 # dates, parse, limits (mirrors the server's bounds), units,
 │       │                        #   chartTheme (one place for every recharts colour), libraryMatch,
-│       │                        #   photoSize + photoDownscale (shrink photos before upload)
+│       │                        #   photoSize + photoDownscale (shrink photos before upload),
+│       │                        #   analysisInputs (is a re-run of an estimate unchanged?)
 │       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Review, Admin,
 │                                #   WhatsNew, settings/ (five tab panels), and the four auth pages
 ├── docs/                        # AI provider runbook, the Gemini EEA-region incident write-up,
@@ -362,6 +363,8 @@ Macros-Calculator
 ├── screenshots/                 # desktop/ and mobile/ captures used by this README
 ├── .github/workflows/           # ci.yml (the same six gates), backup.yml (daily export)
 ├── legacy/                      # original Streamlit app (v1)
+├── PRODUCT.md                   # what the product is, who it serves, and what it must keep true
+├── DESIGN.md                    # the signed-off look for the UI revamp: colour tokens, palettes, type
 ├── LICENSE                      # MIT
 └── render.yaml                  # Render blueprint — documentation of intent, NOT synced with
                                  #   the dashboard, which is the source of truth for every value

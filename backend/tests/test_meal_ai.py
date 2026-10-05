@@ -1110,10 +1110,13 @@ def _quota_error(quota_id=None, message="You exceeded your current quota."):
 
 @pytest.fixture(autouse=True)
 def _forget_exhausted_models():
-    """The exhausted-model memory is module state; no test may inherit another's."""
+    """The exhausted- and missing-model memories are module state; no test may
+    inherit another's."""
     meal_ai._exhausted.clear()
+    meal_ai._missing.clear()
     yield
     meal_ai._exhausted.clear()
+    meal_ai._missing.clear()
 
 
 @pytest.fixture
@@ -2001,3 +2004,86 @@ def test_a_row_written_before_the_column_existed_reads_as_none(client):
         row = session.execute(select(AIAnalysis)).scalars().one()
         assert row.provider_ms is None
         assert row.server_uptime_s is None
+
+
+# --- a model Google no longer serves (404) -----------------------------------
+# Measured 2026-10-05: gemini-2.5-flash, production's only fallback, answers 404
+# "no longer available to new users" on a newer project. Before this, one 404
+# ended the whole call as "AI analysis is misconfigured" -- even when the
+# primary was only busy and would have answered on the next attempt.
+
+
+def _not_found():
+    return genai_errors.ClientError(
+        404,
+        {"error": {"code": 404, "status": "NOT_FOUND",
+                   "message": "This model is no longer available to new users."}},
+    )
+
+
+def _answer():
+    return SimpleNamespace(parsed=SAMPLE, text=None)
+
+
+def test_a_missing_fallback_is_skipped_and_the_primary_asked_again(monkeypatch):
+    """The F11 scenario: primary busy, fallback gone. The primary is retried
+    instead of the call ending as a misconfiguration."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(
+        monkeypatch, [_server_error(), _not_found(), _answer()]
+    )
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-a", "gemini-b", "gemini-a"]
+
+
+def test_a_missing_model_is_skipped_by_later_calls_until_the_recheck(monkeypatch, wall_clock):
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(
+        monkeypatch,
+        [_server_error(), _not_found(), _answer(),   # call 1: b found missing
+         _server_error(), _answer(),                 # call 2: b skipped, a retried
+         _server_error(), _answer()],                # call 3, an hour on: b asked again
+    )
+    asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["models"][3:] == ["gemini-a", "gemini-a"]
+
+    wall_clock["t"] += meal_ai.MISSING_RECHECK
+    asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["models"][5:] == ["gemini-a", "gemini-b"]
+
+
+def test_a_missing_primary_falls_back(monkeypatch):
+    """The July 2026 outage shape: the pinned primary retired. With a fallback
+    configured the app keeps answering; the ERROR line still says why."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(monkeypatch, [_not_found(), _answer()])
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["models"] == ["gemini-a", "gemini-b"]
+
+
+def test_every_model_missing_is_still_a_misconfiguration(monkeypatch):
+    """...and is never dressed up as a daily limit that a reset would lift."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    calls = _install_scripted_provider(monkeypatch, [_not_found()])
+    with pytest.raises(meal_ai.MealAIModelNotFound):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == 2
+
+    # Remembered: the next call says so without asking Google again.
+    with pytest.raises(meal_ai.MealAIModelNotFound) as raised:
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert not isinstance(raised.value, meal_ai.MealAIRateLimited)
+    assert calls["n"] == 2
+    # The router's existing bad-request wording applies, unchanged.
+    assert isinstance(raised.value, meal_ai.MealAIBadRequest)
+
+
+def test_a_busy_model_then_a_missing_one_reports_the_outage(monkeypatch):
+    """The user's real problem was the overload; "misconfigured" would send them
+    looking for a setting that is fine."""
+    _chain(monkeypatch, "gemini-a", "gemini-b")
+    monkeypatch.setenv("MEAL_AI_MAX_ATTEMPTS", "2")
+    _install_scripted_provider(monkeypatch, [_server_error(), _not_found()])
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.analyze_meal([], "chicken"))

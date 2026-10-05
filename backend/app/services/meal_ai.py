@@ -189,6 +189,18 @@ class MealAIBadRequest(MealAIError):
     """
 
 
+class MealAIModelNotFound(MealAIBadRequest):
+    """Google answered 404 for this model id: it does not serve it to this project.
+
+    A subclass, so a chain where EVERY model is gone still reports what it is --
+    a misconfiguration. But one missing model in a chain is not: the retry loop
+    skips it and asks the next. Measured 2026-10-05: gemini-2.5-flash, the
+    production fallback, 404s "no longer available to new users" on a newer
+    project while the older production project is still served -- so a key
+    rotation, or Google extending the cut-off, turns the fallback into this.
+    """
+
+
 class MealAIBadResponse(MealAIError):
     """Provider replied with something that isn't a usable MealAnalysis."""
 
@@ -337,6 +349,30 @@ def _mark_exhausted(model: str) -> None:
     _exhausted[model] = min(next_quota_reset(now), now + EXHAUSTED_RECHECK)
 
 
+# Models Google answered 404 for, and until when to believe it. Kept apart from
+# _exhausted because the two say different things to a user: a chain skipped
+# for quota is "the daily limit, back in N hours", while a chain skipped because
+# its models are gone is a misconfiguration, and telling that user to wait for a
+# reset would be false. Re-asked hourly for the same reason quota is: a model
+# can come back, or the operator can fix the env var without a restart.
+_missing: dict[str, datetime] = {}
+MISSING_RECHECK = timedelta(hours=1)
+
+
+def _is_missing(model: str) -> bool:
+    until = _missing.get(model)
+    if until is None:
+        return False
+    if _utcnow() >= until:
+        del _missing[model]
+        return False
+    return True
+
+
+def _mark_missing(model: str) -> None:
+    _missing[model] = _utcnow() + MISSING_RECHECK
+
+
 @contextmanager
 def _provider_errors(model: str, *, final: bool = True):
     """Translate provider exceptions into the neutral hierarchy, logging why.
@@ -365,6 +401,16 @@ def _provider_errors(model: str, *, final: bool = True):
                 model, ",".join(quota_ids(exc)), resets_at.isoformat(timespec="minutes"),
             )
             raise MealAIDailyQuotaExhausted(str(exc), resets_at) from exc
+        if exc.code == 404:
+            # The model id is not served to this project (retired, or "no
+            # longer available to new users"). ERROR, not a traceback: the cause
+            # is fully known, and Google's message usually names a successor.
+            logger.error(
+                "Gemini model not found (model=%s): skipping it; set MEAL_AI_MODEL / "
+                "MEAL_AI_FALLBACK_MODEL to a served model. Google said: %s",
+                model, str(exc)[:240],
+            )
+            raise MealAIModelNotFound(str(exc)) from exc
         logger.exception(
             "Gemini rejected the request (model=%s, code=%s, quota=%s)",
             model, exc.code, ",".join(quota_ids(exc)) or None,
@@ -554,10 +600,18 @@ async def _call_with_retry(
     running attempt would throw away a request Google has already counted. A 429 takes its model out
     of the rotation for this call and moves on at once -- no sleep, because the
     next model's quota is its own -- and a per-day 429 also takes it out for
-    later calls, until the reset or the hourly re-check.
+    later calls, until the reset or the hourly re-check. A 404 (a model Google
+    no longer serves this project) is handled the same way, with its own hourly
+    re-check; only when every model in the chain is gone does the call fail as
+    a misconfiguration.
     """
     http_options = types.HttpOptions(timeout=timeout_ms)
-    pool = [model for model in _models() if not _is_exhausted(model)]
+    chain = _models()
+    pool = [m for m in chain if not _is_exhausted(m) and not _is_missing(m)]
+    if not pool and all(_is_missing(m) for m in chain):
+        # Not "come back tomorrow": no reset will bring these models back.
+        logger.error("No configured Gemini model is served to this project; not calling")
+        raise MealAIModelNotFound("No configured Gemini model is served to this project.")
     if not pool:
         resets_at = next_quota_reset()
         logger.warning(
@@ -589,16 +643,23 @@ async def _call_with_retry(
         try:
             with _provider_errors(model, final=final):
                 response = await operation(model, http_options)
-        except MealAIRateLimited as exc:
-            last = exc
-            if isinstance(exc, MealAIDailyQuotaExhausted):
-                _mark_exhausted(model)
+        except (MealAIRateLimited, MealAIModelNotFound) as exc:
+            if isinstance(exc, MealAIModelNotFound):
+                _mark_missing(model)
+                # An earlier attempt's outage is the truer reason this call
+                # fails; "misconfigured" only when nothing else went wrong.
+                if last is None:
+                    last = exc
+            else:
+                last = exc
+                if isinstance(exc, MealAIDailyQuotaExhausted):
+                    _mark_exhausted(model)
             # Out of the rotation; turn steps back so the model that slid into
             # this slot is the one asked next.
             pool.remove(model)
             turn -= 1
             if not pool:
-                raise
+                raise last
             logger.info(
                 "Gemini %s refused (%s); trying %s now",
                 model, type(exc).__name__, pool[turn % len(pool)],
