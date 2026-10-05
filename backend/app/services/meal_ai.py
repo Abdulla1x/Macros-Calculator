@@ -52,6 +52,10 @@ DEFAULT_FALLBACK_MODEL = "gemini-2.5-flash"
 # gives up with almost all of it unused, which is exactly the failure a user
 # works around by pressing the button again for a minute. Waiting is the whole
 # strategy; the loop just does it for them.
+#
+# ⚠️ "Instant" only holds on a mild overload. On a bad one (2026-10-04/05) the
+# same 503 took 2-20 s and a 504 13-30 s, so a single refusal can eat a third of
+# the budget -- which is what the *_MIN_ATTEMPT_S floors below account for.
 RETRY_BASE_DELAY = 1.0  # seconds, doubled per attempt
 RETRY_MAX_DELAY = 8.0  # ceiling, so late attempts stay frequent enough to matter
 
@@ -116,6 +120,21 @@ ANALYZE_DEADLINE_S = 60
 # waiting to type, not waiting for an answer.
 TRANSCRIBE_DEADLINE_S = 25
 REVIEW_DEADLINE_S = 30
+
+# The least time an attempt needs to have a real chance of answering. Another
+# attempt starts only if this much budget is left after its backoff, because an
+# attempt that cannot finish inside the deadline still reaches Google -- and a
+# request Google received counts against the per-day quota whether or not we
+# wait for it. Measured from production logs on 2026-10-04/05: answers took
+# 9-23.5 s, and an overloaded model's refusals were NOT instant (503s 2-20 s,
+# 504s 13-30 s). That day a voice-note retry started with ~1 s of budget left
+# and a refine's fourth attempt with ~16 s; both were refused, spent a quota
+# slot each, and the second stretched the wait to 74.5 s against a 60 s budget.
+# Replayed against that day's log, these floors drop 3 of 22 requests and no
+# answer. The first attempt always runs: it is the one the user asked for.
+ANALYZE_MIN_ATTEMPT_S = 20
+TRANSCRIBE_MIN_ATTEMPT_S = 10
+REVIEW_MIN_ATTEMPT_S = 10
 
 
 class MealAIError(Exception):
@@ -508,7 +527,12 @@ def _backoff(attempt: int) -> float:
 
 
 async def _call_with_retry(
-    operation, *, timeout_ms: int, deadline_s: float, max_attempts: int
+    operation,
+    *,
+    timeout_ms: int,
+    deadline_s: float,
+    max_attempts: int,
+    min_attempt_s: float,
 ) -> tuple[str, object]:
     """Run one provider call, retrying only what another attempt can fix.
 
@@ -524,7 +548,10 @@ async def _call_with_retry(
 
     Two budgets bound it, whichever runs out first: the deadline (how long the
     user waits) and max_attempts (how much of the per-day quota one action may
-    spend, since Google counts refused attempts too). A 429 takes its model out
+    spend, since Google counts refused attempts too). The deadline is enforced
+    when an attempt is *started*, never by cutting one short: an attempt only
+    begins if min_attempt_s of budget remain after its backoff. Cutting a
+    running attempt would throw away a request Google has already counted. A 429 takes its model out
     of the rotation for this call and moves on at once -- no sleep, because the
     next model's quota is its own -- and a per-day 429 also takes it out for
     later calls, until the reset or the hourly re-check.
@@ -552,8 +579,12 @@ async def _call_with_retry(
         turn += 1
         delay = _backoff(attempt)
         # Whether there is room for another attempt after this one. Decided up
-        # front so the last failure is the one that pays for a full traceback.
-        final = attempt == max_attempts or (_now() - started) + delay >= deadline_s
+        # front so the last failure is the one that pays for a full traceback;
+        # re-checked after the attempt, which may itself have taken a while.
+        final = (
+            attempt == max_attempts
+            or (_now() - started) + delay + min_attempt_s > deadline_s
+        )
 
         try:
             with _provider_errors(model, final=final):
@@ -583,7 +614,16 @@ async def _call_with_retry(
             return model, response
 
         elapsed = _now() - started
-        if final or elapsed + delay >= deadline_s:
+        if attempt == max_attempts:
+            break
+        if elapsed + delay + min_attempt_s > deadline_s:
+            # Said out loud because it is the line that explains a give-up with
+            # attempts to spare -- and the prod check that this floor holds.
+            logger.info(
+                "Not retrying Gemini: %.0fs of budget left after the backoff, under "
+                "the %.0fs an attempt needs (model=%s, attempt %d of %d)",
+                deadline_s - elapsed - delay, min_attempt_s, model, attempt, max_attempts,
+            )
             break
         logger.info(
             "Retrying Gemini in %.1fs (model=%s, attempt %d of %d, %.0fs of budget left)",
@@ -743,6 +783,7 @@ async def analyze_meal(
         timeout_ms=ANALYZE_TIMEOUT_MS,
         deadline_s=ANALYZE_DEADLINE_S,
         max_attempts=ANALYZE_MAX_ATTEMPTS,
+        min_attempt_s=ANALYZE_MIN_ATTEMPT_S,
     )
 
     # response.parsed is populated when the SDK validated the schema itself;
@@ -796,6 +837,7 @@ async def transcribe_audio(audio_bytes: bytes, audio_mime: str | None) -> str:
         timeout_ms=TRANSCRIBE_TIMEOUT_MS,
         deadline_s=TRANSCRIBE_DEADLINE_S,
         max_attempts=TRANSCRIBE_MAX_ATTEMPTS,
+        min_attempt_s=TRANSCRIBE_MIN_ATTEMPT_S,
     )
 
     try:
@@ -849,6 +891,7 @@ async def phrase_review(facts: Sequence[str]) -> str:
         timeout_ms=REVIEW_TIMEOUT_MS,
         deadline_s=REVIEW_DEADLINE_S,
         max_attempts=REVIEW_MAX_ATTEMPTS,
+        min_attempt_s=REVIEW_MIN_ATTEMPT_S,
     )
 
     try:

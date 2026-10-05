@@ -2,6 +2,7 @@ import asyncio
 import gc
 import io
 import json
+import logging
 import weakref
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -951,6 +952,92 @@ def test_transcription_gets_a_shorter_budget_than_analysis(monkeypatch):
         asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm"))
 
     assert transcribe["n"] < analyze["n"]
+
+
+# --- an attempt only starts if it has time to answer --------------------------
+# Replays of real attempt sequences from the production log of 2026-10-04,
+# timed in seconds as logged. On a bad overload Gemini's refusals are slow (503s
+# 2-20 s, 504s 13-30 s), so the deadline is eaten by the failures themselves --
+# and a retry started with no time left still costs a request Google counts.
+
+
+def _gateway_timeout():
+    return genai_errors.ServerError(504, {"error": {"message": "deadline exceeded"}})
+
+
+def _install_timed_provider(monkeypatch, outcomes):
+    """Each (seconds, outcome) takes that long on a virtual clock, then happens.
+
+    Its own clock, patched over the autouse virtual_clock: backoff sleeps and
+    attempt durations both have to move it for the deadline arithmetic to be the
+    one production ran.
+    """
+    now = {"t": 0.0}
+    calls = {"n": 0}
+
+    async def fake_sleep(seconds):
+        now["t"] += seconds
+
+    async def generate_content(**_kwargs):
+        seconds, outcome = outcomes[calls["n"]]
+        calls["n"] += 1
+        now["t"] += seconds
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(meal_ai.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(meal_ai, "_now", lambda: now["t"])
+    monkeypatch.setattr(meal_ai.genai, "Client", _fake_client_factory(generate_content))
+    return calls, now
+
+
+def test_an_attempt_without_time_to_answer_is_not_started(monkeypatch, caplog):
+    """The 13:01:46 refine: three slow 503s left ~16 s, and a fourth attempt ran
+    30 s into a 504 -- a request Google counted, and a 74.5 s wait on a 60 s
+    budget. Now it stops after the third, inside the budget."""
+    calls, now = _install_timed_provider(
+        monkeypatch,
+        [(15, _server_error()), (2, _server_error()), (20, _server_error()),
+         (30, _gateway_timeout())],
+    )
+    with caplog.at_level(logging.INFO, logger="app.services.meal_ai"):
+        with pytest.raises(meal_ai.MealAIUnavailable):
+            asyncio.run(meal_ai.analyze_meal([], "chicken"))
+    assert calls["n"] == 3
+    assert now["t"] <= meal_ai.ANALYZE_DEADLINE_S
+    assert "Not retrying Gemini" in caplog.text
+
+
+def test_a_voice_note_retry_with_seconds_left_is_not_started(monkeypatch):
+    """The 13:00 voice note that ended in a give-up: a 15 s 504, then retries
+    started with ~9 s and ~1 s of a 25 s budget, both refused. One request now."""
+    calls, _ = _install_timed_provider(
+        monkeypatch,
+        [(15, _gateway_timeout()), (6, _server_error()), (13, _gateway_timeout())],
+    )
+    with pytest.raises(meal_ai.MealAIUnavailable):
+        asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm"))
+    assert calls["n"] == 1
+
+
+def test_a_retry_with_time_to_answer_still_runs(monkeypatch):
+    """The floor must not cost a real answer. Its twin at 13:00 hit a 504 after
+    13 s and the fallback answered in 9.4 s; the 13:03 refine's fallback
+    answered after a 12 s 503. Both still answer."""
+    calls, _ = _install_timed_provider(
+        monkeypatch,
+        [(13, _gateway_timeout()), (9.4, SimpleNamespace(text="two eggs", candidates=None))],
+    )
+    assert asyncio.run(meal_ai.transcribe_audio(b"audio", "audio/webm")) == "two eggs"
+    assert calls["n"] == 2
+
+    calls, _ = _install_timed_provider(
+        monkeypatch,
+        [(12, _server_error()), (21, SimpleNamespace(parsed=SAMPLE, text=None))],
+    )
+    assert asyncio.run(meal_ai.analyze_meal([], "chicken")) is SAMPLE
+    assert calls["n"] == 2
 
 
 @pytest.mark.parametrize(

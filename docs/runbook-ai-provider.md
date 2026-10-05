@@ -49,6 +49,7 @@ Filter Application logs on `Gemini`. Every branch logs a distinct string.
 | `Gemini daily quota exhausted (model=…, quota=…, resets_at=…)` | **That model's per-day quota is spent** (free tier: 20/day per model, failed attempts included). It is skipped until `resets_at` (midnight Pacific), re-checked hourly | Nothing, if a fallback answered. If they all ran out, see the next row |
 | `Every Gemini model is out of quota for the day; not calling` | The whole chain is out; users see "resets in about N hours" | Wait for midnight Pacific (11:00 Dubai in summer time, 12:00 in winter), add a model to `MEAL_AI_FALLBACK_MODEL`, or turn billing on. **A restart clears the memory**, and so does the hourly re-check |
 | `Gemini … refused (…); trying … now` | A 429 moved the call straight to the next model | — |
+| `Not retrying Gemini: Ns of budget left …, under the Ns an attempt needs` | Attempts to spare, but not enough time for one to answer, so none is started: it would still reach Google and spend a request. Expected on bad overload days, when refusals themselves take 2–30 s | — (the `Giving up` line follows) |
 | `Giving up on Gemini after …` | The retry budget was spent — the attempt cap (`MEAL_AI_MAX_ATTEMPTS`) or the deadline, whichever came first | On a paid key, raise `MEAL_AI_MAX_ATTEMPTS` and/or `MEAL_AI_DEADLINE_S` (and the frontend timeout with it). On the free tier, don't: refused attempts spend the per-day quota |
 
 Only the **final** attempt logs a full traceback; earlier ones log a one-line WARNING,
@@ -85,6 +86,11 @@ Before escalating, note these are automatic:
   voice note / review). The cap exists because Google counts refused attempts against
   the per-day quota. Uncapped, one analysis in an overload made ~13 attempts, which is
   most of the free tier's 20 a day for the whole app.
+- **A retry starts only if it has time to answer**: at least 20 s of the deadline left
+  for an analysis, 10 s for a voice note or review (`*_MIN_ATTEMPT_S` in
+  `services/meal_ai.py`). Measured 2026-10-04/05: answers took 9–23.5 s, while an
+  overloaded model's refusals took 2–20 s (503) and 13–30 s (504). A running attempt is
+  never cut short, because Google has already counted it.
 - **Alternating model chain** (`MEAL_AI_FALLBACK_MODEL`, comma-separated, default
   `gemini-2.5-flash`): attempt two already lands on the other serving pool, since
   overload is per pool.
