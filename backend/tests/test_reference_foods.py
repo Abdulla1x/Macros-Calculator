@@ -43,13 +43,15 @@ def test_the_plain_food_outranks_dishes_that_mention_it(tables):
     assert names(search("apples"))[0] == "Apples, raw, with skin"
 
 
-def test_every_query_word_must_be_present(tables):
+def test_a_row_with_every_query_word_comes_first(tables):
     tables("usda", [
         '1,"Apples, raw, granny smith, with skin",58,0.4,10.6,0.2,2.8',
         '2,"Asparagus, green, raw",20,2.2,1.8,0.1,2.1',
         '3,"Croissants, apple",254,7.4,26,14,1.5',
     ])
-    assert names(search("granny smith apple")) == ["Apples, raw, granny smith, with skin"]
+    assert names(search("granny smith apple")) == [
+        "Apples, raw, granny smith, with skin", "Croissants, apple",
+    ]
 
 
 def test_with_no_row_holding_every_word_it_falls_back_to_the_last_word(tables):
@@ -65,12 +67,23 @@ def test_with_no_row_holding_every_word_it_falls_back_to_the_last_word(tables):
     ]
 
 
-def test_the_fallback_never_dilutes_a_query_that_matches(tables):
+def test_a_row_with_every_word_outranks_the_fallback(tables):
     tables("usda", [
-        '1,"Bread, pita",275,9.1,55.7,1.2,2.2',
+        '1,"Bread, white",265,9,49,3.2,2.7',
         '2,"Bread, brown, toasted",260,9,45,2,5',
     ])
-    assert names(search("brown bread")) == ["Bread, brown, toasted"]
+    # The fallback ("bread") may add rows, but only below the real match.
+    assert names(search("brown bread")) == ["Bread, brown, toasted", "Bread, white"]
+
+
+def test_a_poor_match_on_every_word_does_not_hide_the_plain_food(tables):
+    tables("usda", ['1,"Apple, raw",61,0.2,12.7,0.2,2.1'])
+    tables("ciqual", [
+        '13001,"Pomme cythere or golden apple (local variety), giant, green",32,0.5,6,0.2,2',
+    ])
+    # The only row with both words is a tropical fruit; the plain apple, found
+    # through the fallback, still comes first.
+    assert names(search("green apple"))[0] == "Apple, raw"
 
 
 def test_a_preparation_word_marks_the_plain_food_not_a_longer_name(tables):

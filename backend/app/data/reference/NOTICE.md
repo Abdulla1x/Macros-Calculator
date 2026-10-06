@@ -21,3 +21,25 @@ https://fdc.nal.usda.gov/
 
 Public domain under CC0 1.0. USDA requests, but does not require, this citation.
 Carbohydrate (by difference) has had total dietary fibre subtracted.
+
+## UK CoFID — `cofid.csv`
+
+Contains public sector information licensed under the Open Government Licence
+v3.0 (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+Source: Public Health England (2021). McCance and Widdowson's The Composition
+of Foods Integrated Dataset 2021.
+https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid
+
+Carbohydrate is CoFID's available carbohydrate as published (monosaccharide
+equivalents, which read a few percent above the weight of starch eaten).
+CoFID 2021 gives two foods the code 13-669; the second is stored as 13-669#2.
+
+## France Ciqual — `ciqual.csv`
+
+Anses. 2025. Table de composition nutritionnelle des aliments Ciqual.
+https://ciqual.anses.fr/ — reused under the Licence Ouverte
+(https://www.etalab.gouv.fr/licence-ouverte-open-licence/). ANSES does not
+endorse this app or its use of the data. English food names; energy is the EU
+Regulation 1169/2011 figure; carbohydrate is Ciqual's available carbohydrate
+as published. Category averages (group 00) were left out. Data as published on
+2025-11-03.

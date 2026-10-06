@@ -43,6 +43,31 @@ class Row:
     fibre: float | None
 
 
+# Every table spells "below the detection limit" and "not measured"
+# differently. A trace is a real, tiny amount, so it logs as 0; an unmeasured
+# value is unknown, so it stays blank rather than claiming 0.
+TRACE = {"tr", "trace", "traces"}
+MISSING = {"", "n", "-", "na", "n/a", "none"}
+
+
+def parse_value(raw) -> float | None:
+    """One cell -> a number per 100 g, 0 for a trace, None when unmeasured.
+
+    Accepts numbers, "Tr"/"traces", "N"/"-", "< 0,2" (below the limit: a
+    trace) and comma decimals ("49,9"), which covers CoFID, Ciqual, AFCD and
+    CNF as published."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    text = str(raw).strip().lower()
+    if text in MISSING:
+        return None
+    if text in TRACE or text.startswith("<"):
+        return 0.0
+    return float(text.replace(",", "."))
+
+
 def available_carbs(total: float | None, fibre: float | None) -> float | None:
     """Carbs with fibre -> carbs without, never below zero.
 
@@ -76,6 +101,14 @@ def write(source: str, rows: list[Row]) -> Path:
             dropped += 1
             continue
         kept.setdefault(normalize(row.name), row)
+    # A table's own id should be unique, but CoFID 2021 gives two different
+    # foods (roasted aubergine, raw watercress) the same code, 13-669. Both are
+    # real foods, so the second keeps its row and gets a "#2" suffix.
+    seen: dict[str, int] = {}
+    for row in kept.values():
+        seen[row.source_id] = seen.get(row.source_id, 0) + 1
+        if seen[row.source_id] > 1:
+            row.source_id = f"{row.source_id}#{seen[row.source_id]}"
     path = DATA_DIR / f"{source}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
