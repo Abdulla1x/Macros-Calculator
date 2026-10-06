@@ -1,6 +1,6 @@
 # Trackaholic
 
-[![CI](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml)
+[![CI](https://github.com/Abdulla1x/Trackaholic/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdulla1x/Trackaholic/actions/workflows/ci.yml)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
@@ -305,7 +305,7 @@ icon, with a dark splash screen while it starts.
 ```
 
 ```
-Macros-Calculator
+Trackaholic
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, CORS, lifespan (fails fast on a missing JWT_SECRET)
