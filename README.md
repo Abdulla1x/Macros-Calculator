@@ -17,7 +17,7 @@ A full-stack, **multi-user** nutrition tracking app: a **React + TypeScript** da
 
 Sign up with an email and password and get your own private meal log, food library, goals, and AI analyses — every API endpoint is scoped to the authenticated user.
 
-Log meals by typing an ingredient name — macros auto-fill from your personal **food library**, with an **Open Food Facts** lookup as fallback for foods you haven't logged before. Or skip the form entirely: **describe your meal, record a voice note, or photograph it** — any one is enough — and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, weigh in, and watch progress rings, trend charts and a computed weekly review update as you log.
+Log meals by typing an ingredient name — macros auto-fill as you type from your personal **food library** and from **five open national food tables** (USDA, UK, France, Australia, Canada), with an **Open Food Facts** lookup for packaged products. Or skip the form entirely: **describe your meal, record a voice note, or photograph it** — any one is enough — and let **AI estimate the macros** — with honest uncertainty ranges and editable assumptions — before you review and save. Track calories and protein (plus carbs and fat if you enable them), set daily goals, weigh in, and watch progress rings, trend charts and a computed weekly review update as you log.
 
 > **v2 rewrite:** this project started as a Streamlit app and was rebuilt with a decoupled frontend/backend architecture. The original app lives in [`legacy/`](legacy/).
 
@@ -30,6 +30,7 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Per-user everything**: meals, food library, saved meal templates, weight entries, water logs, step counts, supplements and their check-offs, calorie plans, goals/settings, and AI analyses are isolated per account — enforced on every query, verified by a dedicated cross-tenant test suite
 - **Layered AI quotas**: 12 analyses + 16 voice notes + 3 review summaries per user per day, under a **global ceiling** of 40 calls/day across every account — sized for Gemini's free tier of 20 requests a day per model, and checked against the heaviest real user's busiest days. The per-user caps stop one person using up the shared quota, the global one stops mass signups draining it (or running up a bill on a paid key). All of them are env-tunable
 - **What the AI sees**: your photos, voice note and description are sent to Google Gemini to estimate the meal, and the app says so beside the Analyze button. Photos are shrunk on your phone first, which also strips their location data, and only the text of the estimate is kept: the photo and audio are discarded. On Gemini's free tier, Google may use what it is sent to improve its products
+- **What you search for is not logged**: the food searches send what you type as a URL parameter, and both the server's access log and its outgoing-request log blank that value before writing the line. The app's own log lines count results and time them, never the text
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - **Password reset by email — built, deployed, and switched off.** The endpoints, the single-use link (hashed at rest, valid an hour, revoking every session when used) and 38 tests are all here and running in production. They answer **503 to every address**, because no email provider is configured — three free providers were tried and all three refused a domainless free account, which is the profile their fraud screening targets. Until one is wired up **a forgotten password means a lost account**, and the signup page says so rather than letting you find out later. Nothing about the feature needs a deploy to switch on; it activates on credentials alone
 
@@ -59,11 +60,13 @@ Log meals by typing an ingredient name — macros auto-fill from your personal *
 - **Spends the daily AI allowance carefully.** Google's free tier turned out to be 20 requests a day *per model* for the whole app, counting failed attempts, about 25 times less than the app had been configured for. So each action makes at most a few attempts, and starts another only if there is still time for it to answer. A model that is out for the day is skipped, by reading Google's structured quota error rather than its wording, and the next model, which has a quota of its own, is asked straight away. When the day's AI really is gone, the message says when it comes back instead of "try again in a minute"
 
 ### 🍽️ Smart meal logging
-- **Type-ahead food search**: ingredients you've logged before auto-fill their macros from your personal food library
-- **Open Food Facts fallback**: unknown foods can be looked up in the public OFF database (per-serving macros normalized automatically) and are cached locally for next time
-- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings, filter by name, and sort by name or by when each one arrived. Correcting one that came from Open Food Facts makes it yours, so a later lookup can't overwrite your own numbers. Both lists show their first few rows with the rest a tap away, so the controls that act on them — the filter, and adding a food by hand — stay on the first screen instead of sitting below everything you have ever saved
-- **Every saved food is comparable, whatever it was saved against.** Macros are stored per the food's own serving size, which is what the packet says and useless for comparing two of them — 108 kcal per 90 g and 70 kcal per 50 g are the same food twice, and nothing about those two lines says so. Any row that is not already per 100 g now shows what it works out to, and a **Per 100 g** button rewrites it that way for good: it previews the figures first, and it **keeps the Open Food Facts badge**, because a rescale is the same claim in different units and corrects nothing
-- **It tells you when you have saved the same food twice.** The library fills itself up on its own — every Open Food Facts pick is cached, every ticked ingredient saved — so the same thing arrives under names nobody chose to make match. A pair is flagged only when the names overlap **and** the per-100 g calories and protein are close, because names alone would call "chicken breast" and "chicken thigh" duplicates. And it argues rather than acts: both rows are put side by side in the same units so you can see why, every delete is yours, and "not a duplicate" makes it stop asking
+- **Type-ahead food search, three tiers deep**: your own food library first, then **26,000 generic foods from five open national food tables** — USDA FoodData Central, the UK's CoFID, France's Ciqual, Australia's AFCD and the Canadian Nutrient File — both as you type. A new account with an empty library still finds "apple", "lentils" or "basmati rice" on the first keystrokes. Every row is badged with where its figures come from, per 100 g, and carbs are shown **without fibre** in every table, converted where a table publishes them with it
+- **Ranked for plain ingredients, not dishes**: the tables are searched in memory on the server with ranking of its own, because USDA's search API put croissants first for "green apple". "Apples, raw" beats "Croissants, apple", "Egg, fried" beats "Fried eggplant", a few regional and British names are understood ("arabic bread" finds pita, "moong dal" finds mung beans, "aubergine" finds eggplant), and a query no row fully matches falls back to its last word. Measured against 25 of the author's own everyday foods, **the plain food is in the top 3 for 92%**, and CI fails if a change drops that below 90%
+- **Open Food Facts for packaged products**, on request: one tap searches the public OFF database (per-serving macros normalized automatically). It is a button rather than part of the type-ahead because it is a slower third-party call on a shared rate limit
+- **Nothing is saved behind your back**: picking a table or Open Food Facts result fills the ingredient and offers "save to my food library", unticked. Saved, it keeps its source badge; change any of its numbers first and it is saved as yours
+- **A food library you can edit**, not just accumulate — rename, correct or delete saved foods from Settings, filter by name, and sort by name or by when each one arrived. Correcting one that came from Open Food Facts or a food table makes it yours, so the badge never claims figures you changed. Both lists show their first few rows with the rest a tap away, so the controls that act on them — the filter, and adding a food by hand — stay on the first screen instead of sitting below everything you have ever saved
+- **Every saved food is comparable, whatever it was saved against.** Macros are stored per the food's own serving size, which is what the packet says and useless for comparing two of them — 108 kcal per 90 g and 70 kcal per 50 g are the same food twice, and nothing about those two lines says so. Any row that is not already per 100 g now shows what it works out to, and a **Per 100 g** button rewrites it that way for good: it previews the figures first, and it **keeps the food's source badge**, because a rescale is the same claim in different units and corrects nothing
+- **It tells you when you have saved the same food twice.** The library fills up with little thought per entry — every ticked ingredient is saved, and Open Food Facts picks were cached automatically until October 2026 — so the same thing arrives under names nobody chose to make match. A pair is flagged only when the names overlap **and** the per-100 g calories and protein are close, because names alone would call "chicken breast" and "chicken thigh" duplicates. And it argues rather than acts: both rows are put side by side in the same units so you can see why, every delete is yours, and "not a duplicate" makes it stop asking
 - **Saved meals**: store a meal you eat often and re-log it in one tap from the dashboard
 - **Recently logged**: the dashboard offers the meals you actually logged recently, so anything you have eaten before can be re-logged without retyping it. It is the counterpart to saved meals rather than a duplicate of them — a saved meal had to be stored in advance, while this needs no forethought at all, which is the case it exists for. The list is one entry per meal *name*, carrying the most recent version of it and the day that came from, so logging “Breakfast” every morning does not fill the card with six Breakfasts. Tapping one opens the log form filled in, so the portion is still yours to change before it is saved. Meals you have already logged on the day you are looking at are moved to the end of the list rather than dropped from it — you can still have the same thing twice, but the card leads with what you have not had yet
 - **Share a meal by code**: turn a meal or a saved template into a short code, hand it to someone, and they get an **editable copy in their own account**. The code is a self-contained encoded payload — there is no shared row, no invite, nothing to revoke, and no account id inside it, so per-user isolation is untouched by the feature existing
@@ -173,7 +176,7 @@ Nothing is saved until you have looked at it. Ingredients arrive as ordinary row
 
 ### Log a meal
 
-Type an ingredient and your food library fills in the macros, with an Open Food Facts lookup behind it for anything you have not logged before.
+Type an ingredient and your food library fills in the macros, with generic foods from the national food tables listed under it as you type, and an Open Food Facts lookup for packaged products.
 
 <table>
 <tr><th align="center">Desktop</th><th align="center">Phone</th></tr>
@@ -292,8 +295,10 @@ icon, with a dark splash screen while it starts.
 ┌─────────────────────┐         ┌──────────────────────┐        ┌─────────────────┐
 │  React SPA / PWA    │  HTTP   │  FastAPI REST API    │        │ Open Food Facts │
 │  Tailwind, Recharts ├────────►│  /api/auth /meals    ├───────►│  public API     │
-│  React Router       │ Bearer  │  /foods /ai ...      │  httpx │  (fallback)     │
-└─────────────────────┘  JWT    └──────┬────────┬──────┘        └─────────────────┘
+│  React Router       │ Bearer  │  /foods /ai ...      │  httpx │  (packaged)     │
+└─────────────────────┘  JWT    │ + 5 food tables, in  │        └─────────────────┘
+                                │   memory (26k foods) │
+                                └──────┬────────┬──────┘
                                        │SQLAlchemy  google-genai ┌─────────────────┐
                                 ┌──────▼──────┐ └───────────────►│ Gemini 3.5 Flash│
                                 │  PostgreSQL │ users · meals    │ (meal analysis) │
@@ -325,6 +330,8 @@ Trackaholic
 │   │   ├── review.py            # the weekly review's arithmetic: eight checks, each with its own window
 │   │   ├── share.py             # the meal-code codec (a self-contained payload; no table)
 │   │   ├── announcements.py     # committed release notes + an env-var status banner
+│   │   ├── reference_foods.py   # the national food tables: loaded once, searched and ranked in memory
+│   │   ├── data/reference/      # one CSV per table (USDA, CoFID, Ciqual, AFCD, CNF) + NOTICE.md credits
 │   │   ├── routers/             # auth, meals, meal_templates, share, foods, weights, analytics,
 │   │   │                        #   settings, data (CSV/JSON), ai, water, steps, plan,
 │   │   │                        #   supplements, review, announcements, admin
@@ -334,6 +341,7 @@ Trackaholic
 │   │       └── email.py         # password-reset email (the only Brevo-aware module; switched off)
 │   ├── alembic/                 # database migrations (Postgres)
 │   ├── scripts/                 # smoke_multiuser.py — the live two-account isolation check
+│   │                            # reference/ — build_<table>.py per food table, and ranking_report.py
 │   │                            # delete_account_by_email.py — ops: remove an account whose password is gone
 │   │                            # compare_estimates.py — same photos through the real model in
 │   │                            #   several variants (sizes, models), against its own noise
@@ -355,7 +363,8 @@ Trackaholic
 │       ├── lib/                 # dates, parse, limits (mirrors the server's bounds), units,
 │       │                        #   chartTheme (one place for every recharts colour), libraryMatch,
 │       │                        #   photoSize + photoDownscale (shrink photos before upload),
-│       │                        #   analysisInputs (is a re-run of an estimate unchanged?)
+│       │                        #   analysisInputs (is a re-run of an estimate unchanged?),
+│       │                        #   foodSources (source badges, credits, the edited-number rule)
 │       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Review, Admin,
 │                                #   WhatsNew, settings/ (five tab panels), and the four auth pages
 ├── docs/                        # AI provider runbook, the Gemini EEA-region incident write-up,
@@ -640,7 +649,7 @@ to anything else. That failure looks like a network error and never reaches the 
 
 ## 🔌 API overview
 
-54 paths. All of them require an `Authorization: Bearer <token>` header and operate
+55 paths. All of them require an `Authorization: Bearer <token>` header and operate
 only on the caller's data, except these public ones: `/api/health`,
 `/api/announcements`, `/api/auth/signup|login`, and
 `/api/auth/forgot-password|reset-password`.
@@ -671,6 +680,7 @@ only on the caller's data, except these public ones: `/api/health`,
 | POST | `/api/foods/{id}/normalize` | Rescale one food's macros to per 100 g, keeping its provenance |
 | GET | `/api/foods/duplicates` | Pairs of saved foods that look like the same thing twice |
 | GET | `/api/foods/search?q=` | Autocomplete over the local food library |
+| GET | `/api/foods/reference?q=` | Generic foods from the five national tables, per 100 g, ranked |
 | GET | `/api/foods/lookup?q=` | Open Food Facts search (normalized per serving) |
 | GET | `/api/share/meal/{id}` | Encode one of your meals as a shareable code |
 | GET | `/api/share/template/{id}` | Encode a saved meal as a shareable code |
@@ -738,6 +748,21 @@ only on the caller's data, except these public ones: `/api/health`,
   first, because a scanner that misses most products is worse than no scanner
 - Frontend component tests (Vitest + Testing Library) — DOM-free logic has had
   `npm test` since the photo-downscaling work; components still have none
+
+---
+
+## 🥕 Food data sources
+
+The generic foods in the search come from open national food-composition tables, used under their licences and credited here and in the app (Settings → Library). Each was reduced to energy, protein, carbohydrate, fat and fibre per 100 g, with carbohydrate shown **excluding fibre** — subtracted where a table publishes it included. Full credits and every change made are in [`backend/app/data/reference/NOTICE.md`](backend/app/data/reference/NOTICE.md). None of these organisations endorses this app.
+
+| Table | Publisher | Licence |
+|---|---|---|
+| [FoodData Central](https://fdc.nal.usda.gov/) (Foundation, SR Legacy, FNDDS) | U.S. Department of Agriculture, Agricultural Research Service | Public domain (CC0 1.0) |
+| [CoFID 2021](https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid) — McCance and Widdowson's The Composition of Foods Integrated Dataset | Public Health England. Contains public sector information licensed under the Open Government Licence v3.0 | [OGL v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) |
+| [Ciqual 2025](https://ciqual.anses.fr/) — Anses. 2025. Table de composition nutritionnelle des aliments Ciqual | ANSES | [Licence Ouverte](https://www.etalab.gouv.fr/licence-ouverte-open-licence/) |
+| [AFCD Release 3](https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd) — Australian Food Composition Database | Food Standards Australia New Zealand (2025) | [CC BY 2.5 AU](https://creativecommons.org/licenses/by/2.5/au/) |
+| [Canadian Nutrient File 2015](https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/nutrient-data.html) | Health Canada | [OGL – Canada](https://open.canada.ca/en/open-government-licence-canada) |
+| [Open Food Facts](https://world.openfoodfacts.org/) (packaged products, searched live) | Open Food Facts contributors | [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) |
 
 ---
 
