@@ -43,3 +43,25 @@ endorse this app or its use of the data. English food names; energy is the EU
 Regulation 1169/2011 figure; carbohydrate is Ciqual's available carbohydrate
 as published. Category averages (group 00) were left out. Data as published on
 2025-11-03.
+
+## Australia AFCD — `afcd.csv`
+
+Food Standards Australia New Zealand (2025). Australian Food Composition
+Database - Release 3. Canberra: FSANZ.
+https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd
+Licensed under Creative Commons Attribution 2.5 Australia
+(https://creativecommons.org/licenses/by/2.5/au/).
+
+Changes: energy converted from kJ ("Energy with dietary fibre, equated") to
+kcal by dividing by 4.184; carbohydrate is "Available carbohydrate, with sugar
+alcohols" as published.
+
+## Canada CNF — `cnf.csv`
+
+Canadian Nutrient File, Health Canada, 2015. Licensed under the Open
+Government Licence - Canada (https://open.canada.ca/en/open-government-licence-canada).
+https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/nutrient-data.html
+
+Changes: carbohydrate (total, by difference) has had total dietary fibre
+subtracted; foods whose name is identical to a USDA food are left out, since
+CNF copies many of them from USDA.
