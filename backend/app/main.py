@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Macros Calculator API", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="Trackaholic API", version="3.0.0", lifespan=lifespan)
 
 app.state.limiter = limiter
 

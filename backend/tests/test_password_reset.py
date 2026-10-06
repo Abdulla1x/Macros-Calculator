@@ -459,12 +459,12 @@ def test_a_successful_send_posts_to_brevo(monkeypatch):
     payload = capture["json"]
     assert payload["to"] == [{"email": "someone@example.com"}]
     assert payload["sender"]["email"] == "sender@example.com"
-    assert payload["sender"]["name"] == "Macros Calculator"
+    assert payload["sender"]["name"] == "Trackaholic"
     # Both parts, both carrying the link and the real expiry.
     for part in (payload["textContent"], payload["htmlContent"]):
         assert "https://app.example/reset-password?token=abc" in part
         assert "60 minutes" in part
-        assert "Macros Calculator" in part
+        assert "Trackaholic" in part
 
 
 def test_the_sender_name_is_configurable(monkeypatch):

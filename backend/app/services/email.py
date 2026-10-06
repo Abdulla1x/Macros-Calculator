@@ -31,7 +31,7 @@ SENDER_EMAIL_ENV = "EMAIL_SENDER_ADDRESS"
 SENDER_NAME_ENV = "EMAIL_SENDER_NAME"
 # What the recipient sees as the display name. The address beside it is likely
 # to be rewritten (see the module docstring), so this name is doing real work.
-DEFAULT_SENDER_NAME = "Macros Calculator"
+DEFAULT_SENDER_NAME = "Trackaholic"
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
@@ -163,7 +163,7 @@ def _password_reset_body(reset_url: str, ttl_minutes: int) -> tuple[str, str]:
     caller's value so the copy cannot drift from the token's real expiry.
     """
     text = (
-        f"Macros Calculator — password reset\n\n"
+        f"Trackaholic — password reset\n\n"
         f"Someone asked to reset the password for this email address. Open the "
         f"link below to choose a new one:\n\n"
         f"{reset_url}\n\n"
@@ -174,7 +174,7 @@ def _password_reset_body(reset_url: str, ttl_minutes: int) -> tuple[str, str]:
     safe_url = escape(reset_url, quote=True)
     html = (
         f'<div style="font-family:system-ui,sans-serif;line-height:1.5">'
-        f"<h2>Macros Calculator — password reset</h2>"
+        f"<h2>Trackaholic — password reset</h2>"
         f"<p>Someone asked to reset the password for this email address. "
         f"Choose a new one here:</p>"
         f'<p><a href="{safe_url}">Reset your password</a></p>'
@@ -206,7 +206,7 @@ async def send_password_reset(
             "name": _env(SENDER_NAME_ENV) or DEFAULT_SENDER_NAME,
         },
         "to": [{"email": to_email}],
-        "subject": "Reset your Macros Calculator password",
+        "subject": "Reset your Trackaholic password",
         "textContent": text,
         "htmlContent": html,
     }

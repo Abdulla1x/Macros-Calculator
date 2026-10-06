@@ -1,4 +1,4 @@
-# 🍽️ Macros Calculator
+# Trackaholic
 
 [![CI](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdulla1x/Macros-Calculator/actions/workflows/ci.yml)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
@@ -8,6 +8,8 @@
 ![Postgres](https://img.shields.io/badge/Database-PostgreSQL-4169e1?logo=postgresql&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-pytest-brightgreen)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
+
+*Formerly **Macros Calculator**; renamed in October 2026. The live address moves to `trackaholic.app` later.*
 
 **🔗 Live app: [macros-calculator-mu.vercel.app](https://macros-calculator-mu.vercel.app)** — sign up and start logging. (Free-tier hosting: the first request after idle can take ~30–60 s.)
 
