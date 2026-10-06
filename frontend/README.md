@@ -1,4 +1,4 @@
-# Macros Calculator — Frontend
+# Trackaholic — Frontend
 
 React 19 + TypeScript + Vite + Tailwind CSS + Recharts single-page app.
 See the [root README](../README.md) for the full project overview.

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Trackaholic">
+  <rect width="100" height="100" fill="#0f1210"/>
+  <g fill="#f2f4ef"><rect x="15.6" y="41" width="7" height="18"/><rect x="25.0" y="41" width="7" height="18"/><rect x="34.4" y="41" width="7" height="18"/><rect x="43.8" y="41" width="7" height="18"/><rect x="53.2" y="41" width="7" height="18"/></g>
+  <g fill="#3a423c"><rect x="62.6" y="41" width="7" height="18"/><rect x="72.0" y="41" width="7" height="18"/></g>
+  <rect x="81.4" y="37" width="3" height="26" fill="#e88ae8"/>
+</svg>

@@ -38,8 +38,8 @@ export default function ForgotPassword() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-3xl" aria-hidden="true">🍽️</span>
-          <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
+          <img src="/favicon.svg" alt="" className="size-8 rounded-[5px]" />
+          <h1 className="text-xl font-bold tracking-tight">Trackaholic</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
         {sent ? (
@@ -57,7 +57,7 @@ export default function ForgotPassword() {
                 came from a stranger — saying so up front is the difference
                 between "check spam" and "report phishing". */}
             <p className="text-ink-faint">
-              It arrives from <span className="text-slate-300">Macros Calculator</span>{' '}
+              It arrives from <span className="text-slate-300">Trackaholic</span>{' '}
               but at an unfamiliar <code className="text-slate-300">brevosend.com</code>{' '}
               address, so check your spam folder if it isn't there in a few
               minutes.
