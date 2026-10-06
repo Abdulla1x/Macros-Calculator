@@ -54,7 +54,7 @@ It is also free and open source (MIT).
 
 ## Brand Commitments
 
-- **Name:** Trackaholic (domain `trackaholic.app`), replacing "Macros Calculator"; the rename lands as its own step. The name winks at compulsive tracking, so the product must never act like it rewards compulsion.
+- **Name:** Trackaholic (domain `trackaholic.app`), renamed from "Macros Calculator" on 2026-10-06. The name winks at compulsive tracking, so the product must never act like it rewards compulsion.
 - **Look:** recorded in [DESIGN.md](DESIGN.md). The wordmark joins the two brand ideas: the segmented calories gauge and the nutrition label ("Serving size: 1 habit").
 - **Voice: wry, in small doses.**
   - Humour lives in quiet moments: empty states, unlocks, the weekly review, the wordmark.
