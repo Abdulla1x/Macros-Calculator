@@ -5,7 +5,7 @@ from ..schemas import OFFProduct
 
 SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl"
 # OFF asks API users to identify themselves via User-Agent.
-USER_AGENT = "MacrosCalculator/2.0 (https://github.com/Abdulla1x/Macros-Calculator)"
+USER_AGENT = "Trackaholic/2.0 (https://github.com/Abdulla1x/Trackaholic)"
 FIELDS = "product_name,brands,serving_quantity,nutriments"
 
 
