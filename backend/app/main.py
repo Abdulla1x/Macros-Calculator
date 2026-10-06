@@ -48,29 +48,41 @@ logging.basicConfig(
 
 
 class RedactSearchText(logging.Filter):
-    """Blank the `q=` value in uvicorn's access log.
+    """Blank what the user typed into a food search, wherever a URL is logged.
 
-    The three food searches (/api/foods/search, /lookup, /reference) take what
-    the user typed as `?q=`, and uvicorn logs every request's full URL, so
-    Render's logs held a record of what each person searched for -- one line
-    per pause in typing, once the reference search runs as you type. The app's
-    own log lines already leave the text out; this makes that true of the
-    access log too. The path, status and timing stay, which is all the access
-    log is read for.
+    Two loggers wrote it out in full, so Render's logs held a record of what
+    each person searched for:
 
-    uvicorn's access record carries the URL as args[2] of five
-    (client, method, path, http version, status)."""
+    * uvicorn's access log: the three food searches (/api/foods/search,
+      /lookup, /reference) take the text as `?q=`, one line per pause in
+      typing once the reference search runs as you type;
+    * httpx, logging each outgoing request at INFO: the Open Food Facts
+      lookup sends it as `search_terms=` (classic) or `q=` (search service).
 
-    _Q = re.compile(r"([?&]q=)[^&]*")
+    Only the parameter's value goes. Paths, statuses and timings stay, and so
+    do httpx's Gemini request lines, which carry no search text and are what
+    an AI audit reads against user actions.
+
+    Any argument whose text holds one of those parameters is rewritten as a
+    string; every other argument, numbers included, is left as it was, so
+    the record's own %d formatting still works."""
+
+    _PARAM = re.compile(r"([?&](?:q|search_terms)=)[^&\s\"]*")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        args = record.args
-        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
-            record.args = (*args[:2], self._Q.sub(r"\1-", args[2]), *args[3:])
+        if isinstance(record.args, tuple):
+            record.args = tuple(self._redact(arg) for arg in record.args)
         return True
 
+    def _redact(self, arg):
+        if isinstance(arg, (int, float)):
+            return arg
+        text = str(arg)
+        return self._PARAM.sub(r"\1-", text) if self._PARAM.search(text) else arg
 
-logging.getLogger("uvicorn.access").addFilter(RedactSearchText())
+
+for _name in ("uvicorn.access", "httpx"):
+    logging.getLogger(_name).addFilter(RedactSearchText())
 
 
 @asynccontextmanager

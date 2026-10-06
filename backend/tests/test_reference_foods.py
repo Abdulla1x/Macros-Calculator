@@ -251,3 +251,26 @@ def test_the_access_log_never_contains_search_text(path, expected):
     )
     assert RedactSearchText().filter(record) is True
     assert record.getMessage() == f'127.0.0.1:1 - "GET {expected} HTTP/1.1" 200'
+
+
+@pytest.mark.parametrize(("url", "expected"), [
+    ("https://world.openfoodfacts.org/cgi/search.pl?search_terms=oreo&json=1",
+     "https://world.openfoodfacts.org/cgi/search.pl?search_terms=-&json=1"),
+    ("https://search.openfoodfacts.org/search?q=oreo&page_size=8",
+     "https://search.openfoodfacts.org/search?q=-&page_size=8"),
+    # A Gemini call carries no search text and must come through whole.
+    ("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"),
+])
+def test_httpx_request_lines_never_contain_search_text(url, expected):
+    import httpx
+
+    from app.main import RedactSearchText
+
+    # httpx's own call: logger.info('HTTP Request: %s %s "%s %d %s"', ...)
+    record = logging.LogRecord(
+        "httpx", logging.INFO, __file__, 0, 'HTTP Request: %s %s "%s %d %s"',
+        ("GET", httpx.URL(url), "HTTP/1.1", 200, "OK"), None,
+    )
+    assert RedactSearchText().filter(record) is True
+    assert record.getMessage() == f'HTTP Request: GET {expected} "HTTP/1.1 200 OK"'
