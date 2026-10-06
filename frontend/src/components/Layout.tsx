@@ -80,14 +80,12 @@ export default function Layout() {
           meets the header with no seam. */}
       <aside className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:h-screen md:w-60 md:flex-col md:items-stretch md:justify-start md:gap-0 md:self-start md:border-r md:border-b-0 md:px-0 md:py-0">
         <div className="flex min-w-0 items-center gap-2 md:px-5 md:py-5">
-          <span className="text-2xl" aria-hidden="true">
-            🍽️
-          </span>
+          <img src="/favicon.svg" alt="" className="size-6 shrink-0 rounded-[5px]" />
           <div className="min-w-0">
             {/* Not an <h1>: it is the site identity, repeated on every page. Each
                 page now owns the single <h1>, so heading navigation can tell them
-                apart instead of landing on "Macros Calculator" five times. */}
-            <span className="block truncate text-base font-bold tracking-tight">Macros Calculator</span>
+                apart instead of landing on "Trackaholic" five times. */}
+            <span className="block truncate text-base font-bold tracking-tight">Trackaholic</span>
             <p className="hidden text-xs text-ink-faint md:block">Nutrition tracker</p>
           </div>
         </div>
@@ -134,7 +132,7 @@ export default function Layout() {
         </nav>
 
         <div className="flex min-w-0 items-center gap-3 md:mt-auto md:justify-between md:border-t md:border-line md:px-5 md:py-3">
-          {/* Hidden below sm so the brand is not squeezed to "Macros ..." on a
+          {/* Hidden below sm so the brand is not squeezed to "Track..." on a
               360px phone. Safe to hide rather than sr-only: it is redundant
               information, not a control's only accessible name, and Settings ->
               Account states "Signed in as ..." on every width. */}

@@ -15,10 +15,10 @@ export default defineConfig({
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
       },
-      includeAssets: ['apple-touch-icon.png'],
+      includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
-        name: 'Macros Calculator',
-        short_name: 'Macros',
+        name: 'Trackaholic',
+        short_name: 'Trackaholic',
         description: 'Track meals, macros, and goals',
         // theme_color paints the PWA status bar and matches the opaque sticky
         // header (bg-surface) exactly, so the two meet with no seam. It is also

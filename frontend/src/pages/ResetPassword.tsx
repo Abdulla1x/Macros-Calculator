@@ -71,8 +71,8 @@ export default function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-3xl" aria-hidden="true">🍽️</span>
-          <h1 className="text-xl font-bold tracking-tight">Macros Calculator</h1>
+          <img src="/favicon.svg" alt="" className="size-8 rounded-[5px]" />
+          <h1 className="text-xl font-bold tracking-tight">Trackaholic</h1>
         </div>
         <StatusBanner banner={announcements?.banner ?? null} />
         {token ? (
