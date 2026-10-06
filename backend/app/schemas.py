@@ -223,6 +223,12 @@ class SharedMeal(BaseModel):
     )
 
 
+# The imported national food tables (app/reference_foods.py), in tie-break
+# order. Also the values foods.source accepts beyond 'user' and
+# 'openfoodfacts' (models.py, migration 0018).
+ReferenceSource = Literal["usda", "cofid", "ciqual", "afcd", "cnf"]
+
+
 class FoodCreate(BaseModel):
     # allow_inf_nan=False for the reason given above MealCreate.
     name: str = Field(min_length=1, max_length=200)
@@ -233,7 +239,7 @@ class FoodCreate(BaseModel):
     protein: float = Field(ge=0, allow_inf_nan=False)
     carbs: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     fat: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-    source: Literal["user", "openfoodfacts"] = "user"
+    source: Literal["user", "openfoodfacts"] | ReferenceSource = "user"
 
 
 class Food(FoodCreate):
@@ -276,6 +282,20 @@ class OFFProduct(BaseModel):
     carbs: float | None = None
     fat: float | None = None
     source: Literal["openfoodfacts"] = "openfoodfacts"
+
+
+class ReferenceFood(BaseModel):
+    """A generic food from an imported national table, always per 100 g.
+
+    Carbs exclude fibre ("available carbohydrate") whatever the table
+    published; the build scripts in scripts/reference/ do the conversion."""
+    name: str
+    serving_size: float = 100.0
+    calories: float
+    protein: float
+    carbs: float | None = None
+    fat: float | None = None
+    source: ReferenceSource
 
 
 # A weigh-in cannot be in the future, but "today" on the server is UTC and the
