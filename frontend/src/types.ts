@@ -1,3 +1,5 @@
+import type { FoodSource, ReferenceSource } from './lib/foodSources'
+
 export interface User {
   id: number
   email: string
@@ -381,7 +383,7 @@ export interface Food {
   protein: number
   carbs: number | null
   fat: number | null
-  source: 'user' | 'openfoodfacts'
+  source: FoodSource
   /** When the row was written. Server-set and read-only; what the Library's
    *  "Recently added" sort orders on. */
   created_at: string
@@ -412,6 +414,18 @@ export interface OFFProduct {
   carbs: number | null
   fat: number | null
   source: 'openfoodfacts'
+}
+
+/** A generic food from one of the imported national tables, always per 100 g,
+ *  carbs excluding fibre. See backend/app/reference_foods.py. */
+export interface ReferenceFood {
+  name: string
+  serving_size: number
+  calories: number
+  protein: number
+  carbs: number | null
+  fat: number | null
+  source: ReferenceSource
 }
 
 export interface DayTotals {

@@ -1,30 +1,40 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Food, FoodCreate, OFFProduct } from '../types'
+import type { Food, FoodCreate, OFFProduct, ReferenceFood } from '../types'
+import { SOURCE_BADGE, SOURCE_NAME } from '../lib/foodSources'
 import TextInput, { inputSurfaceClass } from './ui/TextInput'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
   value: string
   onChange: (name: string) => void
-  onSelect: (food: FoodCreate) => void
+  /** `fromLibrary` is true only for a row from the user's own library. A food
+   *  from a table or Open Food Facts is NOT saved by picking it; LogMeal offers
+   *  the "save to library" tick for it instead, unticked. */
+  onSelect: (food: FoodCreate, fromLibrary: boolean) => void
 }
 
-/** One row of the suggestion list, from either source.
+/** One row of the suggestion list, from any of the three sources.
  *
- * The two lists are FLATTENED into a single array rather than kept as two, and
+ * The lists are FLATTENED into a single array rather than kept apart, and
  * that is what makes the keyboard work. ARIA's combobox pattern moves a single
- * cursor through one listbox; two lists would need either two cursors or a
- * group structure, and the rows already carry a "library"/"OFF" badge that says
- * where each came from -- so the grouping is visible without being structural. */
+ * cursor through one listbox; separate lists would need either several cursors
+ * or a group structure, and every row already carries a badge saying where it
+ * came from -- so the grouping is visible without being structural. */
 type Suggestion =
   | { kind: 'local'; food: Food }
+  | { kind: 'reference'; food: ReferenceFood }
   | { kind: 'off'; product: OFFProduct }
 
 /**
- * Type-ahead food search: local food library first, with an
- * Open Food Facts lookup as fallback. Picking an OFF result caches it
- * locally so the next search is instant.
+ * Type-ahead food search, in three tiers: the user's own library, then generic
+ * foods from the imported national tables (USDA, UK, France, Australia,
+ * Canada), both as you type; then Open Food Facts for packaged products, on
+ * request, because it is a slow third-party call with a shared rate limit.
+ *
+ * Picking a table or OFF row does NOT save it to the library any more (owner,
+ * 2026-10-06): the tables are searched instantly anyway, and the library is
+ * meant to hold foods the user chose. LogMeal offers the tick instead.
  *
  * ⚠ THIS WAS MOUSE-ONLY UNTIL NOW, on the meal-logging path. There was no
  * combobox role, no aria-expanded, no way to reach a suggestion from the
@@ -47,6 +57,7 @@ type Suggestion =
 export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
   const [open, setOpen] = useState(false)
   const [localResults, setLocalResults] = useState<Food[]>([])
+  const [referenceResults, setReferenceResults] = useState<ReferenceFood[]>([])
   const [offResults, setOffResults] = useState<OFFProduct[] | null>(null)
   const [offLoading, setOffLoading] = useState(false)
   const [offError, setOffError] = useState<string | null>(null)
@@ -66,6 +77,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
 
   const suggestions: Suggestion[] = [
     ...localResults.map((food): Suggestion => ({ kind: 'local', food })),
+    ...referenceResults.map((food): Suggestion => ({ kind: 'reference', food })),
     ...(offResults ?? []).map((product): Suggestion => ({ kind: 'off', product })),
   ]
 
@@ -76,6 +88,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
     }
     if (value.trim().length < 2) {
       setLocalResults([])
+      setReferenceResults([])
       setOffResults(null)
       return
     }
@@ -83,18 +96,19 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
     // current results (the timer only guards the debounce, not the fetch).
     let stale = false
     const timer = setTimeout(() => {
-      api
-        .searchFoods(value.trim())
-        .then((results) => {
+      const query = value.trim()
+      // Both at once, and settled rather than all: either list is worth
+      // showing without the other, so one failing must not blank both.
+      void Promise.allSettled([api.searchFoods(query), api.searchReferenceFoods(query)]).then(
+        ([local, reference]) => {
           if (stale) return
-          setLocalResults(results)
+          setLocalResults(local.status === 'fulfilled' ? local.value : [])
+          setReferenceResults(reference.status === 'fulfilled' ? reference.value : [])
           setOffResults(null)
           setOffError(null)
           setOpen(true)
-        })
-        .catch(() => {
-          if (!stale) setLocalResults([])
-        })
+        },
+      )
     }, 250)
     return () => {
       stale = true
@@ -107,7 +121,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
   // has two rows, and Enter picks whatever slid into that position.
   useEffect(() => {
     setActiveIndex(-1)
-  }, [localResults, offResults])
+  }, [localResults, referenceResults, offResults])
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -127,39 +141,28 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
       ?.scrollIntoView({ block: 'nearest' })
   })
 
-  const pick = (food: FoodCreate) => {
+  const pick = (food: FoodCreate, fromLibrary: boolean) => {
     skipNextSearch.current = true
-    onSelect(food)
+    onSelect(food, fromLibrary)
     setOpen(false)
     setOffResults(null)
     setActiveIndex(-1)
   }
 
-  const pickOffProduct = async (product: OFFProduct) => {
-    const food: FoodCreate = {
-      name: product.name,
-      serving_size: product.serving_size,
-      calories: product.calories,
-      protein: product.protein,
-      carbs: product.carbs,
-      fat: product.fat,
-      source: 'openfoodfacts',
-    }
-    pick(food)
-    // Cache it so the next search finds it locally; best-effort.
-    try {
-      await api.saveFood(food)
-    } catch {
-      /* ignore cache failures */
-    }
-  }
-
-  /** Both sources go through here, so keyboard and mouse cannot diverge --
-   *  and both inherit skipNextSearch, which is what stops the name written
-   *  back into the input from re-opening the panel it just closed. */
+  /** Every source goes through here, so keyboard and mouse cannot diverge --
+   *  and all inherit skipNextSearch, which is what stops the name written
+   *  back into the input from re-opening the panel it just closed.
+   *
+   *  Nothing is saved: an OFF pick used to be cached in the library here, and
+   *  that is what the owner turned off (see the component's docstring). */
   const choose = (suggestion: Suggestion) => {
-    if (suggestion.kind === 'local') pick(suggestion.food)
-    else void pickOffProduct(suggestion.product)
+    if (suggestion.kind === 'local') {
+      pick(suggestion.food, true)
+      return
+    }
+    const { name, serving_size, calories, protein, carbs, fat, source } =
+      suggestion.kind === 'reference' ? suggestion.food : suggestion.product
+    pick({ name, serving_size, calories, protein, carbs, fat, source }, false)
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -211,7 +214,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
     }
   }
 
-  const macroSummary = (food: FoodCreate | OFFProduct) =>
+  const macroSummary = (food: FoodCreate | OFFProduct | ReferenceFood) =>
     `${food.calories} kcal · ${food.protein} g protein / ${food.serving_size} g`
 
   const listboxOpen = open && suggestions.length > 0
@@ -250,11 +253,13 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
               className="max-h-56 overflow-y-auto"
             >
               {suggestions.map((suggestion, index) => {
-                const food = suggestion.kind === 'local' ? suggestion.food : suggestion.product
+                const food = suggestion.kind === 'off' ? suggestion.product : suggestion.food
                 const active = index === activeIndex
+                const key =
+                  suggestion.kind === 'local' ? `local-${suggestion.food.id}` : `${suggestion.kind}-${index}`
                 return (
                   <li
-                    key={suggestion.kind === 'local' ? `local-${suggestion.food.id}` : `off-${index}`}
+                    key={key}
                     id={optionId(index)}
                     role="option"
                     aria-selected={active}
@@ -279,13 +284,25 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                       )}
                       <span className="ml-2 text-xs text-slate-400">{macroSummary(food)}</span>
                     </span>
+                    {/* Library rows grey, online rows blue: the first question is
+                        "is this mine?", the second "whose figures are these?".
+                        The visible badge is a short code; the full name goes to
+                        screen readers, for whom "FR" alone says little. */}
                     {suggestion.kind === 'local' ? (
                       <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase text-slate-400">
-                        {suggestion.food.source === 'user' ? 'library' : 'OFF'}
+                        <span aria-hidden="true">
+                          {suggestion.food.source === 'user' ? 'library' : SOURCE_BADGE[suggestion.food.source]}
+                        </span>
+                        <span className="sr-only">
+                          {suggestion.food.source === 'user'
+                            ? 'your library'
+                            : `your library, from ${SOURCE_NAME[suggestion.food.source]}`}
+                        </span>
                       </span>
                     ) : (
                       <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
-                        OFF
+                        <span aria-hidden="true">{SOURCE_BADGE[food.source]}</span>
+                        <span className="sr-only">{SOURCE_NAME[food.source]}</span>
                       </span>
                     )}
                   </li>
@@ -303,13 +320,13 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
             >
               {offLoading
                 ? 'Searching Open Food Facts…'
-                : localResults.length === 0
-                  ? `No "${value.trim()}" in your library — search Open Food Facts`
-                  : 'Not listed? Search Open Food Facts'}
+                : suggestions.length === 0
+                  ? `No "${value.trim()}" found — search packaged products (Open Food Facts)`
+                  : 'Packaged product? Search Open Food Facts'}
             </button>
           ) : offResults.length === 0 ? (
             <p className="border-t border-slate-700 px-3 py-2 text-sm text-slate-400">
-              No results on Open Food Facts. Enter the macros manually below.
+              No packaged products found on Open Food Facts. Enter the macros manually below.
             </p>
           ) : null}
 
