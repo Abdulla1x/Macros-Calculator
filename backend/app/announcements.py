@@ -29,6 +29,20 @@ STATUS_BANNER_ENV = "STATUS_BANNER"
 # pop-up becoming a dismiss-three-reload-repeat gauntlet.
 ANNOUNCEMENTS: list[Announcement] = [
     Announcement(
+        id="2026-10-06-trackaholic",
+        date="2026-10-06",
+        title="Macros Calculator is now Trackaholic",
+        body=(
+            "**Same app, new name.** Your meals, foods, goals and account are "
+            "exactly where you left them, and the address hasn't changed. The "
+            "new icon is a calories gauge, a first look at the redesign that's "
+            "on its way. If the app is on your home screen, its name and icon "
+            "update on their own within a day or so; if they don't, remove it "
+            "and add it again. And yes, the name is a joke about how much "
+            "tracking is enough: the targets are still a guide, not a rule."
+        ),
+    ),
+    Announcement(
         id="2026-10-04-smaller-photo-uploads",
         date="2026-10-04",
         title="Meal photos upload much faster",

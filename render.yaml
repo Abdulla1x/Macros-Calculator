@@ -92,7 +92,7 @@ services:
       # Display name beside that address. Committed: it carries the app's
       # identity while the address itself is being rewritten.
       - key: EMAIL_SENDER_NAME
-        value: Macros Calculator
+        value: Trackaholic
       # Frontend origin used to build the emailed reset link. Committed on
       # purpose — deriving it from the request's Host header instead would be
       # host-header injection, which poisons the link in the victim's mailbox.
