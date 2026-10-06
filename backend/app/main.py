@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -44,6 +45,32 @@ logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+
+
+class RedactSearchText(logging.Filter):
+    """Blank the `q=` value in uvicorn's access log.
+
+    The three food searches (/api/foods/search, /lookup, /reference) take what
+    the user typed as `?q=`, and uvicorn logs every request's full URL, so
+    Render's logs held a record of what each person searched for -- one line
+    per pause in typing, once the reference search runs as you type. The app's
+    own log lines already leave the text out; this makes that true of the
+    access log too. The path, status and timing stay, which is all the access
+    log is read for.
+
+    uvicorn's access record carries the URL as args[2] of five
+    (client, method, path, http version, status)."""
+
+    _Q = re.compile(r"([?&]q=)[^&]*")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            record.args = (*args[:2], self._Q.sub(r"\1-", args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(RedactSearchText())
 
 
 @asynccontextmanager

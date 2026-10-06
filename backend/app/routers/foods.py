@@ -3,12 +3,13 @@ from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .. import reference_foods
 from ..auth.deps import get_current_user
 from ..db import get_db
 from ..duplicates import LibraryFood, find_duplicates
 from ..models import Food as FoodRow
 from ..models import User
-from ..schemas import Food, FoodCreate, FoodDuplicatePair, OFFProduct
+from ..schemas import Food, FoodCreate, FoodDuplicatePair, OFFProduct, ReferenceFood
 from ..services import off_client
 from ..upsert import upsert
 
@@ -101,6 +102,19 @@ async def lookup_openfoodfacts(
             status_code=502,
             detail="Open Food Facts lookup failed. Enter macros manually.",
         )
+
+
+@router.get("/reference", response_model=list[ReferenceFood])
+def search_reference_foods(
+    q: str = Query(min_length=1, max_length=200),
+    user: User = Depends(get_current_user),
+):
+    """Generic foods from the imported national tables, per 100 g.
+
+    A plain `def`, not `async`: the search is CPU work in Python, so FastAPI
+    runs it in its threadpool instead of on the event loop. Auth is required for
+    the same reason as /lookup -- it is cheap, but it is not a public API."""
+    return reference_foods.search(q)
 
 
 @router.post("", response_model=Food, status_code=201)

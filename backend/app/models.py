@@ -188,7 +188,12 @@ class Food(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
-        CheckConstraint("source IN ('user', 'openfoodfacts')", name="ck_foods_source"),
+        # The five reference tables are app/reference_foods.py's SOURCES; a pick
+        # saved to the library keeps its table as the badge (migration 0018).
+        CheckConstraint(
+            "source IN ('user', 'openfoodfacts', 'usda', 'cofid', 'ciqual', 'afcd', 'cnf')",
+            name="ck_foods_source",
+        ),
     )
 
 
