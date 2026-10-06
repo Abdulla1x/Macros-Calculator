@@ -49,8 +49,55 @@ def test_every_query_word_must_be_present(tables):
         '2,"Asparagus, green, raw",20,2.2,1.8,0.1,2.1',
         '3,"Croissants, apple",254,7.4,26,14,1.5',
     ])
-    assert names(search("green apple")) == []
     assert names(search("granny smith apple")) == ["Apples, raw, granny smith, with skin"]
+
+
+def test_with_no_row_holding_every_word_it_falls_back_to_the_last_word(tables):
+    tables("usda", [
+        '1,"Apples, raw, granny smith, with skin",58,0.4,10.6,0.2,2.8',
+        '2,"Asparagus, green, raw",20,2.2,1.8,0.1,2.1',
+        '3,"Croissants, apple",254,7.4,26,14,1.5',
+    ])
+    # No table says "green apple". The food is the last word, so it falls
+    # back to "apple" -- never to "green", which would offer asparagus.
+    assert names(search("green apple")) == [
+        "Apples, raw, granny smith, with skin", "Croissants, apple",
+    ]
+
+
+def test_the_fallback_never_dilutes_a_query_that_matches(tables):
+    tables("usda", [
+        '1,"Bread, pita",275,9.1,55.7,1.2,2.2',
+        '2,"Bread, brown, toasted",260,9,45,2,5',
+    ])
+    assert names(search("brown bread")) == ["Bread, brown, toasted"]
+
+
+def test_a_preparation_word_marks_the_plain_food_not_a_longer_name(tables):
+    tables("usda", [
+        '1,"Rice, fried",174,4,25,6,1',
+        '2,"Rice, white, cooked",130,2.7,28,0.3,0.4',
+    ])
+    assert names(search("rice"))[0] == "Rice, white, cooked"
+
+
+def test_a_prefix_in_the_first_segment_loses_to_the_whole_word_later(tables):
+    tables("usda", [
+        '1,"Fried eggplant",218,2,15,16,3',
+        '2,"Egg, whole, cooked, fried",196,13.6,0.8,15,0',
+    ])
+    assert names(search("fried egg"))[0] == "Egg, whole, cooked, fried"
+
+
+def test_an_alias_finds_the_tables_name_alongside_the_typed_one(tables):
+    tables("usda", [
+        '1,"Bread, pita",275,9.1,55.7,1.2,2.2',
+        '2,"Mung beans, mature seeds, raw",347,23.9,46.3,1.2,16.3',
+    ])
+    tables("cofid", ['50-1,"Arabic bread, white",270,9,55,1.5,2'])
+    # Both the table that uses the typed name and the one that doesn't.
+    assert set(names(search("arabic bread"))) == {"Arabic bread, white", "Bread, pita"}
+    assert names(search("moong dal")) == ["Mung beans, mature seeds, raw"]
 
 
 def test_a_whole_word_beats_a_longer_word_starting_with_it(tables):
