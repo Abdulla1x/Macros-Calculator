@@ -83,6 +83,10 @@ ALIASES = {
     "minced": "ground",
 }
 
+# What each word dropped from the front of a query costs a row's score; see
+# search(). About half a whole-word match in the first segment.
+DROPPED_WORD_PENALTY = 3.0
+
 # Rows indexed under the first PREFIX_LEN letters of each of their words. A
 # query token shorter than this falls back to scanning every row.
 PREFIX_LEN = 3
@@ -247,9 +251,11 @@ def _score(tokens: list[str], entry: _Entry) -> float | None:
     # Shorter names first among equals ("Apples, raw, with skin" over "Apples,
     # raw, with skin, frozen, unsweetened, heated"), except that a preparation
     # word is not "more name" but evidence of the plain food (PLAIN_STATE).
+    # The bonus is for HAVING one, not per word: Ciqual's "roasted/baked"
+    # would otherwise score twice and outrank "Beef, ground, raw".
     plain = sum(1 for word in entry.rest if word in PLAIN_STATE)
     other = len(entry.first) + len(entry.rest) - plain
-    return total + 0.5 * min(plain, 2) - 0.25 * other
+    return total + (0.5 if plain else 0.0) - 0.25 * other
 
 
 def _variants(tokens: list[str]) -> list[list[str]]:
@@ -265,10 +271,11 @@ def _variants(tokens: list[str]) -> list[list[str]]:
     return variants
 
 
-def _ranked(index: _Index, variants: list[list[str]]) -> list[_Entry]:
-    """Every row matching any variant, best score first."""
+def _ranked(index: _Index, variants: list[tuple[list[str], float]]) -> list[_Entry]:
+    """Every row matching any variant, best score first. Each variant carries
+    a penalty that is subtracted from the scores it produces."""
     best: dict[int, float] = {}
-    for tokens in variants:
+    for tokens, penalty in variants:
         # Candidates from the longest token's prefix: the rarer the prefix,
         # the fewer rows to score. Every hit must contain every token anyway.
         anchor = singular(max(tokens, key=len))
@@ -278,8 +285,8 @@ def _ranked(index: _Index, variants: list[list[str]]) -> list[_Entry]:
             candidates = range(len(index.entries))
         for i in candidates:
             score = _score(tokens, index.entries[i])
-            if score is not None and score > best.get(i, float("-inf")):
-                best[i] = score
+            if score is not None and score - penalty > best.get(i, float("-inf")):
+                best[i] = score - penalty
 
     def order(i: int):
         entry = index.entries[i]
@@ -297,16 +304,18 @@ def search(query: str, limit: int = 8) -> list[ReferenceFood]:
         return []
 
     index = _load()
-    ranked = _ranked(index, _variants(tokens))
-    # Nothing has every word ("green apple": the tables say "granny smith").
-    # Drop words from the FRONT, keeping the last: English puts the food last
-    # and the modifiers before it, so "green apple" falls back to "apple", not
-    # to "green". Only when there is nothing at all, so a query that does
-    # match is never diluted.
-    for start in range(1, len(tokens)):
-        if ranked:
-            break
-        ranked = _ranked(index, _variants(tokens[start:]))
+    # The query as typed, then with words dropped from the FRONT, keeping the
+    # last: English puts the food last and its modifiers before it, so "green
+    # apple" also searches "apple" -- never "green". Every dropped word costs
+    # DROPPED_WORD_PENALTY, so a row that has all the words wins whenever it is
+    # a decent match, and the plain food still surfaces when the only rows
+    # with every word are poor ones (Ciqual's "...golden apple..., green").
+    variants = [
+        (variant, DROPPED_WORD_PENALTY * start)
+        for start in range(len(tokens))
+        for variant in _variants(tokens[start:])
+    ]
+    ranked = _ranked(index, variants)
 
     results: list[ReferenceFood] = []
     seen: set[str] = set()
