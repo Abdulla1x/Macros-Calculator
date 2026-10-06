@@ -24,6 +24,7 @@ whose file is absent is simply not searched, so the app runs with none of them.
 import csv
 import logging
 import re
+import sys
 import threading
 import time
 import unicodedata
@@ -44,6 +45,43 @@ SOURCES = ("usda", "cofid", "ciqual", "afcd", "cnf")
 # Words that would otherwise have to appear in the name: "chicken with rice"
 # should not require the literal word "with".
 STOPWORDS = frozenset({"a", "an", "and", "in", "of", "on", "the", "with"})
+
+# Words that only say what state the food is in. The tables put the food first
+# and its preparation after the first comma ("Rice, white, cooked"), so a row
+# whose qualifiers are all of this kind IS the plain food, while "Rice, fried"
+# or "Tea, bubble" is a dish. These earn a little instead of costing length.
+PLAIN_STATE = frozenset({
+    "raw", "fresh", "cooked", "boiled", "baked", "steamed", "roasted",
+    "grilled", "plain", "whole", "nfs", "ns", "brewed", "hot", "unprepared",
+})
+
+# Names people type that the tables don't use: Gulf and South Asian food words,
+# and British words for things USDA names the American way. Each is searched
+# IN ADDITION to what was typed, never instead, so a table that does use the
+# typed word (CoFID's "Bread, brown") still matches it directly. Keys and values
+# are normalized phrases; a key matches whole consecutive words of the query.
+ALIASES = {
+    "arabic bread": "pita bread",
+    "khubz": "pita bread",
+    "khubus": "pita bread",
+    "moong dal": "mung beans",
+    "moong": "mung",
+    "chana": "chickpeas",
+    "masoor dal": "red lentils",
+    "masoor": "red lentils",
+    "dahi": "yogurt",
+    "laban": "yogurt",
+    "atta": "whole wheat flour",
+    "maida": "white flour",
+    "brinjal": "eggplant",
+    "aubergine": "eggplant",
+    "courgette": "zucchini",
+    "capsicum": "sweet pepper",
+    "prawns": "shrimp",
+    "prawn": "shrimp",
+    "mince": "ground",
+    "minced": "ground",
+}
 
 # Rows indexed under the first PREFIX_LEN letters of each of their words. A
 # query token shorter than this falls back to scanning every row.
@@ -80,10 +118,30 @@ def singular(word: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Entry:
-    food: ReferenceFood
+    # Plain fields, not a ReferenceFood: a Pydantic model per row cost more
+    # memory than everything else together, and only `limit` rows are ever
+    # returned, so the model is built for those alone (see `food`).
+    name: str
+    source: str
+    calories: float
+    protein: float
+    carbs: float | None
+    fat: float | None
     norm: str  # the whole name, normalized: the cross-table de-dup key
     first: tuple[str, ...]  # words of the first comma segment, "Apples, raw" -> apples
     rest: tuple[str, ...]  # every other word
+
+    def food(self) -> ReferenceFood:
+        return ReferenceFood(
+            name=self.name, calories=self.calories, protein=self.protein,
+            carbs=self.carbs, fat=self.fat, source=self.source,
+        )
+
+
+def _words(text: str) -> tuple[str, ...]:
+    # Interned: "raw" and "cooked" occur thousands of times, and one shared
+    # string per word is most of the index's memory saved.
+    return tuple(sys.intern(word) for word in normalize(text).split())
 
 
 class _Index:
@@ -117,17 +175,15 @@ def _read(source: str, path: Path) -> list[_Entry]:
             name = row["name"].strip()
             head, _, tail = name.partition(",")
             entries.append(_Entry(
-                food=ReferenceFood(
-                    name=name,
-                    calories=calories,
-                    protein=protein,
-                    carbs=_number(row["carbs"]),
-                    fat=_number(row["fat"]),
-                    source=source,
-                ),
+                name=name,
+                source=source,
+                calories=calories,
+                protein=protein,
+                carbs=_number(row["carbs"]),
+                fat=_number(row["fat"]),
                 norm=normalize(name),
-                first=tuple(normalize(head).split()),
-                rest=tuple(normalize(tail).split()),
+                first=_words(head),
+                rest=_words(tail),
             ))
     return entries
 
@@ -163,10 +219,12 @@ def _token_score(token: str, entry: _Entry) -> int:
     A whole word beats a word merely starting with the token ("egg" is a whole
     word of "Egg, whole, raw" but only a prefix of "Eggplant"), and either
     beats the same match after the first comma, which is where tables put
-    preparation and qualifiers rather than the food itself."""
+    preparation and qualifiers rather than the food itself. The first-segment
+    prefix scores no higher than a whole word later on, or "fried egg" puts
+    "Fried eggplant" above "Egg, whole, fried"."""
     one = singular(token)
     best = 0
-    for words, whole, prefix in ((entry.first, 6, 4), (entry.rest, 3, 2)):
+    for words, whole, prefix in ((entry.first, 6, 3), (entry.rest, 3, 2)):
         for word in words:
             if singular(word) == one:
                 best = max(best, whole)
@@ -186,9 +244,48 @@ def _score(tokens: list[str], entry: _Entry) -> float | None:
     # merely containing it ("Apple juice, canned"): that is the plain food.
     if {singular(w) for w in entry.first} == {singular(t) for t in tokens}:
         total += 5
-    # Shorter names first among equals: "Apples, raw, with skin" over
-    # "Apples, raw, with skin, frozen, unsweetened, heated".
-    return total - 0.25 * (len(entry.first) + len(entry.rest))
+    # Shorter names first among equals ("Apples, raw, with skin" over "Apples,
+    # raw, with skin, frozen, unsweetened, heated"), except that a preparation
+    # word is not "more name" but evidence of the plain food (PLAIN_STATE).
+    plain = sum(1 for word in entry.rest if word in PLAIN_STATE)
+    other = len(entry.first) + len(entry.rest) - plain
+    return total + 0.5 * min(plain, 2) - 0.25 * other
+
+
+def _variants(tokens: list[str]) -> list[list[str]]:
+    """The query as typed, plus one rewrite per alias it contains."""
+    variants = [tokens]
+    for key, replacement in ALIASES.items():
+        key_words = key.split()
+        for i in range(len(tokens) - len(key_words) + 1):
+            if tokens[i:i + len(key_words)] == key_words:
+                variant = tokens[:i] + replacement.split() + tokens[i + len(key_words):]
+                if variant not in variants:
+                    variants.append(variant)
+    return variants
+
+
+def _ranked(index: _Index, variants: list[list[str]]) -> list[_Entry]:
+    """Every row matching any variant, best score first."""
+    best: dict[int, float] = {}
+    for tokens in variants:
+        # Candidates from the longest token's prefix: the rarer the prefix,
+        # the fewer rows to score. Every hit must contain every token anyway.
+        anchor = singular(max(tokens, key=len))
+        if len(anchor) >= PREFIX_LEN:
+            candidates = index.by_prefix.get(anchor[:PREFIX_LEN], ())
+        else:
+            candidates = range(len(index.entries))
+        for i in candidates:
+            score = _score(tokens, index.entries[i])
+            if score is not None and score > best.get(i, float("-inf")):
+                best[i] = score
+
+    def order(i: int):
+        entry = index.entries[i]
+        return (-best[i], len(entry.name), SOURCES.index(entry.source))
+
+    return [index.entries[i] for i in sorted(best, key=order)]
 
 
 def search(query: str, limit: int = 8) -> list[ReferenceFood]:
@@ -200,28 +297,24 @@ def search(query: str, limit: int = 8) -> list[ReferenceFood]:
         return []
 
     index = _load()
-    # Candidates from the longest token's prefix: the rarer the prefix, the
-    # fewer rows to score. Every hit must contain every token anyway.
-    anchor = singular(max(tokens, key=len))
-    if len(anchor) >= PREFIX_LEN:
-        candidates = (index.entries[i] for i in index.by_prefix.get(anchor[:PREFIX_LEN], ()))
-    else:
-        candidates = iter(index.entries)
-
-    scored = []
-    for entry in candidates:
-        score = _score(tokens, entry)
-        if score is not None:
-            scored.append((-score, len(entry.food.name), SOURCES.index(entry.food.source), entry))
-    scored.sort(key=lambda item: item[:3])
+    ranked = _ranked(index, _variants(tokens))
+    # Nothing has every word ("green apple": the tables say "granny smith").
+    # Drop words from the FRONT, keeping the last: English puts the food last
+    # and the modifiers before it, so "green apple" falls back to "apple", not
+    # to "green". Only when there is nothing at all, so a query that does
+    # match is never diluted.
+    for start in range(1, len(tokens)):
+        if ranked:
+            break
+        ranked = _ranked(index, _variants(tokens[start:]))
 
     results: list[ReferenceFood] = []
     seen: set[str] = set()
-    for *_, entry in scored:
+    for entry in ranked:
         if entry.norm in seen:
             continue  # the same name in a lower-priority table
         seen.add(entry.norm)
-        results.append(entry.food)
+        results.append(entry.food())
         if len(results) == limit:
             break
 
