@@ -1,3 +1,4 @@
+import FoodDataCredits from '../../components/settings/FoodDataCredits'
 import FoodLibrarySection from '../../components/settings/FoodLibrarySection'
 import SavedMealsSection from '../../components/settings/SavedMealsSection'
 import { useSettingsPanel } from './panelContext'
@@ -14,6 +15,7 @@ export default function LibraryPanel() {
     <div className="space-y-6">
       <FoodLibrarySection onRejected={onRejected} />
       <SavedMealsSection />
+      <FoodDataCredits />
     </div>
   )
 }

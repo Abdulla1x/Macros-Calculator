@@ -22,6 +22,7 @@ import type {
   MealTemplateCreate,
   MessageResponse,
   OFFProduct,
+  ReferenceFood,
   PlanDay,
   Settings,
   ReviewSummary,
@@ -381,6 +382,10 @@ export const api = {
   getFoods: () => request<Food[]>('/api/foods'),
   searchFoods: (q: string) =>
     request<Food[]>(`/api/foods/search?q=${encodeURIComponent(q)}`),
+  // The imported national tables, searched on the server in memory: cheap
+  // enough to run on every pause in typing, alongside searchFoods.
+  searchReferenceFoods: (q: string) =>
+    request<ReferenceFood[]>(`/api/foods/reference?q=${encodeURIComponent(q)}`),
   lookupOpenFoodFacts: (q: string) =>
     request<OFFProduct[]>(`/api/foods/lookup?q=${encodeURIComponent(q)}`),
   // An upsert on (user, lower(name)): the two callers that reach for this --

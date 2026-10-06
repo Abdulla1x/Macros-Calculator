@@ -10,6 +10,7 @@ import Button from '../ui/Button'
 import ShowAllToggle, { COLLAPSED_ROWS } from '../ShowAllToggle'
 import DuplicateFoodsPanel from './DuplicateFoodsPanel'
 import { isPer100g, per100gSummary } from '../../lib/foodDensity'
+import { SOURCE_NAME } from '../../lib/foodSources'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
 
 /** The saved-food library: see it, correct it, rename it, delete it.
@@ -270,13 +271,10 @@ export default function FoodLibrarySection({
     <Card as="section">
       <h2 className="mb-1 font-semibold"><span aria-hidden="true">🥫</span> Food library</h2>
       <p className="mb-4 text-sm text-slate-400">
-        The foods autocomplete offers you when you log a meal. Things land here
-        on their own:{' '}
-        <strong className="text-slate-300">
-          every Open Food Facts result you pick is saved here automatically
-        </strong>
-        , along with anything you ticked “save to library” on and any ingredient
-        you saved from an AI estimate. You can also add one yourself with the
+        The foods autocomplete offers you first when you log a meal. A food
+        lands here when you tick “save to library” on it, whether you typed it
+        or picked it from a food table or Open Food Facts, and when you save an
+        ingredient from an AI estimate. You can also add one yourself with the
         button below. This is where you correct one that is wrong. Changes here
         save straight away — nothing on this tab waits for a Save.
       </p>
@@ -355,9 +353,9 @@ export default function FoodLibrarySection({
       ) : items.length === 0 ? (
         <p className="text-sm text-slate-400">
           Nothing saved yet. Use <strong className="text-slate-300">+ Add a food</strong>{' '}
-          above to enter one yourself. Foods also arrive here on their own: pick
-          one from Open Food Facts while logging a meal, save an ingredient from
-          an AI estimate, or tick “save to library” on one you typed.
+          above to enter one yourself. Foods also arrive here while you log a
+          meal: tick “save to library” on an ingredient, or save one from an AI
+          estimate.
         </p>
       ) : shown.length === 0 ? (
         <p className="text-sm text-slate-400">Nothing matches “{filter.trim()}”.</p>
@@ -404,7 +402,7 @@ export default function FoodLibrarySection({
                         : 'bg-sky-500/20 text-sky-300'
                     }`}
                   >
-                    {food.source === 'user' ? 'yours' : 'Open Food Facts'}
+                    {SOURCE_NAME[food.source]}
                   </span>
                   <span className="ml-auto flex items-center gap-2 text-xs">
                     <button
@@ -492,7 +490,7 @@ export default function FoodLibrarySection({
                       . Same food, same figures, different serving —{' '}
                       {food.source === 'user'
                         ? 'nothing else about the row changes.'
-                        : 'it stays an Open Food Facts entry, because a rescale corrects nothing.'}
+                        : `it stays a ${SOURCE_NAME[food.source]} entry, because a rescale corrects nothing.`}
                     </p>
                   )}
                 </div>

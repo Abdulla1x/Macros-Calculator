@@ -5,8 +5,10 @@ import type { Food, FoodDuplicatePair } from '../../types'
 
 /** "These two look like the same food" — shown above the library it is about.
  *
- * The library fills itself up without being asked: every Open Food Facts pick
- * is cached, every ticked ingredient is saved, every AI estimate can be. The
+ * The library fills up with little thought per entry: every ticked ingredient
+ * is saved (typed, or picked from a food table or Open Food Facts), every AI
+ * estimate can be. Open Food Facts picks were also cached automatically until
+ * 2026-10-06, so older libraries hold many of those. The
  * unique index blocks the exact case, so everything that survives is a *near*
  * duplicate under a name nobody chose to make match — and until now nothing
  * pointed at one.

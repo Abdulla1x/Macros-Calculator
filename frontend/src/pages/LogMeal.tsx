@@ -8,6 +8,8 @@ import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { clearNoteDraft } from '../lib/draft'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
+import type { FoodSource } from '../lib/foodSources'
+import { SOURCE_NAME, sourceAfterEdit } from '../lib/foodSources'
 import { num } from '../lib/parse'
 import { useSettings } from '../settings/SettingsContext'
 import type {
@@ -35,6 +37,10 @@ interface Row {
   fat: string
   fromLibrary: boolean
   saveToLibrary: boolean
+  /** Whose figures these are: a table or Open Food Facts when picked from the
+   *  autocomplete, else 'user'. Saved with the row if the tick is on, and
+   *  reset to 'user' by any number edit (updateRow). */
+  source: FoodSource
 }
 
 let rowCounter = 0
@@ -49,6 +55,7 @@ const emptyRow = (): Row => ({
   fat: '',
   fromLibrary: false,
   saveToLibrary: true,
+  source: 'user',
 })
 
 const rowIsValid = (row: Row) => {
@@ -363,11 +370,28 @@ export default function LogMeal() {
     }
   }, [editMeal, shared, sharedCode, template, copyMeal, logDate])
 
+  // Every edit to a row passes through here, so this is the one place the
+  // provenance rule lives: change a number and the figures are the user's own
+  // (lib/foodSources.ts). A patch that sets `source` itself -- a pick -- says
+  // where its numbers came from and is taken at its word.
   const updateRow = (key: number, patch: Partial<Row>) => {
-    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    setRows((current) =>
+      current.map((row) =>
+        row.key !== key
+          ? row
+          : {
+              ...row,
+              ...patch,
+              source: patch.source ?? sourceAfterEdit(row.source, Object.keys(patch)),
+            },
+      ),
+    )
   }
 
-  const selectFood = (key: number, food: FoodCreate) => {
+  // A library pick is already saved, so the tick stays away. A table or Open
+  // Food Facts pick is NOT saved by picking (owner, 2026-10-06): the tick
+  // appears for it, unticked, and saving it keeps the pick's source.
+  const selectFood = (key: number, food: FoodCreate, fromLibrary: boolean) => {
     updateRow(key, {
       name: food.name,
       servingSize: String(food.serving_size),
@@ -375,8 +399,9 @@ export default function LogMeal() {
       protein: String(food.protein),
       carbs: food.carbs == null ? '' : String(food.carbs),
       fat: food.fat == null ? '' : String(food.fat),
-      fromLibrary: true,
+      fromLibrary,
       saveToLibrary: false,
+      source: food.source,
     })
   }
 
@@ -455,7 +480,7 @@ export default function LogMeal() {
                 protein: Number(row.protein),
                 carbs: num(row.carbs),
                 fat: num(row.fat),
-                source: 'user',
+                source: row.source,
               })
               .catch(() => null),
           ),
@@ -568,7 +593,7 @@ export default function LogMeal() {
         <p className="text-sm text-slate-400">
           {editMeal
             ? 'Adjust the details below — saving updates the existing entry.'
-            : 'Start typing an ingredient — your food library and Open Food Facts fill in the macros.'}
+            : 'Start typing an ingredient — your food library and open food tables fill in the macros.'}
         </p>
       </header>
 
@@ -618,10 +643,16 @@ export default function LogMeal() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-300">
                 {rows.length === 1 ? 'Ingredient' : `Ingredient ${index + 1}`}
-                {row.fromLibrary && (
+                {row.fromLibrary ? (
                   <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
                     from library
                   </span>
+                ) : (
+                  row.source !== 'user' && (
+                    <span className="ml-2 rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
+                      from {SOURCE_NAME[row.source]}
+                    </span>
+                  )
                 )}
               </h2>
               {rows.length > 1 && (
@@ -639,7 +670,7 @@ export default function LogMeal() {
                 <FoodAutocomplete
                   value={row.name}
                   onChange={(name) => updateRow(row.key, { name, fromLibrary: false })}
-                  onSelect={(food) => selectFood(row.key, food)}
+                  onSelect={(food, fromLibrary) => selectFood(row.key, food, fromLibrary)}
                 />
               </div>
               <label className="block text-sm">
@@ -712,7 +743,7 @@ export default function LogMeal() {
               <SavedNumbersOffer
                 name={row.name}
                 foods={libraryFoods}
-                onUse={(food) => selectFood(row.key, food)}
+                onUse={(food) => selectFood(row.key, food, true)}
               />
             )}
 
