@@ -1,6 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+// Self-hosted, because the site's Content-Security-Policy allows fonts only
+// from itself. Mona Sans with its width axis (75-125%), which the type scale
+// leans on; Libre Franklin for the wordmark and the Label style.
+import '@fontsource-variable/mona-sans/wdth.css'
+import '@fontsource-variable/libre-franklin/wght.css'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthContext'
