@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useAnnouncements } from '../hooks/useAnnouncements'
 import { useSettings } from '../settings/SettingsContext'
@@ -7,6 +7,10 @@ import AnnouncementsModal from './AnnouncementsModal'
 import StatusBanner from './StatusBanner'
 import WeighInNudge from './WeighInNudge'
 import WakingNotice from './WakingNotice'
+import { RailNav, TabBar } from './shell/AppNav'
+import ProgressSubnav from './shell/ProgressSubnav'
+import { sectionFor } from './shell/sections'
+import Wordmark from './shell/Wordmark'
 
 // A warm server answers settings in well under a second, so this never fires in
 // normal use. Past it, the instance is almost certainly spinning up — and a
@@ -15,17 +19,10 @@ import WakingNotice from './WakingNotice'
 // MealAnalyzer: say nothing until the wait stops looking normal.
 const COLD_START_NOTICE_AFTER_MS = 3_000
 
-const links = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
-  { to: '/log', label: 'Log Meal', icon: '🍽️' },
-  { to: '/weight', label: 'Weight', icon: '⚖️' },
-  { to: '/analytics', label: 'Analytics', icon: '📈' },
-  { to: '/review', label: 'Review', icon: '🗓️' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
-]
-
 export default function Layout() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
+  const { pathname } = useLocation()
+  const section = sectionFor(pathname)
   // /admin is the one route in this app that is genuinely desktop-only — a
   // twelve-column table of per-account counts, read by one person on a big
   // screen. Every other page is designed phone-first and 5xl is right for it,
@@ -34,7 +31,7 @@ export default function Layout() {
   // one place the extra width is clearly correct rather than a preference, and
   // it is what makes the tracker columns affordable as words instead of bare
   // emoji.
-  const wide = useLocation().pathname === '/admin'
+  const wide = pathname === '/admin'
   // One fetch feeds both the banner and the modal.
   const announcements = useAnnouncements()
   // The shared settings fetch doubles as the cold-start probe: it is the first
@@ -59,94 +56,43 @@ export default function Layout() {
   }, [settingsLoading])
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen bg-ground desk:flex">
       {/* First thing in the tab order. Without it a keyboard user tabs through
-          five nav items on every single page before reaching content. Uses
-          :focus rather than :focus-visible on purpose -- the link is only ever
+          the nav on every single page before reaching content. Uses :focus
+          rather than :focus-visible on purpose -- the link is only ever
           reachable by keyboard, and :focus is the pattern with the widest
           support for this one case. */}
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-control focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-brand-ink"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-control focus:bg-action focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-action-ink"
       >
         Skip to content
       </a>
-      {/* One element serves both shells. Below md it is a single sticky top bar
-          holding brand and account — it used to be three stacked rows, ~170px of
-          chrome before any content on a phone. At md+ it is the 240px rail it
-          always was, now sticky too, so nav is reachable from the bottom of a
-          long Settings page at every width. bg-surface is opaque on purpose:
-          theme-color in index.html is the same #0f172a, so the PWA status bar
-          meets the header with no seam. */}
-      <aside className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:h-screen md:w-60 md:flex-col md:items-stretch md:justify-start md:gap-0 md:self-start md:border-r md:border-b-0 md:px-0 md:py-0">
-        <div className="flex min-w-0 items-center gap-2 md:px-5 md:py-5">
-          <img src="/favicon.svg" alt="" className="size-6 shrink-0 rounded-[5px]" />
-          <div className="min-w-0">
-            {/* Not an <h1>: it is the site identity, repeated on every page. Each
-                page now owns the single <h1>, so heading navigation can tell them
-                apart instead of landing on "Trackaholic" five times. */}
-            <span className="block truncate text-base font-bold tracking-tight">Trackaholic</span>
-            <p className="hidden text-xs text-ink-faint md:block">Nutrition tracker</p>
-          </div>
-        </div>
 
-        {/* Below md this leaves the aside entirely and becomes a fixed bottom tab
-            bar — the convention in every app this was measured against, and the
-            single biggest "feels like a real app" change. It is out of flow, so
-            the aside's justify-between sees only brand and account.
-
-            The labels are now always rendered. They used to be `hidden sm:inline`,
-            and `hidden` is display:none, which removes them from the accessibility
-            tree — so every phone got five unlabelled emoji as the only accessible
-            name (audit item 4). Showing them beats sr-only: it helps everyone, and
-            a five-column bar has the room at 360px.
-
-            pb-[env(safe-area-inset-bottom)] is not optional. index.html carries
-            the matching viewport-fit=cover; without the pair, the row sits under
-            the home indicator on a curved display. */}
-        <nav
-          aria-label="Main"
-          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:static md:flex md:flex-col md:gap-1 md:border-t-0 md:bg-transparent md:px-3 md:pb-0"
-        >
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === '/'}
-              className={({ isActive }) =>
-                `flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors min-[360px]:text-[11px] md:min-h-0 md:flex-row md:justify-start md:gap-3 md:rounded-control md:px-3 md:py-2 md:text-sm ${
-                  isActive
-                    ? 'text-emerald-300 md:bg-emerald-500/15'
-                    : 'text-ink-muted hover:text-ink md:hover:bg-raised'
-                }`
-              }
-            >
-              {/* Decorative now that the label is always present. It used to BE
-                  the accessible name. */}
-              <span className="text-lg leading-none md:text-base" aria-hidden="true">
-                {link.icon}
-              </span>
-              <span>{link.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="flex min-w-0 items-center gap-3 md:mt-auto md:justify-between md:border-t md:border-line md:px-5 md:py-3">
-          {/* Hidden below sm so the brand is not squeezed to "Track..." on a
-              360px phone. Safe to hide rather than sr-only: it is redundant
-              information, not a control's only accessible name, and Settings ->
-              Account states "Signed in as ..." on every width. */}
-          <span className="hidden min-w-0 truncate text-xs text-ink-faint sm:block" title={user?.email}>
-            {user?.email}
-          </span>
-          <button onClick={logout} className="shrink-0 text-xs text-ink-muted hover:text-emerald-300">
-            Log out
-          </button>
-        </div>
+      {/* Desktop: the side rail (DESIGN.md, Layout). Sticky, so the nav stays
+          reachable from the bottom of a long page. Phones get TabBar below
+          instead; there is no top header at any width any more -- each page
+          owns its title, and Log out lives in Settings -> Account (UA-8). */}
+      <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-[18px] border-r border-rule px-4 py-[22px] desk:flex">
+        {/* self-start so the gauge spans the name, as DESIGN.md's mark draws it,
+            instead of stretching to the rail's width. */}
+        <Wordmark className="mb-1.5 self-start" />
+        <RailNav active={section} />
+        {/* Who is signed in, where the old header said it. Truncated, with the
+            full address on hover; Settings -> Account states it in full. */}
+        <p className="mt-auto truncate text-small text-ink-2" title={user?.email}>
+          {user?.email}
+        </p>
       </aside>
-      {/* The bottom padding clears the fixed tab bar and its safe-area inset, so
-          the last card on a page is never trapped underneath it. */}
-      <main id="main" tabIndex={-1} className="flex-1 px-4 py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pb-8">
+
+      {/* The bottom padding clears the fixed tab bar and its safe-area inset
+          (--shell-bottom, index.css), so the last thing on a page is never
+          trapped underneath it; the top one clears a notch. */}
+      <main
+        id="main"
+        tabIndex={-1}
+        className="min-w-0 flex-1 px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(var(--shell-bottom)+1.5rem)] desk:px-8 desk:py-8"
+      >
         <div className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
           <StatusBanner banner={announcements?.banner ?? null} />
           {/* Below the status banner on purpose: an outage notice outranks a
@@ -160,9 +106,19 @@ export default function Layout() {
               className="mb-4 rounded-control bg-surface px-3 py-2 text-center text-xs text-ink-muted"
             />
           )}
-          <Outlet />
+          {section === 'progress' && <ProgressSubnav pathname={pathname} />}
+          {/* A 150ms fade when the page changes (DESIGN.md: tab changes are a
+              crossfade). Keyed by the first path segment, NOT the whole path:
+              moving between Settings tabs must keep the Settings shell, and
+              its unsaved draft, mounted. Plain CSS rather than Motion, so the
+              first screen never waits on Motion's features to download. */}
+          <div key={pathname.split('/')[1] ?? ''} className="animate-route-in">
+            <Outlet />
+          </div>
         </div>
       </main>
+
+      <TabBar active={section} />
       <AnnouncementsModal items={announcements?.items ?? []} />
     </div>
   )

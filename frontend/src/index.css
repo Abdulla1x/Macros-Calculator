@@ -110,6 +110,40 @@
    * SEGMENT, not the track -- so -100% parks it just off the left edge and
    * 400% carries its leading edge just past the right one. */
   --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+
+  /* DESIGN.md's one layout switch: under 900px a bottom tab bar, from 900px a
+   * side rail. `desk:` rather than md: (768px), which today's pages still use
+   * for their own inner layouts. */
+  --breakpoint-desk: 900px;
+
+  /* The page changing: DESIGN.md's tab-change crossfade, 150ms. */
+  --animate-route-in: route-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes route-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* How much of the bottom of the screen the app shell covers, for anything
+ * pinned to the bottom of a page (Settings' Save bar) and for the page's own
+ * bottom padding. Phones: the tab bar, 64px plus its 1px top rule, plus the
+ * home-indicator inset. Desktop: nothing, the nav is a side rail. */
+:root {
+  --shell-bottom: calc(65px + env(safe-area-inset-bottom));
+}
+@media (width >= 900px) {
+  :root {
+    --shell-bottom: 0px;
+  }
+}
+
+/* Reduced motion keeps fades only, shorter (DESIGN.md, Motion). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-route-in: route-in 120ms linear;
+  }
 }
 
 @keyframes indeterminate {
@@ -235,7 +269,9 @@
 }
 
 body {
-  background-color: var(--color-app);
+  /* The redesign's ground. Today's pages still draw their own slate cards on
+   * it; pinned dark, the two sit together (index.html). */
+  background-color: var(--color-ground);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   /* The Fixed Digits Rule: values change in place, nothing shifts sideways

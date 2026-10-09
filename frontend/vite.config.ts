@@ -31,15 +31,13 @@ export default defineConfig({
         name: 'Trackaholic',
         short_name: 'Trackaholic',
         description: 'Track meals, macros, and goals',
-        // theme_color paints the PWA status bar and matches the opaque sticky
-        // header (bg-surface) exactly, so the two meet with no seam. It is also
-        // duplicated in index.html — if the surface ramp is ever retuned, both
-        // must move together.
-        theme_color: '#0f172a',
-        // The splash screen, which should be the page ground rather than the
-        // header. body is slate-950; this said slate-900 and flashed the wrong
-        // colour on every cold launch.
-        background_color: '#020617',
+        // theme_color paints the PWA status bar; background_color is the
+        // splash screen. Both are the ground (Daylight dark, #0b0e0c), which
+        // the new shell's pages and tab bar sit on, so the bar meets the page
+        // with no seam. index.html's theme-color meta is the same value; if
+        // the ground ever changes, all three move together.
+        theme_color: '#0b0e0c',
+        background_color: '#0b0e0c',
         display: 'standalone',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
