@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { LazyMotion, MotionConfig } from 'motion/react'
 import {
   createBrowserRouter,
   createRoutesFromElements,
@@ -18,6 +19,7 @@ import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import ResetPassword from './pages/ResetPassword'
 import Signup from './pages/Signup'
+import { DURATION, EASE, loadMotionFeatures } from './lib/motion'
 import { isReloadingForNewVersion, isStaleChunkError, reloadForNewVersion } from './lib/staleChunk'
 import { SettingsProvider } from './settings/SettingsContext'
 
@@ -156,7 +158,20 @@ export default function App() {
           the same silence it exists to prevent. sr-only takes it out of flow, so
           it costs no layout here. */}
       <Announcer />
-      <RouterProvider router={router} />
+      {/* Motion, set up once for the whole app:
+          - LazyMotion + `m` elements instead of `motion` ones: the animation
+            features (about 15 KB) arrive as their own piece after first
+            paint, and `strict` makes a stray full-size `motion.div` throw in
+            development instead of quietly pulling ~34 KB back in.
+          - reducedMotion="user" honours the phone's reduce-motion setting in
+            every Motion animation (UA-16), without each one checking.
+          - DESIGN.md's defaults, so an animation that names no timing gets the
+            house one: 240 ms on the exponential ease-out. */}
+      <LazyMotion features={loadMotionFeatures} strict>
+        <MotionConfig reducedMotion="user" transition={{ duration: DURATION.base, ease: EASE }}>
+          <RouterProvider router={router} />
+        </MotionConfig>
+      </LazyMotion>
     </>
   )
 }
