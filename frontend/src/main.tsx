@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
@@ -24,11 +23,12 @@ createRoot(document.getElementById('root')!).render(
         on a storage-blocked browser came from. A boundary inside it would
         never have caught that. */}
     <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
+      {/* The router itself is created in App.tsx (a data router, for
+          useBlocker). AuthProvider sits outside it: it uses no router hooks,
+          and RequireAuth inside the tree does the redirecting. */}
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,
 )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useBlocker, useLocation } from 'react-router-dom'
 import AlertDialog from '../components/AlertDialog'
+import Modal from '../components/ui/Modal'
 import { validateSettingsField } from '../lib/limits'
 import { useSettings } from '../settings/SettingsContext'
 import type { Settings as SettingsType } from '../types'
@@ -85,19 +86,25 @@ export default function Settings() {
   // depend on it are hooks and cannot sit after a conditional return.
   const dirty = draft !== null && saved !== null && settingsDiffer(draft, saved)
 
-  // Covers a reload, a closed tab and a followed external link. It does NOT
-  // cover in-app navigation: react-router 7's useBlocker needs a data router
-  // and this app mounts <BrowserRouter> + <Routes>, so leaving /settings by
-  // the nav still drops an unsaved draft silently. What the sticky bar buys is
-  // that the draft can no longer be forgotten about -- it cannot scroll away
-  // and it does not hide behind a tab switch, which is where the loss actually
-  // came from.
+  // Covers a reload, a closed tab and a followed external link: the browser's
+  // own "Leave site?" prompt, which is all a page is allowed to show there.
   useEffect(() => {
     if (!dirty) return
     const warn = (event: BeforeUnloadEvent) => event.preventDefault()
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
+
+  // Covers in-app navigation, which beforeunload never sees: tapping a nav tab
+  // or a link while the draft is dirty used to drop it without a word. Moving
+  // between Settings tabs is NOT blocked -- the draft lives in this shell,
+  // above the tab outlet, so it survives that -- only leaving /settings is.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty &&
+      currentLocation.pathname.startsWith('/settings') &&
+      !nextLocation.pathname.startsWith('/settings'),
+  )
 
   // "Saved ✓" is an acknowledgement, not a state to sit in. Without this the
   // bar would stay on screen after every save until the next keystroke, which
@@ -242,6 +249,30 @@ export default function Settings() {
             )}
           </div>
         </div>
+      )}
+
+      {blocker.state === 'blocked' && (
+        // Stay is first, so the dialog's own focus rule lands on it (Enter
+        // keeps the draft) and Escape keeps it too; leaving has to be chosen on
+        // purpose. No autoFocus: with it the dialog would record Stay as its
+        // opener, and focus could not return to the link that was tapped.
+        <Modal role="alertdialog" label="Leave without saving?" onClose={() => blocker.reset()}>
+          <h2 className="mb-2 text-lg font-semibold">Leave without saving?</h2>
+          <p className="text-sm text-slate-300">
+            Your changes to these settings haven't been saved yet.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button onClick={() => blocker.reset()} className="px-5 py-2">
+              Stay
+            </Button>
+            <button
+              onClick={() => blocker.proceed()}
+              className="rounded-control border border-line-strong px-5 py-2 text-sm font-medium text-ink-muted hover:text-ink"
+            >
+              Leave without saving
+            </button>
+          </div>
+        </Modal>
       )}
 
       {rejected && (
