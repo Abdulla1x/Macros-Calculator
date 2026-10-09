@@ -39,34 +39,42 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (!this.state.error) return this.props.children
-
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
-        <Card pad="lg" className="w-full max-w-md">
-          <h1 className="text-lg font-semibold">Something broke on this page</h1>
-          <p className="mt-3 text-sm text-slate-300">
-            Not your data — that is safe on the server. This is the app failing
-            to draw itself, and reloading usually clears it.
-          </p>
-          <p className="mt-3 text-sm text-slate-300">
-            If it keeps happening, one known cause is a browser set to block
-            site data. Allowing it for this site, or leaving private browsing,
-            fixes that particular case.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-5 w-full rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 hover:bg-amber-400"
-          >
-            Reload
-          </button>
-          {/* The message itself, not a friendly paraphrase: it is the only
-              thing that makes a bug report actionable, and hiding it helps
-              nobody who is already looking at a broken page. */}
-          <p className="mt-4 break-words text-xs text-slate-400">
-            {this.state.error.message || String(this.state.error)}
-          </p>
-        </Card>
-      </div>
-    )
+    return <CrashScreen error={this.state.error} />
   }
+}
+
+/** What a broken page shows instead of a white one.
+ *
+ * Shared by the boundary above and by the router's errorElement (App.tsx). A
+ * data router catches errors thrown while rendering a route in a boundary of
+ * its own, so they never reach ErrorBoundary; without an errorElement they
+ * would land on React Router's built-in developer page instead of this one. */
+export function CrashScreen({ error }: { error: unknown }) {
+  const message = (error instanceof Error && error.message) || String(error)
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
+      <Card pad="lg" className="w-full max-w-md">
+        <h1 className="text-lg font-semibold">Something broke on this page</h1>
+        <p className="mt-3 text-sm text-slate-300">
+          Not your data — that is safe on the server. This is the app failing
+          to draw itself, and reloading usually clears it.
+        </p>
+        <p className="mt-3 text-sm text-slate-300">
+          If it keeps happening, one known cause is a browser set to block
+          site data. Allowing it for this site, or leaving private browsing,
+          fixes that particular case.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-5 w-full rounded-lg bg-amber-500 px-4 py-2 font-semibold text-slate-950 hover:bg-amber-400"
+        >
+          Reload
+        </button>
+        {/* The message itself, not a friendly paraphrase: it is the only
+            thing that makes a bug report actionable, and hiding it helps
+            nobody who is already looking at a broken page. */}
+        <p className="mt-4 break-words text-xs text-slate-400">{message}</p>
+      </Card>
+    </div>
+  )
 }
