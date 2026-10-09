@@ -31,7 +31,7 @@ const buttonVariants = cva(
         secondary: 'border-ink bg-transparent text-ink hover:bg-ink/5',
         ghost: 'border-rule bg-transparent text-ink hover:bg-ink/5',
         // The middle of the tab bar and the top of the side rail.
-        log: 'rounded-log border-ink bg-ink font-bold text-ground [font-stretch:108%] tracking-[0.02em] hover:bg-ink/90',
+        log: 'gap-2 rounded-log border-ink bg-ink text-[15px] font-bold text-ground [font-stretch:108%] tracking-[0.02em] hover:bg-ink/90',
       },
       size: {
         default: 'h-[42px] px-4',

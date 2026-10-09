@@ -7,9 +7,10 @@ import TextInput from '../ui/TextInput'
 import Field from '../ui/Field'
 import Button from '../ui/Button'
 import { useLiveMessage } from '../../hooks/useLiveMessage'
+import { Button as ShellButton } from '@/ui/button'
 
 export default function AccountSection() {
-  const { user, changePassword, deleteAccount } = useAuth()
+  const { user, logout, changePassword, deleteAccount } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -77,7 +78,16 @@ export default function AccountSection() {
     <>
       <Card as="section">
         <h2 className="mb-1 font-semibold">Account</h2>
-        <p className="mb-1 text-sm text-slate-400">Signed in as {user?.email}</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="min-w-0 text-sm break-all text-slate-400">Signed in as {user?.email}</p>
+          {/* Here since the redesign's shell, which has no header: it used to
+              hold the top-right corner of every phone screen, prime space for
+              something done rarely (UA-8). The new ghost button rather than the
+              old primary, because leaving is not the action this card is for. */}
+          <ShellButton variant="ghost" onClick={logout}>
+            Log out
+          </ShellButton>
+        </div>
         {/* The only durable way back to the release notes. The pop-up links there
             too, but it is dismissible and then gone -- an entry point that exists
             only inside a thing you just closed is not an entry point. */}

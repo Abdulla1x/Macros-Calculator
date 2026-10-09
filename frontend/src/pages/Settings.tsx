@@ -224,10 +224,11 @@ export default function Settings() {
           scrolling to tab-switching. Ticking a supplement or correcting a food
           still summons nothing, because neither touches this row.
 
-          bottom clears the fixed tab bar (min-h-[3.25rem] plus its safe-area
-          inset in Layout.tsx); at md+ there is no bottom bar to clear. */}
+          bottom sits on top of the phone's tab bar (--shell-bottom, which the
+          shell keeps equal to the bar's height plus its safe-area inset); on
+          desktop there is no bottom bar and it floats 1rem up. */}
       {tab.deferred && (dirty || status !== 'idle') && (
-        <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-20 md:bottom-4">
+        <div className="sticky bottom-(--shell-bottom) z-20 desk:bottom-4">
           <div className="flex items-center justify-between gap-3 rounded-card border border-line-strong bg-raised px-4 py-3 shadow-lg shadow-slate-950/50">
             <p className="min-w-0 text-sm">
               {status === 'saved' ? (
