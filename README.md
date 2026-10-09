@@ -34,6 +34,11 @@ Log meals by typing an ingredient name — macros auto-fill as you type from you
 - **Own your data**: change your password (revokes all previously issued tokens), download everything as JSON, or permanently delete your account from Settings
 - **Password reset by email — built, deployed, and switched off.** The endpoints, the single-use link (hashed at rest, valid an hour, revoking every session when used) and 38 tests are all here and running in production. They answer **503 to every address**, because no email provider is configured — three free providers were tried and all three refused a domainless free account, which is the profile their fraud screening targets. Until one is wired up **a forgotten password means a lost account**, and the signup page says so rather than letting you find out later. Nothing about the feature needs a deploy to switch on; it activates on credentials alone
 
+### 🧭 Getting around
+- **Four places, each one tap away**: **Today**, **Progress** and **You** as tabs, with **Log** as a button in the middle. A bottom bar on phones; from 900 px a side rail with the wordmark. Weight and the weekly review sit under Progress
+- **Unsaved settings are never dropped silently.** Leaving Settings with changes asks first ("Leave without saving?"); reloading or closing the tab gets the browser's own prompt
+- **Each page loads its own code the first time you open it**, so the sign-in page no longer downloads the charts (the first download went from 911 KB to 334 KB). A tab still running the previous version when a new one deploys reloads itself once rather than failing to open a page
+
 ### 📊 Dashboard
 - Daily **progress rings** for each tracked macro vs. your goals
 - Today's meal list with inline edit and delete, directly under the rings — it is what the page is for, and it used to sit below two shortcut cards and three progress bars, which on a phone put it about five screens down
@@ -93,7 +98,7 @@ Log meals by typing an ingredient name — macros auto-fill as you type from you
 - Let the app **keep those goals in step with your weight**: with auto-targets
   on, the daily goals are recalculated on every weigh-in instead of staying
   wherever you first set them
-- Settings is five addressable tabs — Goals, Body, Trackers, Library, Account — each with its own URL, and a save bar that follows you between them rather than scrolling away
+- Settings (under **You**) is five addressable tabs — Goals, Body, Trackers, Library, Account — each with its own URL, and a save bar that follows you between them rather than scrolling away. **Log out** is in Account
 
 ### 🗓️ Weekly review
 - **Everything the app already knew, added up in one place**: how much you logged, calories and protein against target, whether your weight is moving the way you asked, where your daily burn figure came from, water, steps, and one line on estimate accuracy
@@ -295,7 +300,7 @@ icon, with a dark splash screen while it starts.
 ┌─────────────────────┐         ┌──────────────────────┐        ┌─────────────────┐
 │  React SPA / PWA    │  HTTP   │  FastAPI REST API    │        │ Open Food Facts │
 │  Tailwind, Recharts ├────────►│  /api/auth /meals    ├───────►│  public API     │
-│  React Router       │ Bearer  │  /foods /ai ...      │  httpx │  (packaged)     │
+│  Router, shadcn/ui  │ Bearer  │  /foods /ai ...      │  httpx │  (packaged)     │
 └─────────────────────┘  JWT    │ + 5 food tables, in  │        └─────────────────┘
                                 │   memory (26k foods) │
                                 └──────┬────────┬──────┘
@@ -348,14 +353,21 @@ Trackaholic
 │   ├── tests/                   # pytest suite incl. auth + cross-tenant isolation
 │   └── requirements.txt
 ├── frontend/
-│   ├── tests/                   # node --test unit tests for DOM-free lib code (npm test)
+│   ├── tests/                   # node --test unit tests for DOM-free code (npm test), incl. the
+│   │                            #   colour tokens against DESIGN.md and WCAG contrast in every theme
+│   ├── components.json          # shadcn/ui CLI config: new components land in src/ui/
 │   └── src/
 │       ├── api/client.ts        # typed API client
 │       ├── auth/                # AuthContext + token storage (guarded against blocked localStorage)
 │       ├── settings/            # SettingsContext — one settings fetch for the whole app
+│       ├── ui/                  # the redesign's components: shadcn/ui (Radix) restyled from
+│       │                        #   DESIGN.md (button), and icons (Phosphor + the weigh-in scale)
+│       ├── theme.css            # DESIGN.md's colour tokens, 8 palettes × light/dark + Label;
+│       │                        #   generated from DESIGN.md and tested against it
 │       ├── components/
-│       │   ├── ui/              # the six shared primitives: Modal, Card, TextInput,
-│       │   │                    #   OptionChip, Field, Button
+│       │   ├── shell/           # the app shell: tab bar, side rail, wordmark, which tab is current
+│       │   ├── ui/              # the six older primitives (Modal, Card, TextInput, OptionChip,
+│       │   │                    #   Field, Button), replaced screen by screen in the redesign
 │       │   ├── settings/        # the Settings panels' sections
 │       │   └── ...              # Layout, MacroRing, DailyTrackerCard, MealAnalyzer,
 │       │                        #   FoodAutocomplete, WeighInNudge, ShareCodePanel
@@ -364,7 +376,9 @@ Trackaholic
 │       │                        #   chartTheme (one place for every recharts colour), libraryMatch,
 │       │                        #   photoSize + photoDownscale (shrink photos before upload),
 │       │                        #   analysisInputs (is a re-run of an estimate unchanged?),
-│       │                        #   foodSources (source badges, credits, the edited-number rule)
+│       │                        #   foodSources (source badges, credits, the edited-number rule),
+│       │                        #   staleChunk (reload once when a deploy removed a page's code),
+│       │                        #   motion (animation tokens), utils (cn, the class merger)
 │       └── pages/               # Dashboard, LogMeal, Weight, Analytics, Review, Admin,
 │                                #   WhatsNew, settings/ (five tab panels), and the four auth pages
 ├── docs/                        # AI provider runbook, the Gemini EEA-region incident write-up,
@@ -437,6 +451,8 @@ Or start both at once, with a throwaway database:
 ```bash
 ./scripts/dev.sh --fresh
 ```
+
+**Adding a UI component.** `npx shadcn@latest add <name>` (from `frontend/`) puts it in `src/ui/`. Restyle it from `DESIGN.md` before using it: shadcn's default look is never shipped. If you add a `text-*` or `rounded-*` utility to `index.css` that is not a colour, add its name to `src/lib/utils.ts` as well; otherwise `cn()` treats it as a colour and drops the real colour beside it (`tests/cn.test.ts` checks this).
 
 ### Tests and gates
 
@@ -763,6 +779,14 @@ The generic foods in the search come from open national food-composition tables,
 | [AFCD Release 3](https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd) — Australian Food Composition Database | Food Standards Australia New Zealand (2025) | [CC BY 2.5 AU](https://creativecommons.org/licenses/by/2.5/au/) |
 | [Canadian Nutrient File 2015](https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/nutrient-data.html) | Health Canada | [OGL – Canada](https://open.canada.ca/en/open-government-licence-canada) |
 | [Open Food Facts](https://world.openfoodfacts.org/) (packaged products, searched live) | Open Food Facts contributors | [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) |
+
+### Fonts and icons
+
+| Font or icon set | By | Licence |
+|---|---|---|
+| [Mona Sans](https://github.com/github/mona-sans) (the app's typeface, self-hosted) | The Mona Sans Project Authors | [SIL Open Font License 1.1](https://openfontlicense.org/) |
+| [Libre Franklin](https://github.com/googlefonts/Libre-Franklin) (the wordmark and the Label style) | The Libre Franklin Project Authors | [SIL Open Font License 1.1](https://openfontlicense.org/) |
+| [Phosphor Icons](https://phosphoricons.com/) | Phosphor Icons | MIT |
 
 ---
 
