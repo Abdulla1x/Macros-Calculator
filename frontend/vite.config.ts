@@ -14,6 +14,11 @@ export default defineConfig({
       // in a shared browser cache would undermine per-user isolation.
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
+        // The default (js, css, html) plus the two fonts' Latin and Latin
+        // Extended files, so an installed app keeps its type offline. The other
+        // subsets (Cyrillic, Vietnamese) are left to the network: a browser only
+        // fetches them for text that needs them.
+        globPatterns: ['**/*.{js,css,html}', '**/*-latin-*.woff2'],
       },
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {

@@ -468,8 +468,9 @@ The exact tokens, as CSS custom properties. Each palette defines the full set fo
 --ground: #0d0a17; --field: #151122; --ink: #ece8f7; --ink-2: #a49cbc; --rule: #2a2440; --track: #241e38; --fill: #ece8f7;
 --action: #a98bff; --action-ink: #0d0a17; --plan: #ffb067; --label: #06050b; --fact: #6fd394; --band: #2b1b60; --band-rule: #46368a;
 
-/* Label style (palettes do not apply) */
---ground: #e9ebec; --label: #ffffff; --ink: #000000; --ink-2: #3f4245; --track: #d4d7d9; --action: #000000; --action-ink: #ffffff;
+/* Label style (palettes do not apply; it sets every token a palette sets, so none leaks through) */
+--ground: #e9ebec; --label: #ffffff; --ink: #000000; --ink-2: #3f4245; --track: #d4d7d9; --action: #000000; --action-ink: #ffffff; --field: #ffffff; --rule: #000000; --fill: #000000; --plan: #000000; --fact: #000000;
+--band: var(--label); --band-ink: var(--ink); --band-ink-2: var(--ink-2); --band-track: var(--track); --band-fill: var(--fill); --band-plan: var(--plan); --band-rule: var(--rule);
 /* Label style dark */
---ground: #161718; --label: #000000; --ink: #ffffff; --ink-2: #c4c7ca; --track: #3a3c3e; --action: #ffffff; --action-ink: #000000;
+--ground: #161718; --label: #000000; --ink: #ffffff; --ink-2: #c4c7ca; --track: #3a3c3e; --action: #ffffff; --action-ink: #000000; --field: #000000; --rule: #ffffff; --fill: #ffffff; --plan: #ffffff; --fact: #ffffff;
 ```

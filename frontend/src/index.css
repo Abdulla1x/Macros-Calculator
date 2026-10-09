@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* The colour tokens for every palette and theme. Plain CSS custom properties,
+ * switched by attributes on <html>; the @theme inline block below maps them
+ * onto utilities. */
+@import "./theme.css";
 
 /* Semantic tokens over the palette the app already uses.
  *
@@ -59,7 +63,9 @@
    * scripts/a11y-audit.mjs is what enforces it now. The composited tinted
    * grounds are worse still, not better -- ink-faint measures 4.06 on
    * bg-emerald-500/15 and 3.74 on bg-sky-500/20. */
-  --color-ink: #f1f5f9;          /* slate-100 */
+  /* --color-ink now maps to the theme's ink (@theme inline below). Pinned dark,
+   * that is #e7ebe4 where this was #f1f5f9 (slate-100): 14.8:1 on surface
+   * instead of 16.3, so every legacy page keeps its ramp. */
   --color-ink-muted: #94a3b8;    /* slate-400 */
   --color-ink-faint: #7c8aa3;    /* measured, between slate-500 and slate-400 */
 
@@ -93,7 +99,7 @@
    * not swept in. Change a radius here and every card, input, chip and button in
    * the app follows; the leftovers do not, which is the honest state of it. */
   --radius-card: 0.75rem;        /* was rounded-xl */
-  --radius-control: 0.5rem;      /* was rounded-lg */
+  --radius-control: 5px;         /* DESIGN.md (was 0.5rem, rounded-lg) */
 
   /* The only indeterminate animation in the app, used while the AI model is
    * working and there is genuinely nothing to count. Registered here rather
@@ -115,12 +121,98 @@
   }
 }
 
-/* Tells the browser to render built-in UI -- date pickers, select menus, time
- * inputs, scrollbars -- against a dark ground. Replaces five inline
- * style={{ colorScheme: 'dark' }} props that covered only three of the seven
- * date inputs, one select and one time input. */
-:root {
-  color-scheme: dark;
+/* The redesign's tokens, from DESIGN.md. `inline` makes each utility read the
+ * variable itself (bg-ground -> var(--ground)) rather than a value frozen at
+ * build time, which is what lets one attribute on <html> switch palette or
+ * theme at runtime.
+ *
+ * Names follow DESIGN.md, with two exceptions where Tailwind would put two
+ * tokens on one class: the "label" TYPE style is text-field-label (the "label"
+ * colour already makes text-label), and the number styles are
+ * text-display-number / text-field-number / text-row-number (the "field"
+ * colour makes text-field). color-scheme now comes from theme.css, per theme. */
+@theme inline {
+  --color-ground: var(--ground);
+  --color-field: var(--field);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-rule: var(--rule);
+  --color-track: var(--track);
+  --color-fill: var(--fill);
+  --color-action: var(--action);
+  --color-action-ink: var(--action-ink);
+  --color-plan: var(--plan);
+  --color-label: var(--label);
+  --color-fact: var(--fact);
+  --color-band: var(--band);
+  --color-band-ink: var(--band-ink);
+  --color-band-ink-2: var(--band-ink-2);
+  --color-band-track: var(--band-track);
+  --color-band-fill: var(--band-fill);
+  --color-band-plan: var(--band-plan);
+  --color-band-rule: var(--band-rule);
+
+  /* Mona Sans does every job by changing width (DESIGN.md, Typography); the
+   * self-hosted variable font carries the width axis. Overriding --font-sans
+   * makes it the whole app's face, legacy pages included. */
+  --font-sans: "Mona Sans Variable", "Mona Sans", system-ui, sans-serif;
+  /* The nutrition-label face: the wordmark and the Label style only. */
+  --font-label: "Libre Franklin Variable", "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+
+  --radius-tag: 3px;
+  --radius-log: 7px;
+  --radius-sheet: 14px;
+
+  /* DESIGN.md Motion tokens, for CSS transitions; Motion code reads lib/motion.ts. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* DESIGN.md's type scale. Utilities rather than font-size tokens because each
+ * style is width + weight + spacing together, and Tailwind's font-size tokens
+ * cannot carry font-stretch. Numbers use tabular figures (the Fixed Digits
+ * Rule); that is set once on body below. */
+@utility text-display-number {
+  font-size: 92px;
+  font-weight: 820;
+  font-stretch: 75%;
+  line-height: 0.86;
+  letter-spacing: -0.02em;
+}
+@utility text-field-number {
+  font-size: 30px;
+  font-weight: 780;
+  font-stretch: 78%;
+  line-height: 1;
+}
+@utility text-row-number {
+  font-size: 20px;
+  font-weight: 760;
+  font-stretch: 80%;
+  line-height: 1.2;
+}
+@utility text-title {
+  font-size: 16px;
+  font-weight: 750;
+  font-stretch: 112%;
+  line-height: 1.25;
+}
+@utility text-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+@utility text-small {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+@utility text-field-label {
+  font-size: 11px;
+  font-weight: 650;
+  font-stretch: 110%;
+  line-height: 1.3;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 @layer base {
@@ -146,4 +238,7 @@ body {
   background-color: var(--color-app);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+  /* The Fixed Digits Rule: values change in place, nothing shifts sideways
+   * when a digit changes (UA-15 found tabular-nums used twice in the app). */
+  font-variant-numeric: tabular-nums;
 }

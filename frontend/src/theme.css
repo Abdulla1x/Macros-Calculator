@@ -1,0 +1,185 @@
+/* Trackaholic's colour tokens: 8 palettes x light/dark, plus the Label style.
+ *
+ * GENERATED FROM DESIGN.md's token block, which is the source of truth; the
+ * Label blocks are completed from the signed-off prototype (DESIGN.md now says
+ * so too). tests/themeTokens.test.ts checks this file against DESIGN.md and
+ * measures every text and non-text pair, in every theme, against WCAG.
+ *
+ * Three attributes on <html> pick the theme, so a change is one attribute
+ * write and no class juggling:
+ *   data-theme   light | dark      (resolved: "follow the phone" is decided
+ *                                   in index.html before first paint)
+ *   data-palette daylight (default) | ocean | sand | berry | mono | ember |
+ *                citrus | violet
+ *   data-style   fields (default) | label
+ *
+ * How the cascade composes them. Every selector here is :root plus attributes,
+ * so specificity counts the attributes and ORDER breaks ties:
+ *   :root                               Daylight light, the base   (0,1,0)
+ *   :root[data-theme=dark]              Daylight dark              (0,2,0)
+ *   :root[data-palette=x]               palette x light            (0,2,0), later, so it wins over Daylight dark...
+ *   :root[data-palette=x][data-theme=dark]  ...and palette x dark  (0,3,0) wins back, redefining every token Daylight dark set.
+ *   :root[data-style=label] / [..][data-theme=dark]   last, so Label beats any palette
+ * A palette's dark block lists only what changes from its light block; the
+ * band's light-ink tokens carry over, as DESIGN.md intends.
+ *
+ * --band and friends default to var(--ground) etc. A var() in a custom
+ * property resolves on the element that declares it, and every block here is
+ * on the same <html>, so in Daylight dark --band follows the dark --ground.
+ */
+
+/* Daylight */
+:root {
+  --ground: #e4e7e1; --field: #eef0eb; --ink: #0f1210; --ink-2: #485049; --rule: #c3c9c1;
+  --track: #cfd4cc; --fill: #0f1210; --action: #1747e0; --action-ink: #ffffff; --plan: #8c1d8c;
+  --label: #f8f9f6; --fact: #1d6b3a; --band: var(--ground); --band-ink: var(--ink);
+  --band-ink-2: var(--ink-2); --band-track: var(--track); --band-fill: var(--fill);
+  --band-plan: var(--plan); --band-rule: var(--rule);
+  color-scheme: light;
+}
+
+/* Daylight dark */
+:root[data-theme="dark"] {
+  --ground: #0b0e0c; --field: #141815; --ink: #e7ebe4; --ink-2: #9ba49c; --rule: #283029;
+  --track: #232924; --fill: #e7ebe4; --action: #7d9bff; --action-ink: #0b0e0c; --plan: #e88ae8;
+  --label: #050605; --fact: #6fd394;
+  color-scheme: dark;
+}
+
+/* Ocean */
+:root[data-palette="ocean"] {
+  --ground: #dce5ee; --field: #e9eff5; --ink: #0b1a2a; --ink-2: #3d5064; --rule: #b5c4d2;
+  --track: #c3d0dc; --fill: #0b1a2a; --action: #0b57c4; --action-ink: #ffffff; --plan: #7a4300;
+  --label: #f6f9fc; --fact: #0f6a46; --band: #0e2a47; --band-ink: #f2f6fa; --band-ink-2: #a9bfd3;
+  --band-track: #26486b; --band-fill: #f2f6fa; --band-plan: #ffb24a; --band-rule: #23436a;
+  color-scheme: light;
+}
+
+/* Ocean dark */
+:root[data-palette="ocean"][data-theme="dark"] {
+  --ground: #06101a; --field: #0c1825; --ink: #e6eef5; --ink-2: #93a8bb; --rule: #1b2b3b;
+  --track: #172635; --fill: #e6eef5; --action: #6fa8ff; --action-ink: #06101a; --plan: #ffb24a;
+  --label: #03080d; --fact: #5fd6a2; --band: #0f2d4d; --band-rule: #23466e;
+  color-scheme: dark;
+}
+
+/* Sand */
+:root[data-palette="sand"] {
+  --ground: #eae1d2; --field: #f3ede2; --ink: #1f1a14; --ink-2: #5a5044; --rule: #cdc1ae;
+  --track: #d8cdbb; --fill: #1f1a14; --action: #12595e; --action-ink: #ffffff; --plan: #8a2d5a;
+  --label: #fbf8f2; --fact: #12595e; --band: #2b2420; --band-ink: #f5ede1; --band-ink-2: #c6b6a2;
+  --band-track: #4b4038; --band-fill: #f5ede1; --band-plan: #f2a6cb; --band-rule: #463b33;
+  color-scheme: light;
+}
+
+/* Sand dark */
+:root[data-palette="sand"][data-theme="dark"] {
+  --ground: #14110d; --field: #1c1813; --ink: #efe6d8; --ink-2: #ab9e8c; --rule: #2e281f;
+  --track: #2a241c; --fill: #efe6d8; --action: #5cc6c9; --action-ink: #14110d; --plan: #f2a6cb;
+  --label: #0a0806; --fact: #5cc6c9; --band: #2e2621; --band-rule: #4a3f36;
+  color-scheme: dark;
+}
+
+/* Berry */
+:root[data-palette="berry"] {
+  --ground: #ecdfe7; --field: #f5ecf1; --ink: #22101c; --ink-2: #5d4555; --rule: #d1bbca;
+  --track: #dccad6; --fill: #22101c; --action: #8c1a5a; --action-ink: #ffffff; --plan: #0d6a64;
+  --label: #fcf7fa; --fact: #0d6a64; --band: #3a1430; --band-ink: #fbeef6; --band-ink-2: #d6b0c8;
+  --band-track: #5c2b4f; --band-fill: #fbeef6; --band-plan: #7fe0d6; --band-rule: #57284b;
+  color-scheme: light;
+}
+
+/* Berry dark */
+:root[data-palette="berry"][data-theme="dark"] {
+  --ground: #120a10; --field: #1b1018; --ink: #f3e6ee; --ink-2: #b399a9; --rule: #2e1d29;
+  --track: #2a1a25; --fill: #f3e6ee; --action: #ff8fc8; --action-ink: #120a10; --plan: #7fe0d6;
+  --label: #0a0509; --fact: #7fe0d6; --band: #3d1633; --band-rule: #5c2c50;
+  color-scheme: dark;
+}
+
+/* Mono */
+:root[data-palette="mono"] {
+  --ground: #e7e7e7; --field: #f1f1f1; --ink: #111111; --ink-2: #4a4a4a; --rule: #c8c8c8;
+  --track: #d3d3d3; --fill: #111111; --action: #111111; --action-ink: #ffffff; --plan: #b0136e;
+  --label: #fafafa; --fact: #1d6b3a; --band: #111111; --band-ink: #f2f2f2; --band-ink-2: #a8a8a8;
+  --band-track: #333333; --band-fill: #f2f2f2; --band-plan: #ff6fb5; --band-rule: #2e2e2e;
+  color-scheme: light;
+}
+
+/* Mono dark */
+:root[data-palette="mono"][data-theme="dark"] {
+  --ground: #0c0c0c; --field: #161616; --ink: #ededed; --ink-2: #a3a3a3; --rule: #2c2c2c;
+  --track: #262626; --fill: #ededed; --action: #ededed; --action-ink: #0c0c0c; --plan: #ff6fb5;
+  --label: #050505; --fact: #6fd394; --band: #1c1c1c; --band-rule: #333333;
+  color-scheme: dark;
+}
+
+/* Ember */
+:root[data-palette="ember"] {
+  --ground: #e6e4e3; --field: #f0eeed; --ink: #141212; --ink-2: #4d4847; --rule: #c9c5c3;
+  --track: #d4d0ce; --fill: #141212; --action: #b3261e; --action-ink: #ffffff; --plan: #1f5fa8;
+  --label: #faf9f8; --fact: #1d6b3a; --band: #1a1717; --band-ink: #f4f1f0; --band-ink-2: #b0a9a7;
+  --band-track: #3a3434; --band-fill: #f4f1f0; --band-plan: #7fb2ff; --band-rule: #332d2d;
+  color-scheme: light;
+}
+
+/* Ember dark */
+:root[data-palette="ember"][data-theme="dark"] {
+  --ground: #0e0c0c; --field: #171414; --ink: #efeceb; --ink-2: #a9a2a0; --rule: #2d2828;
+  --track: #282323; --fill: #efeceb; --action: #ff5a4e; --action-ink: #0e0c0c; --plan: #7fb2ff;
+  --label: #070606; --fact: #6fd394; --band: #1d1919; --band-rule: #3a3333;
+  color-scheme: dark;
+}
+
+/* Citrus */
+:root[data-palette="citrus"] {
+  --ground: #f3f3ee; --field: #fbfbf7; --ink: #1a1c14; --ink-2: #50544a; --rule: #d6d7cd;
+  --track: #dfe0d6; --fill: #1a1c14; --action: #c2410c; --action-ink: #ffffff; --plan: #2f7d32;
+  --label: #fdfdfa; --fact: #2f7d32; --band: #24561f; --band-ink: #f6fbf2; --band-ink-2: #c3dbbd;
+  --band-track: #3f7339; --band-fill: #f6fbf2; --band-plan: #ffb067; --band-rule: #386a32;
+  color-scheme: light;
+}
+
+/* Citrus dark */
+:root[data-palette="citrus"][data-theme="dark"] {
+  --ground: #0f110c; --field: #171a12; --ink: #eef0e6; --ink-2: #a4a99a; --rule: #2a2e23;
+  --track: #252a1e; --fill: #eef0e6; --action: #ff9a4d; --action-ink: #0f110c; --plan: #8fd88a;
+  --label: #070806; --fact: #8fd88a; --band: #1f4a1b; --band-rule: #2f6229;
+  color-scheme: dark;
+}
+
+/* Violet */
+:root[data-palette="violet"] {
+  --ground: #e6e2ee; --field: #f0edf5; --ink: #17122a; --ink-2: #4f4766; --rule: #c9c1d8;
+  --track: #d5cee2; --fill: #17122a; --action: #5b2fc9; --action-ink: #ffffff; --plan: #9a4508;
+  --label: #faf9fc; --fact: #1d6b3a; --band: #2a1a5e; --band-ink: #f4f0ff; --band-ink-2: #bfb2e6;
+  --band-track: #45358a; --band-fill: #f4f0ff; --band-plan: #ffb067; --band-rule: #3f3080;
+  color-scheme: light;
+}
+
+/* Violet dark */
+:root[data-palette="violet"][data-theme="dark"] {
+  --ground: #0d0a17; --field: #151122; --ink: #ece8f7; --ink-2: #a49cbc; --rule: #2a2440;
+  --track: #241e38; --fill: #ece8f7; --action: #a98bff; --action-ink: #0d0a17; --plan: #ffb067;
+  --label: #06050b; --fact: #6fd394; --band: #2b1b60; --band-rule: #46368a;
+  color-scheme: dark;
+}
+
+/* Label style: black and white, palettes do not apply. Sets every token a
+ * palette sets, so none of the palette leaks through. */
+:root[data-style="label"] {
+  --ground: #e9ebec; --label: #ffffff; --ink: #000000; --ink-2: #3f4245; --track: #d4d7d9;
+  --action: #000000; --action-ink: #ffffff; --field: #ffffff; --rule: #000000; --fill: #000000;
+  --plan: #000000; --fact: #000000; --band: var(--label); --band-ink: var(--ink);
+  --band-ink-2: var(--ink-2); --band-track: var(--track); --band-fill: var(--fill);
+  --band-plan: var(--plan); --band-rule: var(--rule);
+  color-scheme: light;
+}
+
+/* Label style dark */
+:root[data-style="label"][data-theme="dark"] {
+  --ground: #161718; --label: #000000; --ink: #ffffff; --ink-2: #c4c7ca; --track: #3a3c3e;
+  --action: #ffffff; --action-ink: #000000; --field: #000000; --rule: #ffffff; --fill: #ffffff;
+  --plan: #ffffff; --fact: #ffffff;
+  color-scheme: dark;
+}
