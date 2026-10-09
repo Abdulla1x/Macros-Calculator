@@ -15,6 +15,11 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    /* `@/` is src/: shadcn/ui's components import through it (components.json).
+       The same alias is in vite.config.ts; the two must agree. */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     /* Type checking. `strict` was already true of the code before it was
        declared -- turning it on produced zero errors across all 40 files -- so
