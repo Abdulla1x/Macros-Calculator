@@ -25,6 +25,22 @@ export function dayTotals(meals: readonly Meal[]): DayTotals {
   )
 }
 
+/** The meals a day shows, and the ones it counts, around a deletion.
+ *
+ *  A held meal (still undoable) is shown, struck through, and not counted. A
+ *  gone meal (its delete has been sent) is neither, from the moment it is
+ *  sent until the server stops returning it. The held state ends when the
+ *  line has folded away, 280 ms in, while the reload that drops the meal is
+ *  still on its way: without the gone set, the meal counted again in that gap
+ *  and the totals dropped, came back, then dropped again (owner, P40). */
+export function shownMeals(meals: readonly Meal[], heldId: number | undefined, gone: ReadonlySet<number>): Meal[] {
+  return meals.filter((meal) => meal.id === heldId || !gone.has(meal.id))
+}
+
+export function countedMeals(meals: readonly Meal[], heldId: number | undefined, gone: ReadonlySet<number>): Meal[] {
+  return meals.filter((meal) => meal.id !== heldId && !gone.has(meal.id))
+}
+
 /** What the caption under the calories says, if anything.
  *
  *  Only calories get one. Protein does not move under a plan at all, and

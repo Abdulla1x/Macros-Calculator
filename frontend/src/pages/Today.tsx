@@ -11,13 +11,14 @@ import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
 import { localIsoDate } from '../lib/dates'
 import { isReviewDay } from '../lib/review'
-import { dayTotals, planCaption, viewedDay } from '../lib/today'
+import { countedMeals, dayTotals, planCaption, shownMeals, viewedDay } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
 import type { Meal, PlanDay } from '../types'
 import { useHeldDelete } from '../hooks/useHeldDelete'
 import { useLiveMessage } from '../hooks/useLiveMessage'
+import { useToast } from '../ui/toast'
 
 export default function Today() {
   const { settings } = useSettings()
@@ -122,10 +123,18 @@ export default function Today() {
   // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
   // with the meal in router state; it is held, struck through, for ten
   // seconds before anything is sent (hooks/useHeldDelete.ts).
-  const { held, hold, undo } = useHeldDelete((failure) => {
-    if (failure) setError(failure)
+  // A refused delete is reported in a toast, not in the list's error slot:
+  // that slot replaces the whole list, and the reload below clears it in the
+  // same moment anyway, which is how the message used to vanish unseen. The
+  // reload puts the meal back, so the toast and the list agree.
+  const toast = useToast()
+  const { held, gone, hold, undo, prune } = useHeldDelete((failure) => {
+    if (failure) toast.show({ text: failure })
     load()
   })
+  useEffect(() => {
+    if (meals) prune(meals)
+  }, [meals, prune])
   const [heldNote, setHeldNote] = useState<string | null>(null)
   useLiveMessage(heldNote)
   const location = useLocation()
@@ -139,9 +148,9 @@ export default function Today() {
     navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
   }, [arriving, hold, navigate, location.pathname, location.search])
 
-  // Out of the totals the moment it is deleted, not ten seconds later.
-  const counted = (meals ?? []).filter((meal) => meal.id !== held?.meal.id)
-  const consumed = dayTotals(counted)
+  // Out of the totals the moment it is deleted, not ten seconds later, and
+  // kept out until the server stops returning it.
+  const consumed = dayTotals(countedMeals(meals ?? [], held?.meal.id, gone))
 
   // Checked at render rather than trusted from state. Two day-switches in
   // quick succession can land their responses out of order, and the late one
@@ -172,7 +181,7 @@ export default function Today() {
       </div>
 
       <MealList
-        meals={meals}
+        meals={meals && shownMeals(meals, held?.meal.id, gone)}
         error={error}
         onRetry={load}
         isToday={isToday}

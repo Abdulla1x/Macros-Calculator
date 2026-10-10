@@ -21,6 +21,10 @@ const FOLD_MS = 280
  *  this tab to finish a timer. */
 export function useHeldDelete(onSettled: (error: string | null) => void) {
   const [held, setHeld] = useState<{ meal: Meal; folding: boolean } | null>(null)
+  // Sent, and not to be counted again unless the server refuses: the held
+  // state ends when the line has folded, which is before the reload that drops
+  // the meal has come back (lib/today.ts, shownMeals).
+  const [gone, setGone] = useState<ReadonlySet<number>>(() => new Set())
   const heldRef = useRef<Meal | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const settled = useRef(onSettled)
@@ -32,12 +36,33 @@ export function useHeldDelete(onSettled: (error: string | null) => void) {
     window.clearTimeout(timer.current)
     heldRef.current = null
     // Gone now: the line folds closed, then leaves.
+    setGone((ids) => new Set(ids).add(meal.id))
     setHeld({ meal, folding: true })
     window.setTimeout(() => setHeld((now) => (now?.meal.id === meal.id && now.folding ? null : now)), FOLD_MS)
     api
       .deleteMeal(meal.id)
       .then(() => settled.current(null))
-      .catch(() => settled.current(`"${meal.name}" wasn't deleted. Check your connection, then try again.`))
+      .catch(() => {
+        // Not deleted, so it counts again: the totals must not claim otherwise.
+        setGone((ids) => {
+          const next = new Set(ids)
+          next.delete(meal.id)
+          return next
+        })
+        settled.current(`"${meal.name}" wasn't deleted. Check your connection, then try again.`)
+      })
+  }, [])
+
+  /** Forgets the gone ids a fresh answer no longer contains: the server has
+   *  caught up with them, and nothing should hide a later meal on their
+   *  account. */
+  const prune = useCallback((meals: readonly Meal[]) => {
+    setGone((ids) => {
+      if (ids.size === 0) return ids
+      const present = new Set(meals.map((meal) => meal.id))
+      const next = new Set([...ids].filter((id) => present.has(id)))
+      return next.size === ids.size ? ids : next
+    })
   }, [])
 
   const hold = useCallback(
@@ -78,5 +103,5 @@ export function useHeldDelete(onSettled: (error: string | null) => void) {
     }
   }, [send])
 
-  return { held, hold, undo }
+  return { held, gone, hold, undo, prune }
 }
