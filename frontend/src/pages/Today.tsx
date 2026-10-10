@@ -4,11 +4,13 @@ import { api } from '../api/client'
 import CaloriesBand from '../components/today/CaloriesBand'
 import DateBar from '../components/today/DateBar'
 import MealList from '../components/today/MealList'
+import ReviewCard from '../components/today/ReviewCard'
 import WeighInCard from '../components/today/WeighInCard'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
 import { localIsoDate } from '../lib/dates'
+import { isReviewDay } from '../lib/review'
 import { dayTotals, planCaption, viewedDay } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
@@ -208,6 +210,9 @@ export default function Today() {
           through time, and a tracker that ignored them would be the only part
           of this screen showing a different day from the rest. */}
       <div className="grid content-start grid-cols-[minmax(0,1fr)]">
+        {/* Above the trackers on review day only (Mondays, owner 2026-10-10),
+            and only while looking at today. */}
+        {isToday && isReviewDay(realToday) && <ReviewCard today={realToday} />}
         {/* First: the one tracker every account has, and the one with a
             reminder. */}
         <WeighInCard day={viewedDate} today={realToday} />
