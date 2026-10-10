@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { MAX_ATTACHED_FOODS, MAX_IMAGES, useAnalysis } from '../analysis/AnalysisContext'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { matchItem, perPortion } from '../lib/libraryMatch'
 import type { Confidence, MealAnalysisResponse, Settings } from '../types'
-import AnalysisProgress from './AnalysisProgress'
-import Card from './ui/Card'
+import EstimateStages from './log/EstimateStages'
 import LibraryFoodPicker from './LibraryFoodPicker'
 import SaveIngredientToLibrary from './SaveIngredientToLibrary'
-import TextInput from './ui/TextInput'
-import Button from './ui/Button'
+import { Button, buttonVariants } from '@/ui/button'
+import { FIELD } from '@/ui/field'
+import { CloseIcon, EstimateIcon, PhotoIcon, VoiceIcon } from '@/ui/icons'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
@@ -69,6 +69,7 @@ export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: 
     watch,
   } = useAnalysis()
   useLiveMessage(error)
+  const headingId = useId()
 
   // Open straight away when there is anything to show: a note, photos, an
   // estimate on its way or one already back. Otherwise someone returning to a
@@ -103,18 +104,21 @@ export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: 
       <button
         onClick={() => setExpanded(true)}
         aria-expanded={false}
-        className="w-full rounded-xl border border-dashed border-slate-700 py-3 text-sm text-slate-400 hover:border-emerald-500 hover:text-emerald-300"
+        className="flex min-h-[52px] w-full items-center gap-3 border-y border-rule text-left text-body focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
-        <span aria-hidden="true">✨</span> Estimate macros with AI — describe it,
-        speak it, or snap a photo
+        <EstimateIcon size={18} aria-hidden className="text-ink-2" />
+        Estimate with AI: describe it, say it or snap it
       </button>
     )
   }
 
+  const busy = analyzing || transcribing
   return (
-    <Card as="section">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold">AI meal analysis</h2>
+    <section aria-labelledby={headingId} className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 id={headingId} className="text-field-label text-ink-2">
+          Estimate with AI
+        </h3>
         {/* The expand control and this one are never on screen together -- each
             branch renders one of them -- so each hard-codes the state it is in,
             the way SaveIngredientToLibrary's does. */}
@@ -122,84 +126,106 @@ export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: 
           <button
             onClick={() => setExpanded(false)}
             aria-expanded={true}
-            className="text-xs text-ink-faint hover:text-slate-300"
+            className="min-h-11 px-1 text-small text-ink-2 underline underline-offset-3 hover:text-ink"
           >
             Hide
           </button>
         )}
       </div>
 
-      <p className="mb-3 text-xs text-slate-400">
-        A description or a photo is enough — combine them for a sharper estimate.
-        The mic writes into the description, so you can fix anything it mishears.
-      </p>
+      <label className="grid gap-1">
+        <span className="text-small text-ink-2">Describe it, with weights if you have them</span>
+        <textarea
+          ref={noteRef}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={4}
+          placeholder={'e.g. "150 g chicken, 1 tbsp olive oil, half the rice"'}
+          className={`${FIELD} min-h-24 resize-y py-2.5`}
+        />
+      </label>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs text-slate-400">Describe it</span>
-          <TextInput as="textarea"
-            ref={noteRef}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={4}
-            placeholder={'e.g. "Grilled chicken with ~1 tbsp olive oil, I only ate half the rice"'}
-            className="w-full"
+      <div className="flex flex-wrap gap-2">
+        {/* The mic writes into the description above rather than sending the
+            audio with the estimate, so a misheard word is a typo to fix first. */}
+        {audio.supported && (
+          <Button
+            type="button"
+            onClick={audio.toggle}
+            disabled={transcribing}
+            aria-pressed={audio.recording}
+            variant="secondary"
+            className={audio.recording ? 'border-action text-action' : undefined}
+          >
+            <VoiceIcon size={18} aria-hidden />
+            {audio.recording ? 'Stop recording' : 'Voice note'}
+          </Button>
+        )}
+        {/* A label styled as a button, around the real file input, so the
+            keyboard reaches the input itself and the OS chooser opens as it
+            always did.
+
+            No `capture` attribute, deliberately. It is not a hint: it tells
+            the browser to acquire from a camera and skip the file picker, so
+            on Android it made the gallery unreachable. `accept` alone gets the
+            OS chooser -- Camera, Gallery and Files -- so taking a photo still
+            works. */}
+        <label
+          className={buttonVariants({
+            variant: 'secondary',
+            className: `cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action ${
+              files.length >= MAX_IMAGES ? 'pointer-events-none opacity-45' : ''
+            }`,
+          })}
+        >
+          <PhotoIcon size={18} aria-hidden />
+          Photos
+          <span className="font-normal text-ink-2 tabular-nums">
+            {files.length}/{MAX_IMAGES}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => {
+              addFiles(e.target.files)
+              // Cleared so picking the same file again still fires a change
+              // event -- otherwise removing a photo and re-adding it silently
+              // does nothing.
+              e.target.value = ''
+            }}
+            disabled={files.length >= MAX_IMAGES}
+            className="sr-only"
           />
         </label>
-
-        <div className="block text-sm">
-          <label className="block">
-            <span className="mb-1 block text-xs text-slate-400">
-              Meal photos{' '}
-              <span className="text-ink-faint">
-                ({files.length}/{MAX_IMAGES} — more angles sharpen the estimate)
-              </span>
-            </span>
-            {/* No `capture` attribute, deliberately. It is not a hint: it tells
-                the browser to acquire from a camera and skip the file picker,
-                so on Android it made the gallery unreachable. Desktop has no
-                capture flow to invoke and ignored it, which is why this looked
-                like a phone-only bug for months. `accept` alone gets the OS
-                chooser — Camera, Gallery and Files — so taking a photo still
-                works. */}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => {
-                addFiles(e.target.files)
-                // Cleared so picking the same file again still fires a change
-                // event — otherwise removing a photo and re-adding it silently
-                // does nothing.
-                e.target.value = ''
-              }}
-              disabled={files.length >= MAX_IMAGES}
-              className="block w-full text-xs text-slate-400 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-xs file:text-slate-200 hover:file:bg-slate-700 disabled:opacity-50"
-            />
-          </label>
-          {previewUrls.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {previewUrls.map((url, index) => (
-                <li key={url} className="relative">
-                  <img
-                    src={url}
-                    alt={`Meal photo ${index + 1}`}
-                    className="h-20 w-20 rounded-lg border border-slate-800 object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFile(index)}
-                    aria-label={`Remove photo ${index + 1}`}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-400"
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </div>
+
+      {transcribing && (
+        <p className="text-small text-ink-2">Transcribing. The text lands in the box above, ready to fix.</p>
+      )}
+      {audio.error && <p className="border-l-2 border-ink pl-3 text-small">{audio.error}</p>}
+
+      {previewUrls.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {previewUrls.map((url, index) => (
+            <li key={url} className="relative">
+              <img
+                src={url}
+                alt={`Meal photo ${index + 1}`}
+                className="size-16 rounded-control border border-rule object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeFile(index)}
+                aria-label={`Remove photo ${index + 1}`}
+                className="absolute -top-2 -right-2 grid size-6 place-items-center rounded-tag bg-ink text-ground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                <CloseIcon size={14} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <LibraryFoodPicker
         foods={library}
@@ -209,100 +235,58 @@ export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: 
         onDetach={detach}
       />
 
-      {audio.supported && (
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={audio.toggle}
-            disabled={transcribing}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-60 ${
-              audio.recording
-                ? 'animate-pulse border-rose-500/50 bg-rose-500/10 text-rose-300'
-                : 'border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-emerald-300'
-            }`}
-          >
-            <span aria-hidden="true">🎤</span>{' '}
-            {audio.recording ? 'Stop recording' : 'Record a voice note'}
-          </button>
-          {transcribing && (
-            <span className="text-xs text-slate-400">
-              Transcribing — the text will appear above, ready to edit…
-            </span>
-          )}
-          {audio.error && <span className="text-xs text-rose-400">{audio.error}</span>}
-        </div>
-      )}
-
-      <div className="mt-3 flex items-center gap-3">
-        <Button
-          onClick={() => analyze(false)}
-          disabled={analyzing || transcribing}
-          className="px-5 py-2"
-        >
-          {analyzing ? 'Analyzing…' : analysis ? 'Analyze again' : 'Analyze'}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => analyze(false)} disabled={busy} className="flex-1">
+          {analyzing ? 'Estimating…' : analysis ? 'Estimate again' : 'Estimate'}
         </Button>
         {analysis && (
-          <button
-            onClick={() => analyze(true)}
-            disabled={analyzing || transcribing}
-            className="rounded-lg border border-slate-700 px-5 py-2 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
-          >
+          <Button variant="secondary" onClick={() => analyze(true)} disabled={busy} className="flex-1">
             Refine with my note
-          </button>
+          </Button>
         )}
-        <p className="text-xs text-ink-faint">
-          Estimates are approximate — review before saving.
-        </p>
       </div>
-
       {analysis && (
-        <p className="mt-2 text-xs text-ink-faint">
-          <span className="text-slate-300">Refine</span> adjusts this estimate to your
-          note — use it after correcting an assumption.{' '}
-          <span className="text-slate-300">Analyze again</span> starts over — use it
-          after adding photos.
+        <p className="text-small text-ink-2">
+          Refine adjusts this estimate to your note. Estimate again starts over, for new photos.
         </p>
       )}
 
       {unchangedRerun && (
-        <div
-          role="status"
-          className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300"
-        >
+        <div role="status" className="grid gap-2 border-l-2 border-ink pl-3 text-small">
           <p>
-            Nothing has changed since this estimate: same note, photos and saved
-            foods. Running it again uses one of today's AI estimates and usually
-            moves the numbers only a few percent.
+            Nothing has changed since this estimate: same note, photos and saved foods. Running it
+            again uses one of today's AI estimates and usually moves the numbers only a few percent.
           </p>
-          <div className="mt-2 flex gap-3">
+          <div className="flex flex-wrap gap-2">
             {/* Same rule as the buttons above: a voice note still transcribing
                 is about to change the note, so running now would send it without. */}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => analyze(unchangedRerun === 'refine', true)}
-              disabled={analyzing || transcribing}
-              className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
+              disabled={busy}
             >
               Run it anyway
-            </button>
-            <button
-              type="button"
-              onClick={dismissUnchangedRerun}
-              className="px-1 text-ink-faint hover:text-slate-300"
-            >
+            </Button>
+            <Button variant="ghost" onClick={dismissUnchangedRerun}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      <p className="mt-2 text-xs text-ink-faint">
-        Your photo, voice note, and description are sent to Google Gemini for analysis.
+      <EstimateStages
+        state={progress}
+        photos={files.length}
+        hasNote={note.trim() !== ''}
+        savedFoods={attached.length}
+      />
+
+      {/* Ink and words, never red (DESIGN.md, the No Red Rule). */}
+      {error && <p className="border-l-2 border-ink pl-3 text-small">{error}</p>}
+
+      <p className="text-small text-ink-2">
+        Your note, photos and voice notes go to Google Gemini to be estimated.
       </p>
-
-      <AnalysisProgress state={progress} />
-
-      {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
 
       {analysis && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-800/40 p-4">
@@ -449,6 +433,6 @@ export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: 
           </button>
         </div>
       )}
-    </Card>
+    </section>
   )
 }
