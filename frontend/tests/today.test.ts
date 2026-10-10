@@ -1,7 +1,7 @@
 // Run with `npm test` (see photoSize.test.ts for how).
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { dayTotals, planCaption } from '../src/lib/today.ts'
+import { calorieBalance, dayHeading, dayTotals, litSegments, planCaption, viewedDay } from '../src/lib/today.ts'
 import type { Meal, PlanDay } from '../src/types.ts'
 
 const meal = (calories: number, protein: number, carbs: number | null, fat: number | null): Meal => ({
@@ -53,4 +53,36 @@ test('a plan caption names the day it moves calories to or from', () => {
     planCaption(plan({ calorie_delta: -100, kind: 'compensating', event_date: '2026-10-08' }), false) ?? '',
     /^−100 kcal — making up /,
   )
+})
+
+test('a gauge fills towards its goal and stops there', () => {
+  assert.equal(litSegments(0, 2100, 20), 0)
+  assert.equal(litSegments(1050, 2100, 20), 10)
+  assert.equal(litSegments(2100, 2100, 20), 20)
+  assert.equal(litSegments(3500, 2100, 20), 20)
+  assert.equal(litSegments(40, 2100, 20), 0)
+  assert.equal(litSegments(500, 0, 20), 0)
+  assert.equal(litSegments(-5, 100, 10), 0)
+})
+
+test('the headline is always positive; over says which way', () => {
+  assert.deepEqual(calorieBalance(860.4, 2100), { amount: 1240, over: false })
+  assert.deepEqual(calorieBalance(2100, 2100), { amount: 0, over: false })
+  assert.deepEqual(calorieBalance(2350, 2100), { amount: 250, over: true })
+})
+
+test('the viewed day is a real past date from the address, or today', () => {
+  const today = '2026-10-10'
+  assert.equal(viewedDay(null, today), today)
+  assert.equal(viewedDay('2026-10-07', today), '2026-10-07')
+  assert.equal(viewedDay('2026-10-11', today), today)
+  assert.equal(viewedDay('2026-02-31', today), today)
+  assert.equal(viewedDay('yesterday', today), today)
+  assert.equal(viewedDay('2026-10-10', today), today)
+})
+
+test('the date control says Today and Yesterday by name', () => {
+  assert.match(dayHeading('2026-10-10', '2026-10-10', '2026-10-09'), /^Today, /)
+  assert.match(dayHeading('2026-10-09', '2026-10-10', '2026-10-09'), /^Yesterday, /)
+  assert.doesNotMatch(dayHeading('2026-10-07', '2026-10-10', '2026-10-09'), /Today|Yesterday/)
 })

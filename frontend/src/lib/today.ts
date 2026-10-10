@@ -1,5 +1,5 @@
 import type { Meal, PlanDay } from '../types.ts'
-import { parseIsoDate } from './dates.ts'
+import { localIsoDate, parseIsoDate } from './dates.ts'
 
 /** The arithmetic behind Today, kept apart from the page so it can be tested
  *  without a browser. Nothing in here draws anything. */
@@ -51,4 +51,43 @@ export function planCaption(plan: PlanDay | null, failed: boolean): string | und
     : null
   if (!when) return moved
   return plan.kind === 'planned' ? `${moved} — funding ${when}` : `${moved} — making up ${when}`
+}
+
+/** How many of a gauge's segments are lit. A gauge fills to its goal and no
+ *  further: past the target it is simply full (DESIGN.md: over is drawn
+ *  calmly, never as an alarm). No goal means nothing to fill towards. */
+export function litSegments(value: number, goal: number, segments: number): number {
+  if (!(goal > 0) || !(value > 0)) return 0
+  return Math.round((Math.min(value, goal) / goal) * segments)
+}
+
+/** The headline number: calories left, or by how much the day went over. The
+ *  number shown is always positive; `over` says which word goes above it. */
+export function calorieBalance(eaten: number, target: number): { amount: number; over: boolean } {
+  const left = Math.round(target) - Math.round(eaten)
+  return { amount: Math.abs(left), over: left < 0 }
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/** The day Today shows, from the address's `?day=`. Anything that is not a
+ *  real past date (a typo, a future day, a hand-edited link) shows today
+ *  instead of an error: the page always has a day to show. */
+export function viewedDay(param: string | null, today: string): string {
+  if (!param || !ISO_DAY.test(param) || param >= today) return today
+  // 2026-02-31 parses, and rolls over to March: not a real day.
+  return localIsoDate(parseIsoDate(param)) === param ? param : today
+}
+
+/** The date control's words: "Today, Sat 10 Oct", "Yesterday, Fri 9 Oct",
+ *  or just "Wed 7 Oct" further back. */
+export function dayHeading(day: string, today: string, yesterday: string): string {
+  const date = parseIsoDate(day).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+  if (day === today) return `Today, ${date}`
+  if (day === yesterday) return `Yesterday, ${date}`
+  return date
 }

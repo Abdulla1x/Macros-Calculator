@@ -1,35 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import MacroRing from '../components/MacroRing'
+import CaloriesBand from '../components/today/CaloriesBand'
+import DateBar from '../components/today/DateBar'
 import ShareCodePanel from '../components/ShareCodePanel'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
-import {
-  axisStroke,
-  axisTick,
-  chartMargin,
-  macroHues,
-  shortDate,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from '../lib/chartTheme'
-import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
-import { dayTotals, planCaption } from '../lib/today'
+import { localIsoDate, parseIsoDate } from '../lib/dates'
+import { dayTotals, planCaption, viewedDay } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
-import type { AnalyticsSummary, Meal, PlanDay } from '../types'
+import type { Meal, PlanDay } from '../types'
 import Card from '../components/ui/Card'
-import { primaryButtonClass } from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function Today() {
   const { settings } = useSettings()
   const [meals, setMeals] = useState<Meal[]>([])
-  const [week, setWeek] = useState<AnalyticsSummary | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   // Lifted here rather than held per-row so only one panel is ever open,
   // the same reason confirmDelete above is a single id and not a set.
@@ -42,25 +31,36 @@ export default function Today() {
   useLiveMessage(error)
   const [planDay, setPlanDay] = useState<PlanDay | null>(null)
   const [planFailed, setPlanFailed] = useState(false)
-  const [viewedDate, setViewedDate] = useState(localIsoDate)
-  const todayRef = useRef(localIsoDate())
-  const realToday = localIsoDate()
+  // The day on show lives in the address (`?day=`, absent for today), so it
+  // survives opening a meal and coming back, a reload, and the back button.
+  // The Log panel's own `date` parameter is a different one: which day a new
+  // meal is for.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [realToday, setRealToday] = useState(localIsoDate)
+  const viewedDate = viewedDay(searchParams.get('day'), realToday)
   const isToday = viewedDate === realToday
+  // Replace rather than push: stepping back through a week should not leave a
+  // week of history entries for the back button to walk through again.
+  const showDay = (day: string) =>
+    setSearchParams(
+      (params) => {
+        if (day >= localIsoDate()) params.delete('day')
+        else params.set('day', day)
+        return params
+      },
+      { replace: true },
+    )
   // The Log panel opens over this page. A meal logged from here is for the day
   // being viewed, so a tap while looking at yesterday lands on yesterday; today
   // is the panel's default and is left out of the address.
   const { open: openLog } = useLogPanel()
   const forDay = isToday ? null : viewedDate
 
-  // When the tab regains focus past midnight, roll the view forward — but only
-  // if the user is still on "today", so a day they deliberately navigated to
-  // isn't clobbered. Same-string updates are no-ops.
+  // Past midnight, "today" moves on. A page showing today (no `?day=`) follows
+  // it when the tab regains focus; a day picked on purpose is in the address
+  // and stays put. Same-string updates are no-ops.
   useEffect(() => {
-    const refresh = () => {
-      const now = localIsoDate()
-      setViewedDate((prev) => (prev === todayRef.current ? now : prev))
-      todayRef.current = now
-    }
+    const refresh = () => setRealToday(localIsoDate())
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     return () => {
@@ -70,36 +70,18 @@ export default function Today() {
   }, [])
 
   const load = useCallback(() => {
-    const today = localIsoDate()
     setError(null)
     // A failed load must not masquerade as an empty day.
     api.getMeals(viewedDate).then(setMeals).catch(() => {
       setMeals([])
       setError("Couldn't load your meals — check your connection and try again.")
     })
-    // The 7-day trend stays anchored to the real today, independent of the day
-    // being viewed — and it STOPS AT YESTERDAY.
-    //
-    // The analytics endpoint divides by calendar days in the range, so a range
-    // ending today counts a half-finished day as a whole one: at lunchtime the
-    // average reads hundreds of kcal below what is actually being eaten, which
-    // is exactly when someone checks it. Seven *complete* days is still a
-    // seven-day window, and it is the only one whose average means anything
-    // before bedtime.
-    //
-    // It also settles a calendar disagreement: the server clamps the range end
-    // to its own UTC today, while these dates are local. An end date always in
-    // the past makes that clamp a no-op instead of a timezone-dependent one.
-    api
-      .getAnalytics(addDays(today, -7), addDays(today, -1))
-      .then(setWeek)
-      .catch(() => setWeek(null))
     // The targets actually in force on the viewed day. These are NOT
     // settings.calorie_goal: a calorie plan adjusts a single day, and the
     // server composes the adjustment on top of the stored goals. Resolved
     // there and never recomputed here -- a second definition of these numbers
     // in the client is a second thing that can be wrong, and this one would be
-    // wrong invisibly, as a ring quietly drawn against the wrong target.
+    // wrong invisibly, as a gauge quietly drawn against the wrong target.
     api
       .getPlanDay(viewedDate)
       .then((day) => {
@@ -107,7 +89,7 @@ export default function Today() {
         setPlanFailed(false)
       })
       .catch(() => {
-        // Falls back to the stored goals, and SAYS SO under the ring. A ring
+        // Falls back to the stored goals, and SAYS SO under the gauge. A gauge
         // silently drawn against a target that may be wrong is the kind of
         // wrong nobody reports, because nothing about it looks wrong.
         setPlanDay(null)
@@ -151,8 +133,8 @@ export default function Today() {
 
   // Checked at render rather than trusted from state. Two day-switches in
   // quick succession can land their responses out of order, and the late one
-  // would otherwise draw this day's rings against the other day's target --
-  // silently, since a ring gives no sign which day it was told about. The
+  // would otherwise draw this day's gauge against the other day's target --
+  // silently, since a gauge gives no sign which day it was told about. The
   // stale value is dropped instead, and the goals fall back for the moment it
   // takes the right response to arrive.
   const dayPlan = planDay?.date === viewedDate ? planDay : null
@@ -160,100 +142,20 @@ export default function Today() {
 
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setViewedDate((d) => addDays(d, -1))}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-2 text-slate-300 hover:bg-slate-800"
-              title="Previous day"
-              aria-label="Previous day"
-            >
-              ◀
-            </button>
-            <button
-              onClick={() => setViewedDate((d) => addDays(d, 1))}
-              disabled={isToday}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-2 text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Next day"
-              aria-label="Next day"
-            >
-              ▶
-            </button>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">
-                {isToday
-                  ? 'Today'
-                  : parseIsoDate(viewedDate).toLocaleDateString(undefined, { weekday: 'long' })}
-              </h1>
-              {!isToday && (
-                <button
-                  onClick={() => setViewedDate(localIsoDate())}
-                  className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300 hover:bg-slate-700"
-                >
-                  Jump to today
-                </button>
-              )}
-            </div>
-            <input
-              type="date"
-              value={viewedDate}
-              max={realToday}
-              onChange={(e) => e.target.value && setViewedDate(e.target.value)}
-              className="mt-1 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-base sm:text-sm text-slate-400"
-              aria-label="Pick a date"
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => openLog('start', { date: forDay })}
-          className={`${primaryButtonClass} px-5 py-2.5`}
-        >
-          + Log a meal
-        </button>
-      </header>
-
-      {settings && goals && (
-        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MacroRing
-            label="Calories"
-            value={consumed.calories}
-            goal={goals.calorie_goal}
-            unit="kcal"
-            color={macroHues.calories}
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 desk:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] desk:gap-x-10">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 desk:col-span-2">
+        <DateBar day={viewedDate} today={realToday} onChange={showDay} />
+        {settings && goals && (
+          <CaloriesBand
+            day={viewedDate}
+            eaten={consumed}
+            targets={goals}
             caption={planCaption(dayPlan, planFailed)}
+            trackCarbs={settings.track_carbs}
+            trackFat={settings.track_fat}
           />
-          <MacroRing
-            label="Protein"
-            value={consumed.protein}
-            goal={goals.protein_goal}
-            unit="g"
-            color={macroHues.protein}
-          />
-          {settings.track_carbs && (
-            <MacroRing
-              label="Carbs"
-              value={consumed.carbs}
-              goal={goals.carbs_goal}
-              unit="g"
-              color={macroHues.carbs}
-            />
-          )}
-          {settings.track_fat && (
-            <MacroRing
-              label="Fat"
-              value={consumed.fat}
-              goal={goals.fat_goal}
-              unit="g"
-              color={macroHues.fat}
-            />
-          )}
-        </section>
-      )}
+        )}
+      </div>
 
       {/* The entire discovery path for calorie planning, and deliberately a
           plain standing link rather than something that appears when you go
@@ -263,16 +165,17 @@ export default function Today() {
           a planning tool into a loop. This is here whether the day went well or
           badly, and it waits to be looked for. */}
       {settings && (
-        <div className="-mt-2 text-right">
+        <div className="text-right desk:col-span-2">
           <Link
             to={`/settings/goals?plan=${viewedDate}`}
-            className="text-xs text-ink-faint hover:text-slate-300"
+            className="text-small text-ink-2 underline underline-offset-3 hover:text-ink"
           >
             Plan a bigger day, or spread one you already had →
           </Link>
         </div>
       )}
 
+      <div className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
       {/* Directly above the meal list, which is now its only trigger on this
           page: template sharing moved to Settings -> Library along with the
           rest of template management. */}
@@ -289,8 +192,7 @@ export default function Today() {
         />
       )}
 
-      <section className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+        <Card>
           <h2 className="mb-3 font-semibold">
             {isToday
               ? "Today's meals"
@@ -381,82 +283,12 @@ export default function Today() {
           )}
         </Card>
 
-        <Card className="lg:col-span-2">
-          {/* "Previous", not "Last": the range ends yesterday. Today is already
-              on this page in full — the rings and the meal list above — so
-              leaving it out of the trend costs nothing and keeps the chart and
-              the average below it telling the same story. */}
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-semibold">Previous 7 days</h2>
-            {/* The review covers exactly this window, so the link belongs on
-                the numbers it summarises rather than in a card of its own.
-                Outside the `week &&` guard below on purpose: a week with
-                nothing logged is precisely when "you logged no meals, so there
-                is nothing to review yet" is worth reading. */}
-            <Link to="/review" className="text-xs text-ink-muted underline hover:text-emerald-300">
-              Weekly review →
-            </Link>
-          </div>
-          {week && week.days.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={week.days} margin={chartMargin}>
-                <defs>
-                  <linearGradient id="calGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={macroHues.calories} stopOpacity={0.5} />
-                    <stop offset="100%" stopColor={macroHues.calories} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  tick={axisTick}
-                  tickFormatter={shortDate}
-                  stroke={axisStroke}
-                />
-                <YAxis tick={axisTick} stroke={axisStroke} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelStyle={tooltipLabelStyle}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="calories"
-                  stroke={macroHues.calories}
-                  strokeWidth={2}
-                  fill="url(#calGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="py-6 text-center text-sm text-ink-faint">
-              Nothing logged in the seven days before today.
-            </p>
-          )}
-          {week && week.days.length > 0 && (
-            <p className="mt-2 text-xs text-slate-400">
-              Avg {Math.round(week.averages.calories)} kcal ·{' '}
-              {Math.round(week.averages.protein)} g protein per day
-              {/* The denominator, in the open. Averaging over logged days is
-                  what stops a forgotten day reading as a fasting day, but it
-                  does mean the figure is built from fewer days than the card's
-                  title suggests — so say how many. */}
-              <span className="text-ink-faint">
-                {' '}
-                over {week.logged_days} logged day
-                {week.logged_days === 1 ? '' : 's'}, excluding today
-              </span>
-            </p>
-          )}
-        </Card>
-      </section>
+      </div>
 
       {/* The three daily trackers.
 
-          One section holding a grid, not a stack of full-width cards — this is
-          where steps and supplements landed, and three trackers each taking a
-          full row would push the meal list off the first screen on a phone.
-          Adding another is adding a child here.
-
-          It sits below the rings because those are the primary targets, and
+          The right-hand column from 900px, below the meals on a phone. They
+          sit below the calories because those are the primary targets, and
           below the meal list because that is what you came to read. These three
           are a glance, and a glance is what goes last. It used to sit ABOVE the
           meal list, which is how a phone ended up asking for five screens of
@@ -468,14 +300,14 @@ export default function Today() {
           now "Saved meals", which settles it from the other end: these are
           trackers, and the thing that logs meals is named after meals.
 
-          `viewedDate`, not today: the header's ◀ ▶ already move the whole page
+          `viewedDate`, not today: the date bar's ◀ ▶ already move the whole page
           through time, and a tracker that ignored them would be the only part
           of this screen showing a different day from the rest. */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <section aria-label="Trackers" className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
         <WaterCard date={viewedDate} />
         <StepsCard date={viewedDate} />
         {/* Renders nothing until there is a supplement to tick, so the grid is
-            two cards wide for an account that has not set any up. The entry
+            two cards long for an account that has not set any up. The entry
             point is Settings; a permanent empty card would spend prime space
             explaining a feature once. */}
         <SupplementsCard date={viewedDate} />
