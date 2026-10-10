@@ -413,7 +413,7 @@ export default function LogMeal() {
       {/* Only when editing: a new meal starts from the AI box on the panel's
           first screen, but re-estimating a meal already logged happens here,
           where the form it fills is right below. */}
-      {editMeal && <MealAnalyzer settings={settings} onApply={applyAnalysis} />}
+      {editMeal && <MealAnalyzer onApply={applyAnalysis} />}
 
       <section className="space-y-4">
         {rows.map((row, index) => (

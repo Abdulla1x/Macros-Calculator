@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 import MealAnalyzer from '../MealAnalyzer'
 import MealCodeInput from '../MealCodeInput'
 import { addDays, localIsoDate, parseIsoDate } from '../../lib/dates'
-import { useSettings } from '../../settings/SettingsContext'
 import { Chip } from '@/ui/chip'
 import { NextIcon } from '@/ui/icons'
 import { logDate } from './logPanelUrl'
@@ -19,7 +18,6 @@ const ROW =
  *  ways in. */
 export default function LogStart() {
   const { search } = useLocation()
-  const { settings } = useSettings()
   const { open, setDate } = useLogPanel()
   const [pasting, setPasting] = useState(false)
 
@@ -66,7 +64,6 @@ export default function LogStart() {
       </fieldset>
 
       <MealAnalyzer
-        settings={settings}
         alwaysOpen
         onApply={() => open('hand', { state: { fromEstimate: true } })}
       />
