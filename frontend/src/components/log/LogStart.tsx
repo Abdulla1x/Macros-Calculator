@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import MealAnalyzer from '../MealAnalyzer'
 import MealCodeInput from '../MealCodeInput'
-import { addDays, localIsoDate, parseIsoDate } from '../../lib/dates'
-import { Chip } from '@/ui/chip'
+import { localIsoDate } from '../../lib/dates'
 import { NextIcon } from '@/ui/icons'
+import DayChips from './DayChips'
 import { logDate } from './logPanelUrl'
 import { RecentMeals, SavedMeals } from './MealShortcuts'
 import { useLogPanel } from './useLogPanel'
@@ -22,46 +22,13 @@ export default function LogStart() {
   const [pasting, setPasting] = useState(false)
 
   const today = localIsoDate()
-  const yesterday = addDays(today, -1)
   const date = logDate(search) ?? today
-  const other = date !== today && date !== yesterday
-  const chipDate = parseIsoDate(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <div className="grid gap-5">
-      {/* "For" rather than a date field: nearly every meal is today's or
-          yesterday's, so those are one tap, and anything older is the native
-          picker behind "Other day". */}
-      <fieldset className="grid gap-2">
-        <legend className="mb-2 text-field-label text-ink-2">For</legend>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Chip pressed={date === today} onClick={() => setDate(null)}>
-            Today
-          </Chip>
-          <Chip pressed={date === yesterday} onClick={() => setDate(yesterday)}>
-            Yesterday
-          </Chip>
-          <label
-            className={`relative inline-flex h-9 items-center rounded-control border-[1.5px] px-3 text-[13.5px] font-semibold focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action ${
-              other ? 'border-ink bg-ink text-ground' : 'border-rule text-ink hover:border-ink'
-            }`}
-          >
-            {other ? chipDate : 'Other day'}
-            {/* The native picker, laid invisibly over the chip: on a phone it
-                opens the system calendar, which beats any picker drawn here. */}
-            <input
-              type="date"
-              // Contains the words on the chip, so a voice command naming what
-              // is on screen finds it (WCAG 2.5.3, label in name).
-              aria-label={other ? `${chipDate}, pick another day` : 'Other day'}
-              value={date}
-              max={today}
-              onChange={(event) => event.target.value && setDate(event.target.value === today ? null : event.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
-            />
-          </label>
-        </div>
-      </fieldset>
+      {/* "For" rather than a date field: the day travels in the address, so
+          the by-hand form and a saved estimate land on it. */}
+      <DayChips legend="For" value={date} onChange={(day) => setDate(day === today ? null : day)} />
 
       <MealAnalyzer
         alwaysOpen

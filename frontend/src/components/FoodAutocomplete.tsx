@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { Food, FoodCreate, OFFProduct, ReferenceFood } from '../types'
 import { SOURCE_BADGE, SOURCE_NAME } from '../lib/foodSources'
-import TextInput, { inputSurfaceClass } from './ui/TextInput'
+import { FIELD } from '@/ui/field'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
@@ -62,11 +62,22 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
   const [offLoading, setOffLoading] = useState(false)
   const [offError, setOffError] = useState<string | null>(null)
   useLiveMessage(offError)
+  // UA-22: Open Food Facts rows land at the END of the list, under the library
+  // and the tables, so with six or more matches above them they arrived below
+  // the fold, and the only sign anything happened was the button vanishing; a
+  // screen reader heard nothing at all. Now the count is said, on screen and
+  // aloud, and the first of them is scrolled into view (effect below).
+  const offNotice =
+    offResults && offResults.length > 0
+      ? `${offResults.length} ${offResults.length === 1 ? 'result' : 'results'} from Open Food Facts`
+      : null
+  useLiveMessage(offNotice)
   // -1 is "no row is current", which is the state the panel opens in. Typing a
   // name and pressing Enter must submit what was typed, not silently swap in
   // whatever happened to be first in a list the user has not looked at.
   const [activeIndex, setActiveIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const skipNextSearch = useRef(false)
   // Stable across renders and unique per instance -- LogMeal renders one of
@@ -106,7 +117,11 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
           setReferenceResults(reference.status === 'fulfilled' ? reference.value : [])
           setOffResults(null)
           setOffError(null)
-          setOpen(true)
+          // Only while the user is in the field. The form also fills names
+          // itself -- a saved meal, a copied meal, an AI estimate -- and a
+          // list opening on its own then covered the very form it was filling.
+          // Focusing the field later reopens it (onFocus below).
+          setOpen(document.activeElement === inputRef.current)
         },
       )
     }, 250)
@@ -140,6 +155,19 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
       ?.querySelector(`#${CSS.escape(optionId(activeIndex))}`)
       ?.scrollIntoView({ block: 'nearest' })
   })
+
+  // Bring the first Open Food Facts row into view when they arrive. "nearest"
+  // scrolls the list only as far as needed, and never the page around it.
+  const firstOffIndex = localResults.length + referenceResults.length
+  useEffect(() => {
+    if (!offResults || offResults.length === 0) return
+    listRef.current
+      ?.querySelector(`#${CSS.escape(optionId(firstOffIndex))}`)
+      ?.scrollIntoView({ block: 'nearest' })
+    // Only when a new set of results arrives; optionId is derived from a
+    // stable id, and the index is fixed for that set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offResults])
 
   const pick = (food: FoodCreate, fromLibrary: boolean) => {
     skipNextSearch.current = true
@@ -221,14 +249,16 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
 
   return (
     <div ref={containerRef} className="relative">
-      <TextInput
+      <input
+        ref={inputRef}
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => value.trim().length >= 2 && setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder="Type a food name…"
-        className="w-full"
+        aria-label="Food name"
+        className={FIELD}
         role="combobox"
         aria-expanded={listboxOpen}
         aria-controls={listboxOpen ? listId : undefined}
@@ -237,20 +267,18 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
           listboxOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined
         }
       />
-      {/* The panel below is deliberately the input's own border and ground rather
-          than a Card: it is the drawer belonging to the field above it, and
-          reading as a separate surface would break that. */}
+      {/* The drawer belonging to the field above: the field's ground, with an
+          ink border rather than a shadow to stand it apart from the page (the
+          Flat Rule). */}
       {open && (
-        <div
-          className={`absolute z-40 mt-1 w-full overflow-hidden ${inputSurfaceClass} shadow-xl`}
-        >
+        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-control border-[1.5px] border-ink bg-field">
           {suggestions.length > 0 && (
             <ul
               ref={listRef}
               id={listId}
               role="listbox"
               aria-label="Food suggestions"
-              className="max-h-56 overflow-y-auto"
+              className="max-h-64 overflow-y-auto"
             >
               {suggestions.map((suggestion, index) => {
                 const food = suggestion.kind === 'off' ? suggestion.product : suggestion.food
@@ -271,25 +299,27 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                       choose(suggestion)
                     }}
                     onMouseEnter={() => setActiveIndex(index)}
-                    className={`flex cursor-pointer items-center justify-between px-3 py-2 text-left text-sm ${
-                      active ? 'bg-slate-700' : ''
+                    className={`flex min-h-11 cursor-pointer items-center justify-between gap-3 border-b border-rule px-3 py-2 text-left last:border-b-0 ${
+                      active ? 'bg-ink/10' : ''
                     }`}
                   >
-                    <span>
-                      <span className="font-medium">{food.name}</span>
-                      {suggestion.kind === 'off' && suggestion.product.brand && (
-                        <span className="ml-2 text-xs text-ink-faint">
-                          {suggestion.product.brand}
-                        </span>
-                      )}
-                      <span className="ml-2 text-xs text-slate-400">{macroSummary(food)}</span>
+                    <span className="grid min-w-0">
+                      <span className="truncate text-body">
+                        {food.name}
+                        {suggestion.kind === 'off' && suggestion.product.brand && (
+                          <span className="ml-2 text-small text-ink-2">{suggestion.product.brand}</span>
+                        )}
+                      </span>
+                      <span className="text-small text-ink-2 tabular-nums">{macroSummary(food)}</span>
                     </span>
-                    {/* Library rows grey, online rows blue: the first question is
-                        "is this mine?", the second "whose figures are these?".
-                        The visible badge is a short code; the full name goes to
-                        screen readers, for whom "FR" alone says little. */}
+                    {/* The fact colour for the user's own foods (DESIGN.md: it
+                        marks values from their saved foods), plain ink 2 for
+                        everyone else's: the first question is "is this mine?",
+                        the second "whose figures are these?". The visible tag
+                        is a short code; the full name goes to screen readers,
+                        for whom "FR" alone says little. */}
                     {suggestion.kind === 'local' ? (
-                      <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase text-slate-200">
+                      <span className="shrink-0 rounded-tag border-[1.5px] border-fact px-1.5 text-[11px] font-bold tracking-[0.04em] text-fact uppercase">
                         <span aria-hidden="true">
                           {suggestion.food.source === 'user' ? 'library' : SOURCE_BADGE[suggestion.food.source]}
                         </span>
@@ -300,7 +330,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                         </span>
                       </span>
                     ) : (
-                      <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
+                      <span className="shrink-0 rounded-tag border-[1.5px] border-ink-2 px-1.5 text-[11px] font-bold tracking-[0.04em] text-ink-2 uppercase">
                         <span aria-hidden="true">{SOURCE_BADGE[food.source]}</span>
                         <span className="sr-only">{SOURCE_NAME[food.source]}</span>
                       </span>
@@ -316,7 +346,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
               type="button"
               onClick={searchOff}
               disabled={offLoading}
-              className="w-full border-t border-slate-700 px-3 py-2 text-left text-sm text-emerald-300 hover:bg-slate-700 disabled:opacity-60"
+              className="min-h-11 w-full border-t border-rule px-3 py-2 text-left text-small font-semibold text-action underline underline-offset-3 hover:bg-ink/5 disabled:opacity-45"
             >
               {offLoading
                 ? 'Searching Open Food Facts…'
@@ -325,14 +355,17 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                   : 'Packaged product? Search Open Food Facts'}
             </button>
           ) : offResults.length === 0 ? (
-            <p className="border-t border-slate-700 px-3 py-2 text-sm text-slate-400">
-              No packaged products found on Open Food Facts. Enter the macros manually below.
+            <p className="border-t border-rule px-3 py-2 text-small text-ink-2">
+              No packaged products found on Open Food Facts. Enter the numbers below.
             </p>
-          ) : null}
-
-          {offError && (
-            <p className="border-t border-slate-700 px-3 py-2 text-sm text-rose-400">{offError}</p>
+          ) : (
+            <p className="border-t border-rule px-3 py-2 text-small text-ink-2">
+              {offNotice}, at the end of the list.
+            </p>
           )}
+
+          {/* Ink and words, never red (DESIGN.md, the No Red Rule). */}
+          {offError && <p className="border-t border-rule px-3 py-2 text-small">{offError}</p>}
         </div>
       )}
     </div>
