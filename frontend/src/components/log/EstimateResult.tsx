@@ -139,8 +139,13 @@ export default function EstimateResult({
             {round(totals.calories).toLocaleString()}
             <span className="ml-1 text-small font-semibold text-ink-2">kcal</span>
           </span>
+          {/* How sure the model is of the whole meal, in the same words as
+              each item, beside the range it qualifies. Ink, never a coloured
+              badge: a guess is not a warning. */}
           <span className="text-small text-ink-2 tabular-nums">
             likely {round(analysis.calories.low).toLocaleString()} to {round(analysis.calories.high).toLocaleString()}
+            {' · '}
+            {CONFIDENCE[analysis.confidence]}
           </span>
         </p>
         <p className="text-small text-ink-2 tabular-nums">{macroLine}</p>
