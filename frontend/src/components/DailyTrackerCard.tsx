@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { litSegments } from '../lib/today'
 import Explainer from '@/ui/explainer'
 import Gauge from '@/ui/gauge'
+import RollingNumber from '@/ui/rolling-number'
 import Tracker from './today/Tracker'
 
 /**
@@ -65,7 +66,11 @@ export default function DailyTrackerCard({
       value={
         valueText ?? (
           <span>
-            <span className="font-semibold">{n(value)}</span>
+            {/* Rolls like the calories figure (owner's pick, after the P40
+                test found water and steps "static or sudden"). */}
+            <span className="font-semibold">
+              <RollingNumber value={value} />
+            </span>
             <span className="text-ink-2">
               {hasGoal && ` / ${n(goal!)}`} {unit}
             </span>
