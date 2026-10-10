@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import CaloriesBand from '../components/today/CaloriesBand'
 import DateBar from '../components/today/DateBar'
 import MealList from '../components/today/MealList'
+import WeighInCard from '../components/today/WeighInCard'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
@@ -70,26 +71,44 @@ export default function Today() {
       setMeals(null)
       setError("Couldn't load your meals. Check your connection, then try again.")
     })
-    // The targets actually in force on the viewed day. These are NOT
-    // settings.calorie_goal: a calorie plan adjusts a single day, and the
-    // server composes the adjustment on top of the stored goals. Resolved
-    // there and never recomputed here -- a second definition of these numbers
-    // in the client is a second thing that can be wrong, and this one would be
-    // wrong invisibly, as a gauge quietly drawn against the wrong target.
+  }, [viewedDate])
+
+  // The targets actually in force on the viewed day. These are NOT
+  // settings.calorie_goal: a calorie plan adjusts a single day, and the
+  // server composes the adjustment on top of the stored goals. Resolved
+  // there and never recomputed here -- a second definition of these numbers
+  // in the client is a second thing that can be wrong, and this one would be
+  // wrong invisibly, as a gauge quietly drawn against the wrong target.
+  //
+  // Fetched again whenever the stored goals change, not only per day: a
+  // weigh-in saved from this page rewrites them when targets are worked out
+  // automatically, and the band must follow without a reload.
+  const storedGoals = settings
+    ? `${settings.calorie_goal}/${settings.protein_goal}/${settings.carbs_goal}/${settings.fat_goal}`
+    : ''
+  useEffect(() => {
+    // Only the latest request may answer: two goal changes in quick
+    // succession must not let the older response land last.
+    let live = true
     api
       .getPlanDay(viewedDate)
       .then((day) => {
+        if (!live) return
         setPlanDay(day)
         setPlanFailed(false)
       })
       .catch(() => {
+        if (!live) return
         // Falls back to the stored goals, and SAYS SO under the gauge. A gauge
         // silently drawn against a target that may be wrong is the kind of
         // wrong nobody reports, because nothing about it looks wrong.
         setPlanDay(null)
         setPlanFailed(true)
       })
-  }, [viewedDate])
+    return () => {
+      live = false
+    }
+  }, [viewedDate, storedGoals])
 
   useEffect(() => {
     load()
@@ -188,7 +207,10 @@ export default function Today() {
           `viewedDate`, not today: the date bar's ◀ ▶ already move the whole page
           through time, and a tracker that ignored them would be the only part
           of this screen showing a different day from the rest. */}
-      <section aria-label="Trackers" className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
+      <div className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
+        {/* First: the one tracker every account has, and the one with a
+            reminder. */}
+        <WeighInCard day={viewedDate} today={realToday} />
         <WaterCard date={viewedDate} />
         <StepsCard date={viewedDate} />
         {/* Renders nothing until there is a supplement to tick, so the grid is
@@ -196,7 +218,7 @@ export default function Today() {
             point is Settings; a permanent empty card would spend prime space
             explaining a feature once. */}
         <SupplementsCard date={viewedDate} />
-      </section>
+      </div>
     </div>
   )
 }
