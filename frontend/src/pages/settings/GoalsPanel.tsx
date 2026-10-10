@@ -29,7 +29,7 @@ const goalFields: GoalField[] = [
  */
 export default function GoalsPanel() {
   const { settings, update, guard, onRejected, targetsKey } = useSettingsPanel()
-  // The day the dashboard was showing when the planning link was followed, so
+  // The day being looked at when a planning link was followed, so
   // the planner opens on it rather than on today. Absent when Settings is
   // reached any other way, which is the ordinary case.
   //
@@ -38,7 +38,11 @@ export default function GoalsPanel() {
   // bookmarked, and this app has already shipped one bug from state outliving
   // what it described (a shared-meal notice that stayed on screen over the next
   // meal typed by hand). A param has neither failure mode.
-  const planDate = useSearchParams()[0].get('plan') ?? undefined
+  const [search] = useSearchParams()
+  const planDate = search.get('plan') ?? undefined
+  // Which form the day screen's row asked for, if any.
+  const kind = search.get('kind')
+  const planKind = kind === 'planned' || kind === 'compensating' ? kind : undefined
 
   const showGoal = (key: GoalField['key']) =>
     key === 'carbs_goal' ? settings.track_carbs : key === 'fat_goal' ? settings.track_fat : true
@@ -130,7 +134,7 @@ export default function GoalsPanel() {
 
       <BodyTargetsCard reloadKey={targetsKey} unit={settings.weight_unit} />
 
-      <CaloriePlanSection onRejected={onRejected} initialDate={planDate} />
+      <CaloriePlanSection onRejected={onRejected} initialDate={planDate} initialKind={planKind} />
     </div>
   )
 }

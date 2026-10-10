@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { addDays, dayRange, localIsoDate, parseIsoDate } from '../../lib/dates'
 import { MAX_PLAN_DAYS, MAX_PLAN_HORIZON_DAYS, validatePlan } from '../../lib/limits'
@@ -49,11 +49,16 @@ const humaniseDates = (message: string) =>
 export default function CaloriePlanSection({
   onRejected,
   initialDate,
+  initialKind,
 }: {
   onRejected: (message: string) => void
-  /** Prefills the day being planned around, when arriving from the dashboard
-   *  link rather than from the settings page itself. */
+  /** Prefills the day being planned around, when arriving from a day's
+   *  numbers rather than from the settings page itself. */
   initialDate?: string
+  /** Opens that kind of plan straight away: the day screen offers "Plan a
+   *  bigger day" and "Make up a day" as two rows, and each should land on its
+   *  own form rather than on a choice the user already made. */
+  initialKind?: PlanKind
 }) {
   const [plans, setPlans] = useState<CaloriePlan[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,6 +155,18 @@ export default function CaloriePlanSection({
       setEventDate(initialDate && initialDate >= today ? initialDate : today)
     }
   }
+
+  // Once, on arrival. A ref rather than an empty dependency list, because
+  // `open` is a fresh function every render and the rule about listing it is
+  // right in general; here it must not re-run when it changes.
+  const form = useRef<HTMLDivElement>(null)
+  const opened = useRef(false)
+  useEffect(() => {
+    if (!initialKind || opened.current) return
+    opened.current = true
+    open(initialKind)
+    requestAnimationFrame(() => form.current?.scrollIntoView({ block: 'center' }))
+  })
 
   const close = () => {
     setError('')
@@ -309,7 +326,7 @@ export default function CaloriePlanSection({
           </button>
         </div>
       ) : (
-        <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-950 p-4">
+        <div ref={form} className="space-y-4 rounded-lg border border-slate-800 bg-slate-950 p-4">
           <div className="flex flex-wrap items-end gap-4">
             <label className="text-sm">
               <span className="block text-slate-400">
