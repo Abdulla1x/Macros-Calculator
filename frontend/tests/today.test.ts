@@ -4,11 +4,13 @@ import { test } from 'node:test'
 import {
   calorieBalance,
   changedDigits,
+  countedMeals,
   dayHeading,
   dayTotals,
   litSegments,
   mealTimeLabel,
   planCaption,
+  shownMeals,
   viewedDay,
 } from '../src/lib/today.ts'
 import type { Meal, PlanDay } from '../src/types.ts'
@@ -114,4 +116,21 @@ test('a meal shows the time it was logged only when logged on its own day', () =
   assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: null }, true), null)
   assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: at(2026, 10, 10, 8, 10) }, false), null)
   assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: 'garbage' }, true), null)
+})
+
+test('a deleted meal stops counting when it is held and stays out once it is sent', () => {
+  const day = [1, 2, 3].map((id) => ({ ...meal(100 * id, 10, null, null), id }))
+  const ids = (meals: Meal[]) => meals.map((m) => m.id)
+  // Held: still on screen, struck through, but out of the totals.
+  assert.deepEqual(ids(shownMeals(day, 2, new Set())), [1, 2, 3])
+  assert.deepEqual(ids(countedMeals(day, 2, new Set())), [1, 3])
+  // Sent and folding: still drawn (the fold plays), still not counted.
+  assert.deepEqual(ids(shownMeals(day, 2, new Set([2]))), [1, 2, 3])
+  assert.deepEqual(ids(countedMeals(day, 2, new Set([2]))), [1, 3])
+  // Folded, the reload not back yet: the gap that flickered. Neither shown
+  // nor counted.
+  assert.deepEqual(ids(shownMeals(day, undefined, new Set([2]))), [1, 3])
+  assert.deepEqual(ids(countedMeals(day, undefined, new Set([2]))), [1, 3])
+  // Nothing deleted: everything counts.
+  assert.deepEqual(ids(countedMeals(day, undefined, new Set())), [1, 2, 3])
 })
