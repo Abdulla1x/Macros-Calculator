@@ -119,11 +119,16 @@
   /* The page changing: DESIGN.md's tab-change crossfade, 150ms. */
   --animate-route-in: route-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* DESIGN.md's catalogue, Today's two: a gauge segment lighting (220ms; the
-   * caller staggers them 35ms apart) and a changed digit rolling into place
-   * (320ms, 0.45em, 40ms apart from the right). `backwards` keeps a delayed
-   * segment dark until its turn instead of flashing on first. */
+  /* DESIGN.md's catalogue, Today's two: a gauge segment lighting and a
+   * changed digit rolling into place (320ms, 0.45em, 40ms apart from the
+   * right). A gauge first drawn fades its segments in (220ms); one that grows
+   * afterwards sweeps: each new segment lights in the action colour and settles
+   * to its fill (760ms, 45ms apart), so a bright edge runs along the gauge and
+   * leaves the new total behind (owner's pick from a prototype, after the P40
+   * test found the fade easy to miss). `backwards` keeps a delayed segment dark
+   * until its turn instead of flashing on first. */
   --animate-segment-on: segment-on 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-segment-sweep: segment-sweep 760ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-roll-up: roll-up 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-roll-down: roll-down 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 
@@ -166,6 +171,17 @@
     opacity: 0;
   }
 }
+/* No `to`: the segment settles to its own fill, whichever tone it is in. */
+@keyframes segment-sweep {
+  0% {
+    opacity: 0;
+    background-color: var(--color-action);
+  }
+  22% {
+    opacity: 1;
+    background-color: var(--color-action);
+  }
+}
 @keyframes roll-up {
   from {
     opacity: 0;
@@ -204,6 +220,7 @@
     --animate-route-in: route-in 120ms linear;
     /* A short fade with no stagger, and numbers that simply change. */
     --animate-segment-on: segment-on 120ms linear;
+    --animate-segment-sweep: segment-on 120ms linear;
     --animate-roll-up: none;
     --animate-roll-down: none;
     /* The strike is simply there. The drain stays: it is not decoration but
