@@ -17,6 +17,9 @@ interface Props {
   // the same matches this component displays, and re-fetching there would be a
   // second request for an answer already in memory.
   onApply: (analysis: MealAnalysisResponse, foods: LibraryContext) => void
+  /** Always shown, with no Hide: the Log panel puts AI first, so folding it
+   *  away behind a button would undo that. */
+  alwaysOpen?: boolean
 }
 
 const confidenceBadge: Record<Confidence, string> = {
@@ -37,7 +40,7 @@ const round = (value: number) => Math.round(value)
  *  photos, the call in flight and its answer -- lives in AnalysisProvider, so
  *  leaving the page no longer throws an estimate away; this component only
  *  draws it. */
-export default function MealAnalyzer({ settings, onApply }: Props) {
+export default function MealAnalyzer({ settings, onApply, alwaysOpen = false }: Props) {
   const {
     note,
     setNote,
@@ -70,9 +73,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   // Open straight away when there is anything to show: a note, photos, an
   // estimate on its way or one already back. Otherwise someone returning to a
   // running estimate would find it folded away behind the button.
-  const [expanded, setExpanded] = useState(
+  const [expandedByUser, setExpanded] = useState(
     () => note !== '' || files.length > 0 || analyzing || analysis !== null,
   )
+  const expanded = alwaysOpen || expandedByUser
 
   // While this is on screen the provider knows an estimate that lands has been
   // seen, so it neither shows a toast nor puts "Ready" on the Log button.
@@ -114,13 +118,15 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
         {/* The expand control and this one are never on screen together -- each
             branch renders one of them -- so each hard-codes the state it is in,
             the way SaveIngredientToLibrary's does. */}
-        <button
-          onClick={() => setExpanded(false)}
-          aria-expanded={true}
-          className="text-xs text-ink-faint hover:text-slate-300"
-        >
-          Hide
-        </button>
+        {!alwaysOpen && (
+          <button
+            onClick={() => setExpanded(false)}
+            aria-expanded={true}
+            className="text-xs text-ink-faint hover:text-slate-300"
+          >
+            Hide
+          </button>
+        )}
       </div>
 
       <p className="mb-3 text-xs text-slate-400">
@@ -435,7 +441,11 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
             onClick={() => onApply(analysis, { attached, library })}
             className="mt-4 w-full rounded-lg border border-emerald-500/50 bg-emerald-500/10 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"
           >
-            Use these ingredients ↓ (edit them below before saving)
+            {/* In the Log panel the form is the next screen; when editing a
+                meal it is right below. */}
+            {alwaysOpen
+              ? 'Use these ingredients → (check them before saving)'
+              : 'Use these ingredients ↓ (edit them below before saving)'}
           </button>
         </div>
       )}

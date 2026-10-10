@@ -168,7 +168,10 @@ async function stableSnapshot(page, attempts = 30, intervalMs = 300) {
   throw new Error(`DOM never settled after ${attempts} reads; something is animating forever`)
 }
 
-const fileNameFor = (route) => `${route === '/' ? 'index' : route.slice(1).replaceAll('/', '_')}.html`
+// A query string is part of a route now ('/?log', the Log panel over Today),
+// and `?` has no business in a file name.
+const fileNameFor = (route) =>
+  `${route === '/' ? 'index' : route.slice(1).replaceAll('/', '_').replace(/[?&=]+/g, '_').replace(/^_/, 'index_')}.html`
 
 const capture = (context, routes, label) =>
   visitRoutes(context, routes, async (page, route) => {

@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { AnimatePresence, m } from 'motion/react'
 import { CloseIcon } from '@/ui/icons'
 import { DURATION, SPRING } from '@/lib/motion'
@@ -14,7 +13,9 @@ import { DURATION, SPRING } from '@/lib/motion'
  *  "Ready" state. */
 export interface ToastInput {
   text: string
-  action?: { label: string; to: string }
+  /** A button, not a link: the one action so far opens the Log panel over
+   *  whatever page is showing when it is pressed, which no fixed href knows. */
+  action?: { label: string; onSelect: () => void }
 }
 
 interface ToastItem extends ToastInput {
@@ -78,13 +79,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <p className="flex-1 text-[14px]">{toast.text}</p>
               {toast.action && (
-                <Link
-                  to={toast.action.to}
-                  onClick={() => dismiss(toast.id)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismiss(toast.id)
+                    toast.action?.onSelect()
+                  }}
                   className="inline-flex h-[38px] items-center rounded-control border-[1.5px] border-ground px-3 text-[14px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ground"
                 >
                   {toast.action.label}
-                </Link>
+                </button>
               )}
               <button
                 type="button"

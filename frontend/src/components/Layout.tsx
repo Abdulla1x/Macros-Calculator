@@ -9,6 +9,7 @@ import WeighInNudge from './WeighInNudge'
 import WakingNotice from './WakingNotice'
 import { RailNav, TabBar } from './shell/AppNav'
 import ProgressSubnav from './shell/ProgressSubnav'
+import LogPanelSlot from './log/LogPanelSlot'
 import { sectionFor } from './shell/sections'
 import Wordmark from './shell/Wordmark'
 
@@ -119,6 +120,8 @@ export default function Layout() {
       </main>
 
       <TabBar active={section} />
+      {/* Over every page, opened by the Log button through the address. */}
+      <LogPanelSlot />
       <AnnouncementsModal items={announcements?.items ?? []} />
     </div>
   )

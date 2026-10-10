@@ -4,6 +4,7 @@ import { m } from 'motion/react'
 import { Button } from '@/ui/button'
 import { LogIcon, ProgressIcon, TodayIcon, YouIcon } from '@/ui/icons'
 import { useAnalysis } from '@/analysis/AnalysisContext'
+import { useLogPanel } from '@/components/log/useLogPanel'
 import { logButtonLabel, logButtonState } from './logButton'
 import { SECTION_HOME, type Section } from './sections'
 
@@ -85,33 +86,39 @@ function TabLink({
   )
 }
 
-/** The Log action. A link, because today it opens the Log page; phase 2 turns
- *  it into the button that opens the Log panel. "Log" in the tab bar, where the
- *  middle slot needs a short label (0a), "Log a meal" in the wider rail.
+/** The Log action: a button that opens the Log panel over the current page
+ *  (overhaul 0a: Log is an action, not a place). "Log" in the tab bar, where
+ *  the middle slot needs a short label (0a), "Log a meal" in the wider rail.
  *
  *  It also carries the AI estimate running in the background (AnalysisProvider):
  *  a spinner while it works, a dot and "Ready" when it landed unseen. */
-function LogAction({ active, place, className = '' }: { active: boolean; place: 'bar' | 'rail'; className?: string }) {
+function LogAction({ place, className = '' }: { place: 'bar' | 'rail'; className?: string }) {
   const { analyzing, unseen } = useAnalysis()
+  const { open } = useLogPanel()
   const state = logButtonState(analyzing, unseen)
   const { visible, spoken } = logButtonLabel(place, state)
   return (
-    <Button asChild variant="log" size="log" className={className}>
-      <Link to={SECTION_HOME.log} aria-current={active ? 'page' : undefined} aria-label={spoken}>
-        {state === 'working' ? (
-          // A ring with a gap, turning. Under reduced motion the loop stops and
-          // the ring stays, so it still reads as "busy" (DESIGN.md: loops stop).
-          <span
-            aria-hidden="true"
-            className="size-[18px] rounded-full border-[2.5px] border-current border-r-transparent motion-safe:animate-spin"
-          />
-        ) : state === 'ready' ? (
-          <span aria-hidden="true" className="size-2.5 rounded-full bg-current" />
-        ) : (
-          <LogIcon size={18} aria-hidden />
-        )}
-        {visible}
-      </Link>
+    <Button
+      variant="log"
+      size="log"
+      className={className}
+      onClick={() => open()}
+      aria-haspopup="dialog"
+      aria-label={spoken}
+    >
+      {state === 'working' ? (
+        // A ring with a gap, turning. Under reduced motion the loop stops and
+        // the ring stays, so it still reads as "busy" (DESIGN.md: loops stop).
+        <span
+          aria-hidden="true"
+          className="size-[18px] rounded-full border-[2.5px] border-current border-r-transparent motion-safe:animate-spin"
+        />
+      ) : state === 'ready' ? (
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-current" />
+      ) : (
+        <LogIcon size={18} aria-hidden />
+      )}
+      {visible}
     </Button>
   )
 }
@@ -134,7 +141,7 @@ export function TabBar({ active }: { active: Section | null }) {
         ))}
         {/* min-w keeps "Log" and "Ready" the same width, so the tabs either
             side don't shift when an estimate lands. */}
-        <LogAction active={active === 'log'} place="bar" className="mx-1.5 min-w-[112px]" />
+        <LogAction place="bar" className="mx-1.5 min-w-[112px]" />
         <TabLink {...TABS[2]!} active={active === 'you'} className={TAB_CLASS} />
       </div>
     </nav>
@@ -155,7 +162,7 @@ export function RailNav({ active }: { active: Section | null }) {
   const box = useMarker(list, active, 'y')
   return (
     <nav aria-label="Main" className="grid gap-[18px]">
-      <LogAction active={active === 'log'} place="rail" className="w-full" />
+      <LogAction place="rail" className="w-full" />
       <div ref={list} className="relative grid gap-0.5">
         <Marker box={box} axis="y" className="top-0 left-0 w-[3px] py-2 [background-clip:content-box]" />
         {TABS.map((tab) => (
