@@ -460,7 +460,9 @@ export async function visitRoutes(context, routes, onRoute) {
       // harness unusable on a fresh account.
       if ((await page.locator(selector).count()) === 0) continue
       if (typeof expander === 'string') {
-        await page.locator(selector).click()
+        // The first match, like the wait above: "open a meal" matches every
+        // meal row, and an account with two meals today failed the whole run.
+        await page.locator(selector).first().click()
         // A beat before networkidle below: at the instant of the click the
         // network is still idle, because the request a click starts (a meal's
         // share code) has not gone out yet, so networkidle returned at once
