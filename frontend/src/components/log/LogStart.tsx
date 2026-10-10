@@ -25,7 +25,10 @@ export default function LogStart() {
   const date = logDate(search) ?? today
 
   return (
-    <div className="grid gap-5">
+    // minmax(0, 1fr): a grid column otherwise grows to its widest child's
+    // unbreakable content, and one long food name then widened the whole panel
+    // past the screen.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       {/* "For" rather than a date field: the day travels in the address, so
           the by-hand form and a saved estimate land on it. */}
       <DayChips legend="For" value={date} onChange={(day) => setDate(day === today ? null : day)} />

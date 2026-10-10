@@ -131,7 +131,7 @@ export default function EstimateResult({
     .join(' · ')
 
   return (
-    <section ref={top} aria-label="Estimate" className="grid scroll-mt-4 gap-3">
+    <section ref={top} aria-label="Estimate" className="grid scroll-mt-4 grid-cols-[minmax(0,1fr)] gap-3">
       <div className="grid gap-1 border-b border-rule pb-3">
         <h3 className="text-field-label text-ink-2">Estimate</h3>
         <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -218,7 +218,7 @@ export default function EstimateResult({
           <p className="text-small text-ink-2">Assumed. Tap one to correct it in your note:</p>
           <div className="flex flex-wrap gap-1.5">
             {analysis.assumptions.map((assumption) => (
-              <Chip key={assumption} onClick={() => correctAssumption(assumption)} className="h-auto min-h-9 py-1 whitespace-normal">
+              <Chip key={assumption} onClick={() => correctAssumption(assumption)} className="h-auto min-h-9 max-w-full shrink py-1 text-left whitespace-normal">
                 {assumption}
               </Chip>
             ))}
@@ -239,7 +239,7 @@ export default function EstimateResult({
             <div>
               <button type="button" aria-expanded={reviewing} onClick={() => setReviewing((open) => !open)} className={ROW}>
                 <SavedFoodsIcon size={18} aria-hidden className="shrink-0" />
-                <span className="flex-1">
+                <span className="min-w-0 flex-1">
                   {unsaved.length === 0
                     ? 'New foods saved to your library'
                     : `Save ${unsaved.length === 1 ? 'the new food' : `${unsaved.length} new foods`} to my library`}
@@ -269,7 +269,7 @@ export default function EstimateResult({
           {mode === 'save' && (
             <button type="button" onClick={keep} className={ROW}>
               <KeepIcon size={18} aria-hidden className="shrink-0" />
-              <span className="flex-1">
+              <span className="min-w-0 flex-1">
                 Keep as a saved meal
                 {kept && <span className="block text-small text-ink-2">{kept}</span>}
               </span>
@@ -294,7 +294,7 @@ export default function EstimateResult({
       {mode === 'save' ? (
         // The panel's footer: always in reach at the bottom of the sheet, so
         // saving never needs a scroll past a long list of items.
-        <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-rule bg-ground px-4 py-3 desk:-mx-7 desk:px-7">
+        <div className="sticky bottom-0 -mx-4 flex flex-wrap gap-2 border-t border-rule bg-ground px-4 py-3 desk:-mx-7 desk:px-7">
           <Button variant="secondary" onClick={onApply}>
             Check and edit first
           </Button>

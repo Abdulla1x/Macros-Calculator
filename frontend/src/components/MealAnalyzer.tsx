@@ -111,7 +111,7 @@ export default function MealAnalyzer({ onApply, alwaysOpen = false }: Props) {
 
   const busy = analyzing || transcribing
   return (
-    <section aria-labelledby={headingId} className="grid gap-3">
+    <section aria-labelledby={headingId} className="grid grid-cols-[minmax(0,1fr)] gap-3">
       <div className="flex items-center justify-between gap-3">
         <h3 id={headingId} className="text-field-label text-ink-2">
           Estimate with AI

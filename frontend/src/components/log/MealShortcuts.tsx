@@ -37,7 +37,7 @@ function dayLabel(iso: string, today: string): string {
 
 function Section({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="grid">
+    <section className="grid grid-cols-[minmax(0,1fr)]">
       <h3 className="flex items-center justify-between pb-1 text-field-label text-ink-2">
         <span>{label}</span>
         {count !== undefined && <span>{count}</span>}
