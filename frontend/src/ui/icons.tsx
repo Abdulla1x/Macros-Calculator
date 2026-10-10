@@ -35,6 +35,9 @@ export { SparkleIcon as EstimateIcon } from '@phosphor-icons/react/dist/csr/Spar
 // Not in DESIGN.md's mapping either: the Log panel's search over saved and
 // recent meals.
 export { MagnifyingGlassIcon as SearchIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlass'
+// Not in DESIGN.md's mapping either: the caret on a "How is this worked out?"
+// disclosure, turned over while it is open.
+export { CaretDownIcon as ExpandIcon } from '@phosphor-icons/react/dist/csr/CaretDown'
 // Not in DESIGN.md's mapping either: the steps tracker, which replaced its 👟.
 export { FootprintsIcon as StepsIcon } from '@phosphor-icons/react/dist/csr/Footprints'
 

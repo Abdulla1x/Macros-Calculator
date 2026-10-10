@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { litSegments } from '../lib/today'
+import Explainer from '@/ui/explainer'
 import Gauge from '@/ui/gauge'
 import Tracker from './today/Tracker'
 
@@ -31,8 +32,12 @@ interface Props {
   valueText?: ReactNode
   /** False for a tracker whose progress is a list, already visible below. */
   meter?: boolean
-  /** Where the goal came from. Rendered under the bar, small. */
+  /** A status line, always shown, small ("Next at 21:00"). */
   caption?: ReactNode
+  /** Where the goal or a figure came from, behind "How is this worked out?"
+   *  (owner, P40 test: always-on explanations made the cards read as a
+   *  wall of text). */
+  explanation?: ReactNode
   actions?: ReactNode
   error?: string | null
 }
@@ -46,6 +51,7 @@ export default function DailyTrackerCard({
   valueText,
   meter = true,
   caption,
+  explanation,
   actions,
   error,
 }: Props) {
@@ -90,6 +96,7 @@ export default function DailyTrackerCard({
       )}
 
       {caption && <p className="text-small text-ink-2">{caption}</p>}
+      {explanation && <Explainer>{explanation}</Explainer>}
     </Tracker>
   )
 }

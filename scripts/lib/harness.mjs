@@ -406,7 +406,12 @@ export const EXPAND_ON = {
   '/?log': ['button:has-text("Show all")', 'button:has-text("Show more")'],
   // The weigh-in card's edit form: the seed weighs in today, so the card shows
   // the weight and Edit, and the field is otherwise never in the DOM.
-  '/': ['section[aria-label="Weigh-in"] button:has-text("Edit")'],
+  // The water card's "How is this worked out?", closed by default since the
+  // P40 fixes: its text is otherwise never in the DOM.
+  '/': [
+    'section[aria-label="Weigh-in"] button:has-text("Edit")',
+    'section[aria-label="Water"] button:has-text("How is this worked out?")',
+  ],
   // Opens the first meal of the day, then its share code: the meal screen and
   // the code panel are both only reachable by tapping.
   '/?meal': ['main a[href*="/meal/"]', 'button:has-text("Share as a code")'],
