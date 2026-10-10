@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Food } from '../types'
-import TextInput, { inputSurfaceClass } from './ui/TextInput'
+import { FIELD } from '@/ui/field'
+import { CloseIcon, SavedFoodsIcon } from '@/ui/icons'
 
 interface Props {
   /** The whole library. Fetched and owned by MealAnalyzer, which also hands it
@@ -23,7 +24,7 @@ interface Props {
  * is the idiom Saved meals's "Browse all" and the Settings food library already
  * use, and the filtering costs no round trips because the list is in memory.
  *
- * Closed by default: on a phone an always-open list would push the Analyze
+ * Closed by default: on a phone an always-open list would push the Estimate
  * button off screen. The attached chips stay visible either way, so what is
  * going to be sent is readable without opening anything.
  */
@@ -53,32 +54,36 @@ export default function LibraryFoodPicker({
   }, [foods, attached, filter])
 
   return (
-    <div className="mt-3">
+    <div className="grid gap-2">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className="rounded-control border border-line-strong px-3 py-2 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300"
+        className="flex min-h-11 items-center gap-2 justify-self-start rounded-control border-[1.5px] border-rule px-3 text-[14.5px] font-semibold hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
-        <span aria-hidden="true">🥣</span> Use foods from your library
-        {attached.length > 0 && ` (${attached.length})`} {open ? '▲' : '▼'}
+        <SavedFoodsIcon size={18} aria-hidden />
+        Use my saved foods
+        {attached.length > 0 && <span className="font-normal text-ink-2 tabular-nums">{attached.length}</span>}
+        <span aria-hidden="true" className="text-ink-2">
+          {open ? '▴' : '▾'}
+        </span>
       </button>
-      <p className="mt-1 text-xs text-ink-faint">
-        Attach a saved food and the AI works out how much you ate instead of
-        guessing its macros.
+      <p className="text-small text-ink-2">
+        Your saved foods count as facts: the AI only judges how much you ate.
       </p>
 
       {attached.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-1.5">
           {attached.map((food) => (
             <li key={food.id}>
               <button
                 type="button"
                 onClick={() => onDetach(food.id)}
                 aria-label={`Remove ${food.name}`}
-                className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 hover:border-rose-500 hover:text-rose-300"
+                className="inline-flex h-9 items-center gap-1.5 rounded-control border-[1.5px] border-ink bg-ink px-3 text-[13.5px] font-semibold text-ground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
-                {food.name} ✕
+                {food.name}
+                <CloseIcon size={14} aria-hidden />
               </button>
             </li>
           ))}
@@ -86,40 +91,40 @@ export default function LibraryFoodPicker({
       )}
 
       {open && (
-        <div className={`mt-2 overflow-hidden ${inputSurfaceClass}`}>
+        <div className="overflow-hidden rounded-control border-[1.5px] border-rule bg-field">
           <div className="p-2">
-            <TextInput
+            <input
               type="text"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Filter your library…"
-              className="w-full"
+              placeholder="Filter your saved foods…"
+              aria-label="Filter your saved foods"
+              className={FIELD}
             />
           </div>
 
           {foods.length === 0 ? (
-            <p className="border-t border-line-strong px-3 py-2 text-sm text-slate-400">
-              Nothing saved yet. Foods you tick “save to my library” on while
-              logging show up here.
+            <p className="border-t border-rule px-3 py-2 text-small text-ink-2">
+              Nothing saved yet. Foods you save while logging show up here.
             </p>
           ) : visible.length === 0 ? (
-            <p className="border-t border-line-strong px-3 py-2 text-sm text-slate-400">
+            <p className="border-t border-rule px-3 py-2 text-small text-ink-2">
               {filter.trim()
-                ? `Nothing in your library matches “${filter.trim()}”.`
-                : 'Everything in your library is already attached.'}
+                ? `Nothing saved matches “${filter.trim()}”.`
+                : 'Every saved food is already attached.'}
             </p>
           ) : (
-            <ul className="max-h-56 overflow-y-auto border-t border-line-strong">
+            <ul className="max-h-56 divide-y divide-rule overflow-y-auto border-t border-rule">
               {visible.map((food) => (
                 <li key={food.id}>
                   <button
                     type="button"
                     onClick={() => onAttach(food)}
                     disabled={full}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-700 disabled:opacity-50 disabled:hover:bg-transparent"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-left text-body hover:bg-ink/5 disabled:opacity-45 disabled:hover:bg-transparent"
                   >
-                    <span className="font-medium">{food.name}</span>
-                    <span className="shrink-0 text-xs text-slate-400">
+                    <span className="min-w-0 truncate">{food.name}</span>
+                    <span className="shrink-0 text-small text-ink-2 tabular-nums">
                       {food.calories} kcal · {food.protein} g P / {food.serving_size} g
                     </span>
                   </button>
@@ -129,8 +134,8 @@ export default function LibraryFoodPicker({
           )}
 
           {full && (
-            <p className="border-t border-line-strong px-3 py-2 text-xs text-amber-300">
-              That’s the limit — {max} saved foods per analysis.
+            <p className="border-t border-rule px-3 py-2 text-small">
+              That’s the limit: {max} saved foods per estimate.
             </p>
           )}
         </div>

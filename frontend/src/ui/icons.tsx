@@ -30,6 +30,8 @@ export { CaretLeftIcon as BackIcon } from '@phosphor-icons/react/dist/csr/CaretL
 export { CaretRightIcon as NextIcon } from '@phosphor-icons/react/dist/csr/CaretRight'
 export { XIcon as CloseIcon } from '@phosphor-icons/react/dist/csr/X'
 export { CheckIcon as DoneIcon } from '@phosphor-icons/react/dist/csr/Check'
+// Not in DESIGN.md's mapping: the AI box's collapsed row, when editing a meal.
+export { SparkleIcon as EstimateIcon } from '@phosphor-icons/react/dist/csr/Sparkle'
 
 /** The weigh-in scale. Phosphor has no bathroom scale, so this one is drawn on
  *  Phosphor's 256 grid at its 16-unit line weight (DESIGN.md, Iconography), to

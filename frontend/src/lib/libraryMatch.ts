@@ -1,4 +1,4 @@
-import type { AnalyzedItem, Food, FoodCreate } from '../types'
+import type { AnalyzedItem, Food, FoodCreate } from '../types.ts'
 
 /**
  * Matching an AI item to one of the user's saved foods, and the conversion that

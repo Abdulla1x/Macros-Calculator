@@ -1,4 +1,4 @@
-import type { FoodSource, ReferenceSource } from './lib/foodSources'
+import type { FoodSource, ReferenceSource } from './lib/foodSources.ts'
 
 export interface User {
   id: number
