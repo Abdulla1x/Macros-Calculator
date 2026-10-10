@@ -59,7 +59,9 @@ export default function LogPanel() {
         : Array.from(document.querySelectorAll<HTMLElement>('button[aria-haspopup="dialog"]')).find(
             (button) => button.offsetParent !== null,
           )
-    target?.focus()
+    // Without scrolling: the page underneath did not move while the panel
+    // was open, and after a save it is about to scroll to the top itself.
+    target?.focus({ preventScroll: true })
   }
 
   const state = location.state as { editMeal?: unknown; logFromStart?: boolean } | null

@@ -19,6 +19,31 @@ import type { Meal, PlanDay } from '../types'
 import { useHeldDelete } from '../hooks/useHeldDelete'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 import { useToast } from '../ui/toast'
+import { DURATION } from '../lib/motion'
+
+/** Waits for the Log panel to leave, then scrolls to the top of the page.
+ *  Instant under reduced motion. Resolves once there, or after a second in
+ *  case the scroll never arrives (a page too short to scroll, a user who grabs
+ *  it), so the meals are never held back for long. */
+function showTheTop(): Promise<void> {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return new Promise((resolve) => {
+    window.setTimeout(
+      () => {
+        if (window.scrollY < 2) return resolve()
+        window.scrollTo({ top: 0, behavior: still ? 'instant' : 'smooth' })
+        const started = performance.now()
+        const arrived = () => {
+          if (window.scrollY < 2 || performance.now() - started > 1_000) resolve()
+          else requestAnimationFrame(arrived)
+        }
+        requestAnimationFrame(arrived)
+      },
+      // The panel's close (DESIGN.md: 240 ms); under reduced motion it fades.
+      still ? DURATION.reduced * 1000 : DURATION.base * 1000,
+    )
+  })
+}
 
 export default function Today() {
   const { settings } = useSettings()
@@ -67,10 +92,12 @@ export default function Today() {
     }
   }, [])
 
-  const load = useCallback(() => {
+  // `ready` holds the answer back until something has finished first: the
+  // scroll that brings the day into view after a save, below.
+  const load = useCallback((ready?: Promise<void>) => {
     setError(null)
     // A failed load must not masquerade as an empty day.
-    api.getMeals(viewedDate).then(setMeals).catch(() => {
+    Promise.all([api.getMeals(viewedDate), ready]).then(([fresh]) => setMeals(fresh)).catch(() => {
       setMeals(null)
       setError("Couldn't load your meals. Check your connection, then try again.")
     })
@@ -118,7 +145,17 @@ export default function Today() {
   }, [load])
 
   // A save in the Log panel happens over this page, which never remounts.
-  useEffect(() => onMealsChanged(() => load()), [load])
+  // A meal saved for the day on show is brought into view: the page goes to
+  // the top, where the calories are, and only then takes the new meals, so the
+  // digits roll and the gauge fills where they can be seen (owner, P40: from
+  // further down the page the save changed nothing visible). The meals are
+  // fetched at once and held, not fetched after the scroll, so the wait is the
+  // longer of the two rather than both. A save for another day only refreshes:
+  // an edit can move a meal off the day on show.
+  useEffect(
+    () => onMealsChanged((change) => load(change.date === viewedDate ? showTheTop() : undefined)),
+    [load, viewedDate],
+  )
 
   // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
   // with the meal in router state; it is held, struck through, for ten
@@ -183,7 +220,7 @@ export default function Today() {
       <MealList
         meals={meals && shownMeals(meals, held?.meal.id, gone)}
         error={error}
-        onRetry={load}
+        onRetry={() => load()}
         isToday={isToday}
         showTimes={settings?.show_meal_times ?? true}
         trackCarbs={settings?.track_carbs ?? false}
