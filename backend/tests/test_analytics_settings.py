@@ -136,7 +136,7 @@ def test_daily_summary_average_is_unchanged_by_widening_an_empty_range(client):
 # here.
 #
 # "Unset" means omittable from a PUT, not necessarily null in the response.
-# targets_auto and weigh_in_reminder_days are both NOT NULL columns, so their
+# targets_auto, weigh_in_reminder_days and show_meal_times are NOT NULL columns, so their
 # entries here are the shipped defaults rather than None -- which is exactly
 # what a whole-payload assertion should be pinning.
 UNSET_OPTIONALS = {
@@ -147,6 +147,7 @@ UNSET_OPTIONALS = {
     "water_goal_ml": None, "water_quick_adds": None,
     "steps_goal": None,
     "weigh_in_reminder_time": None, "weigh_in_reminder_days": 1,
+    "show_meal_times": True,
 }
 
 
@@ -179,6 +180,7 @@ def test_body_profile_round_trips(client):
         "water_goal_ml": None, "water_quick_adds": None,
         "steps_goal": None,
         "weigh_in_reminder_time": None, "weigh_in_reminder_days": 1,
+        "show_meal_times": True,
     }
     assert client.put("/api/settings", json=profile).json() == profile
     assert client.get("/api/settings").json() == profile
@@ -527,3 +529,16 @@ def test_the_reminder_time_must_look_like_a_clock(client):
         assert client.put(
             "/api/settings", json={**settings, "weigh_in_reminder_time": good}
         ).status_code == 200, good
+
+
+def test_meal_times_are_shown_until_switched_off(client):
+    settings = client.get("/api/settings").json()
+    assert settings["show_meal_times"] is True
+
+    saved = client.put("/api/settings", json={**settings, "show_meal_times": False}).json()
+    assert saved["show_meal_times"] is False
+
+    # A stale bundle PUTs without the key, and must not switch it back on.
+    stale = {key: value for key, value in saved.items() if key != "show_meal_times"}
+    assert client.put("/api/settings", json=stale).json()["show_meal_times"] is False
+    assert client.get("/api/data/export/all").json()["settings"]["show_meal_times"] is False

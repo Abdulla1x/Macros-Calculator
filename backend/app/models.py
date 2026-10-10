@@ -578,6 +578,13 @@ class Setting(Base):
     weigh_in_reminder_days: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1"
     )
+    # Whether Today's meal rows show the time each meal was logged. On by
+    # default, the design's meal row. NOT NULL with a server_default, the
+    # targets_auto pairing: it is a plain on/off with no third state, and the
+    # server_default backfills every account that predates it.
+    show_meal_times: Mapped[bool] = mapped_column(
+        default=True, server_default=sa_true()
+    )
 
     __table_args__ = (
         CheckConstraint(

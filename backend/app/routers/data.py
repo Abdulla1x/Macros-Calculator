@@ -171,6 +171,8 @@ def export_all(user: User = Depends(get_current_user), db: Session = Depends(get
             # is never null and is kept even while the reminder is off.
             "weigh_in_reminder_time": setting.weigh_in_reminder_time,
             "weigh_in_reminder_days": setting.weigh_in_reminder_days,
+            # Whether Today shows the time each meal was logged. Never null.
+            "show_meal_times": setting.show_meal_times,
         },
         "meals": [
             # `date` is when it was eaten, `created_at` when it was logged,

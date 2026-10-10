@@ -21,6 +21,7 @@ const meal = (calories: number, protein: number, carbs: number | null, fat: numb
   carbs,
   fat,
   updated_at: null,
+  created_at: null,
 })
 
 const plan = (over: Partial<PlanDay>): PlanDay => ({
