@@ -103,7 +103,7 @@ export default function StepsCard({ date }: Props) {
       goal={day.goal}
       unit="steps"
       error={error}
-      caption={<StepsCaption day={day} />}
+      explanation={<StepsCaption day={day} />}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-stretch">

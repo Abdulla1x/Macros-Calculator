@@ -112,7 +112,7 @@ export default function WaterCard({ date }: Props) {
       goal={day.goal_ml}
       unit="ml"
       error={error}
-      caption={<GoalCaption day={day} />}
+      explanation={<GoalCaption day={day} />}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {quickAdds.map((ml) => (
@@ -163,7 +163,8 @@ export default function WaterCard({ date }: Props) {
 /** The derivation, in the open.
  *
  * The standing rule is that no derived number reaches the screen without its
- * inputs beside it — and the "default" case matters most, because 2 litres
+ * inputs one tap away (behind "How is this worked out?" since the P40 test;
+ * they used to sit under the bar for good) — and the "default" case matters most, because 2 litres
  * looks personal and isn't. */
 function GoalCaption({ day }: { day: WaterDay }) {
   const { source, ml_per_kg, weight_kg } = day.goal_basis
@@ -181,7 +182,7 @@ function GoalCaption({ day }: { day: WaterDay }) {
   }
   return (
     <>
-      A general default — log a weigh-in and this becomes {' '}
+      A general default — log a weigh-in and this becomes{' '}
       {WATER_ML_PER_KG} ml per kg of your own weight instead.
     </>
   )
