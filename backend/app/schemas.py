@@ -886,6 +886,9 @@ class Settings(BaseModel):
     weigh_in_reminder_days: int = Field(
         default=1, ge=1, le=MAX_WEIGH_IN_REMINDER_DAYS
     )
+    # Today's meal rows show the time each meal was logged. Defaulted, for the
+    # reason weight_unit is: a stale bundle PUTs without it.
+    show_meal_times: bool = True
 
     @field_validator("birth_date")
     @classmethod

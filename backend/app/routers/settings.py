@@ -33,6 +33,7 @@ _PATCHED_FIELDS = (
     "steps_goal",
     "weigh_in_reminder_time",
     "weigh_in_reminder_days",
+    "show_meal_times",
 )
 
 

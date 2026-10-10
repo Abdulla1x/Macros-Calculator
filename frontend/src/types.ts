@@ -103,6 +103,8 @@ export interface Settings {
    *  it cannot express "off", which is what keeps it from contradicting the
    *  field above. Kept while the reminder is off. */
   weigh_in_reminder_days: number
+  /** Whether Today's meal rows show the time each meal was logged. */
+  show_meal_times: boolean
 }
 
 /** One logged drink. */
