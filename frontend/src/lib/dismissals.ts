@@ -65,3 +65,15 @@ export function isWeighInNudgeDismissed(isoDate: string): boolean {
 export function dismissWeighInNudge(isoDate: string) {
   writeLocal(WEIGH_IN_KEY, isoDate)
 }
+
+// The AI box's tip card (UA-25): shown until dismissed, then never again on
+// this device. A failed read shows it again, which is the harmless direction.
+const AI_TIPS_KEY = 'trackaholic_ai_tips_dismissed'
+
+export function areAiTipsDismissed(): boolean {
+  return readLocal(AI_TIPS_KEY) !== null
+}
+
+export function dismissAiTips() {
+  writeLocal(AI_TIPS_KEY, '1')
+}

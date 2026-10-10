@@ -2,11 +2,14 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { MAX_ATTACHED_FOODS, MAX_IMAGES, useAnalysis } from '../analysis/AnalysisContext'
 import type { LibraryContext } from '../lib/libraryMatch'
 import type { MealAnalysisResponse } from '../types'
+import AiTips from './log/AiTips'
 import EstimateResult from './log/EstimateResult'
 import EstimateStages from './log/EstimateStages'
 import LibraryFoodPicker from './LibraryFoodPicker'
 import { Button, buttonVariants } from '@/ui/button'
+import { Chip } from '@/ui/chip'
 import { FIELD } from '@/ui/field'
+import { HIDDEN_EXTRAS, noteWithExtras, shouldAskAboutHidden } from '../lib/aiGuidance'
 import { CloseIcon, EstimateIcon, PhotoIcon, VoiceIcon } from '@/ui/icons'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
@@ -51,6 +54,19 @@ export default function MealAnalyzer({ onApply, alwaysOpen = false }: Props) {
   } = useAnalysis()
   useLiveMessage(error)
   const headingId = useId()
+
+  // The hidden-extras question (UA-25): a photo-only estimate stops to ask
+  // what the photos cannot show before it is sent. Answering adds one line to
+  // the note; "No, that's it" sends it as it was.
+  const [asking, setAsking] = useState(false)
+  const [extras, setExtras] = useState<string[]>([])
+  const askId = useId()
+  useLiveMessage(asking ? 'Photos miss oil and sauces. Anything hidden?' : null)
+  const send = (picks: string[]) => {
+    setAsking(false)
+    setExtras([])
+    void analyze(false, false, picks.length > 0 ? noteWithExtras(note, picks) : undefined)
+  }
 
   // Open straight away when there is anything to show: a note, photos, an
   // estimate on its way or one already back. Otherwise someone returning to a
@@ -113,6 +129,8 @@ export default function MealAnalyzer({ onApply, alwaysOpen = false }: Props) {
           </button>
         )}
       </div>
+
+      {alwaysOpen && <AiTips />}
 
       <label className="grid gap-1">
         <span className="text-small text-ink-2">Describe it, with weights if you have them</span>
@@ -216,23 +234,54 @@ export default function MealAnalyzer({ onApply, alwaysOpen = false }: Props) {
         onDetach={detach}
       />
 
-      <div className="flex flex-wrap gap-2">
-        {/* Primary until there is an estimate; then saving it is the main
-            action and this steps back, so the panel never shows two. */}
-        <Button
-          variant={analysis ? 'secondary' : 'primary'}
-          onClick={() => analyze(false)}
-          disabled={busy}
-          className="flex-1"
-        >
-          {analyzing ? 'Estimating…' : analysis ? 'Estimate again' : 'Estimate'}
-        </Button>
-        {analysis && (
-          <Button variant="secondary" onClick={() => analyze(true)} disabled={busy} className="flex-1">
-            Refine with my note
+      {asking ? (
+        <div role="group" aria-labelledby={askId} className="grid gap-2 border-l-2 border-ink pl-3">
+          <p id={askId} className="font-semibold">
+            Photos miss oil and sauces. Anything hidden?
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {HIDDEN_EXTRAS.map((extra) => (
+              <Chip
+                key={extra}
+                pressed={extras.includes(extra)}
+                onClick={() =>
+                  setExtras((current) =>
+                    current.includes(extra) ? current.filter((pick) => pick !== extra) : [...current, extra],
+                  )
+                }
+              >
+                {extra}
+              </Chip>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => send(extras)} disabled={busy || extras.length === 0} className="flex-1">
+              Estimate with these
+            </Button>
+            <Button variant="secondary" onClick={() => send([])} disabled={busy} className="flex-1">
+              No, that's it
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {/* Primary until there is an estimate; then saving it is the main
+              action and this steps back, so the panel never shows two. */}
+          <Button
+            variant={analysis ? 'secondary' : 'primary'}
+            onClick={() => (shouldAskAboutHidden(files.length, note) ? setAsking(true) : analyze(false))}
+            disabled={busy}
+            className="flex-1"
+          >
+            {analyzing ? 'Estimating…' : analysis ? 'Estimate again' : 'Estimate'}
           </Button>
-        )}
-      </div>
+          {analysis && (
+            <Button variant="secondary" onClick={() => analyze(true)} disabled={busy} className="flex-1">
+              Refine with my note
+            </Button>
+          )}
+        </div>
+      )}
       {analysis && (
         <p className="text-small text-ink-2">
           Refine adjusts this estimate to your note. Estimate again starts over, for new photos.
