@@ -135,8 +135,13 @@ function seedFoods() {
 export const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password']
 
 // Everything behind RequireAuth. `/nope` is any unmatched address, which renders
-// NotFound inside the Layout. There are no parameterised routes in this app, so
-// this list is the whole surface.
+// NotFound inside the Layout.
+//
+// Two routes are parameterised since 2026-10-10, the day in detail and the meal
+// screen. The day is today's (the seed always logs a meal today); the meal
+// screen has no fixed address at all, since its id comes from the seed, so it
+// is reached the way a person reaches it: `/?meal` is Today with the first meal
+// row then opened by its expander, and audited as the meal screen it lands on.
 //
 // `/settings` is kept alongside its five panels on purpose: it is a redirect to
 // /settings/goals, and visiting it is what would catch the redirect quietly
@@ -147,6 +152,8 @@ export const PRIVATE_ROUTES = [
   // and recent meals. /log below redirects to the panel too, but its expanders
   // walk on to the by-hand form, so this one keeps the start screen in view.
   '/?log',
+  `/day/${isoDaysAgo(0)}`,
+  '/?meal',
   '/log',
   '/weight',
   '/analytics',
@@ -233,7 +240,10 @@ export async function authenticate() {
  *  thing a determinism harness must not do. Found on a UTC+4 machine at 23:37
  *  UTC while verifying the weekly review, whose window was short a day for the
  *  same reason. */
-const isoDaysAgo = (days) => {
+//
+// A function declaration rather than a const, so PRIVATE_ROUTES above can use
+// it while the module is still loading.
+function isoDaysAgo(days) {
   const day = new Date()
   day.setDate(day.getDate() - days)
   const pad = (n) => String(n).padStart(2, '0')
@@ -393,6 +403,12 @@ export const EXPAND_ON = {
   // lists are open on the start screen; only saved meals past six hide behind
   // "Show all".
   '/?log': ['button:has-text("Show all")'],
+  // The weigh-in card's edit form: the seed weighs in today, so the card shows
+  // the weight and Edit, and the field is otherwise never in the DOM.
+  '/': ['section[aria-label="Weigh-in"] button:has-text("Edit")'],
+  // Opens the first meal of the day, then its share code: the meal screen and
+  // the code panel are both only reachable by tapping.
+  '/?meal': ['main a[href*="/meal/"]', 'button:has-text("Share as a code")'],
   '/log': [
     'button:has-text("Enter it by hand")',
     // "egg" matches exactly the two seeded egg rows, in a fixed order (neither
@@ -445,6 +461,11 @@ export async function visitRoutes(context, routes, onRoute) {
       if ((await page.locator(selector).count()) === 0) continue
       if (typeof expander === 'string') {
         await page.locator(selector).click()
+        // A beat before networkidle below: at the instant of the click the
+        // network is still idle, because the request a click starts (a meal's
+        // share code) has not gone out yet, so networkidle returned at once
+        // and the page was audited without what the click was there to open.
+        await page.waitForTimeout(300)
       } else {
         // Typed rather than filled: the field debounces on change, and fill()
         // sets the value in one event that the debounce never sees.
