@@ -1,32 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import CaloriesBand from '../components/today/CaloriesBand'
 import DateBar from '../components/today/DateBar'
-import ShareCodePanel from '../components/ShareCodePanel'
+import MealList from '../components/today/MealList'
 import StepsCard from '../components/StepsCard'
 import SupplementsCard from '../components/SupplementsCard'
 import WaterCard from '../components/WaterCard'
-import { localIsoDate, parseIsoDate } from '../lib/dates'
+import { localIsoDate } from '../lib/dates'
 import { dayTotals, planCaption, viewedDay } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
 import type { Meal, PlanDay } from '../types'
-import Card from '../components/ui/Card'
+import { useHeldDelete } from '../hooks/useHeldDelete'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function Today() {
   const { settings } = useSettings()
-  const [meals, setMeals] = useState<Meal[]>([])
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  // Lifted here rather than held per-row so only one panel is ever open,
-  // the same reason confirmDelete above is a single id and not a set.
-  const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(
-    null,
-  )
-  const [shareError, setShareError] = useState<string | null>(null)
-  useLiveMessage(shareError)
+  // Null until the day's first answer: an empty list and "not loaded yet"
+  // must not look alike, or every load opens on "Nothing logged yet".
+  const [meals, setMeals] = useState<Meal[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useLiveMessage(error)
   const [planDay, setPlanDay] = useState<PlanDay | null>(null)
@@ -73,8 +67,8 @@ export default function Today() {
     setError(null)
     // A failed load must not masquerade as an empty day.
     api.getMeals(viewedDate).then(setMeals).catch(() => {
-      setMeals([])
-      setError("Couldn't load your meals — check your connection and try again.")
+      setMeals(null)
+      setError("Couldn't load your meals. Check your connection, then try again.")
     })
     // The targets actually in force on the viewed day. These are NOT
     // settings.calorie_goal: a calorie plan adjusts a single day, and the
@@ -104,32 +98,29 @@ export default function Today() {
   // A save in the Log panel happens over this page, which never remounts.
   useEffect(() => onMealsChanged(load), [load])
 
-  const remove = async (id: number) => {
-    try {
-      await api.deleteMeal(id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed — try again.')
-      return
-    } finally {
-      setConfirmDelete(null)
-    }
+  // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
+  // with the meal in router state; it is held, struck through, for ten
+  // seconds before anything is sent (hooks/useHeldDelete.ts).
+  const { held, hold, undo } = useHeldDelete((failure) => {
+    if (failure) setError(failure)
     load()
-  }
+  })
+  const [heldNote, setHeldNote] = useState<string | null>(null)
+  useLiveMessage(heldNote)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const arriving = (location.state as { deleteMeal?: Meal } | null)?.deleteMeal
+  useEffect(() => {
+    if (!arriving) return
+    hold(arriving)
+    setHeldNote(`Deleted "${arriving.name}". Undo is there for ten seconds.`)
+    // Spent: a reload or the back button must not delete it a second time.
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
+  }, [arriving, hold, navigate, location.pathname, location.search])
 
-  // Minted on demand rather than alongside every meal in the list: a code is
-  // derived from a row, so there is nothing to cache and nothing to keep in
-  // sync when the row changes.
-  const showCode = async (label: string, mint: () => Promise<{ code: string }>) => {
-    setShareError(null)
-    try {
-      setShareCode({ label, code: (await mint()).code })
-    } catch (err) {
-      setShareCode(null)
-      setShareError(err instanceof Error ? err.message : 'Could not make a code.')
-    }
-  }
-
-  const consumed = dayTotals(meals)
+  // Out of the totals the moment it is deleted, not ten seconds later.
+  const counted = (meals ?? []).filter((meal) => meal.id !== held?.meal.id)
+  const consumed = dayTotals(counted)
 
   // Checked at render rather than trusted from state. Two day-switches in
   // quick succession can land their responses out of order, and the late one
@@ -145,7 +136,9 @@ export default function Today() {
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 desk:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] desk:gap-x-10">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3 desk:col-span-2">
         <DateBar day={viewedDate} today={realToday} onChange={showDay} />
-        {settings && goals && (
+        {!settings || !goals || meals === null ? (
+          <div aria-hidden="true" className="-mx-4 h-[226px] bg-track/40 motion-safe:animate-pulse desk:mx-0 desk:h-[274px]" />
+        ) : (
           <CaloriesBand
             day={viewedDate}
             eaten={consumed}
@@ -157,115 +150,25 @@ export default function Today() {
         )}
       </div>
 
-      <div className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
-      {/* Directly above the meal list, which is now its only trigger on this
-          page: template sharing moved to Settings -> Library along with the
-          rest of template management. */}
-      {shareError && (
-        <Card as="p" tone="error" pad="sm" className="text-sm">
-          {shareError}
-        </Card>
-      )}
-      {shareCode && (
-        <ShareCodePanel
-          label={shareCode.label}
-          code={shareCode.code}
-          onClose={() => setShareCode(null)}
-        />
-      )}
-
-        <Card>
-          <h2 className="mb-3 font-semibold">
-            {isToday
-              ? "Today's meals"
-              : `Meals · ${parseIsoDate(viewedDate).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                })}`}
-          </h2>
-          {error && (
-            <p className="mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-              {error}{' '}
-              <button onClick={load} className="underline hover:text-rose-200">
-                Retry
-              </button>
-            </p>
-          )}
-          {meals.length === 0 ? (
-            !error && (
-              <p className="py-6 text-center text-sm text-ink-faint">
-                Nothing logged yet —{' '}
-                <button
-                  type="button"
-                  onClick={() => openLog('start', { date: forDay })}
-                  className="text-emerald-400 underline"
-                >
-                  log your first meal
-                </button>
-                .
-              </p>
-            )
-          ) : (
-            <ul className="divide-y divide-slate-800">
-              {meals.map((meal) => (
-                <li key={meal.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium">{meal.name}</p>
-                    <p className="text-xs text-slate-400">
-                      {Math.round(meal.calories)} kcal · {Math.round(meal.protein)} g protein
-                      {settings?.track_carbs && meal.carbs != null && ` · ${Math.round(meal.carbs)} g carbs`}
-                      {settings?.track_fat && meal.fat != null && ` · ${Math.round(meal.fat)} g fat`}
-                    </p>
-                  </div>
-                  {confirmDelete === meal.id ? (
-                    <span className="flex items-center gap-2 text-xs">
-                      <button onClick={() => remove(meal.id)} className="rounded bg-rose-500/20 px-2 py-1 text-rose-300 hover:bg-rose-500/30">
-                        Delete
-                      </button>
-                      <button onClick={() => setConfirmDelete(null)} className="rounded bg-slate-800 px-2 py-1 text-slate-300 hover:bg-slate-700">
-                        Cancel
-                      </button>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-3">
-                      {/* Named by the meal, for the reason Weight's row pair is:
-                          a button's contents win the accessible name whenever
-                          they are non-empty, so `title` was never read and all
-                          three announced as their glyph -- once per meal on the
-                          list. */}
-                      <button
-                        onClick={() =>
-                          showCode(meal.name, () => api.shareMeal(meal.id))
-                        }
-                        className="text-xs text-ink-faint hover:text-emerald-400"
-                        aria-label={`Copy ${meal.name} as a code`}
-                      >
-                        <span aria-hidden="true">📋</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openLog('hand', { date: null, state: { editMeal: meal } })}
-                        className="text-xs text-ink-faint hover:text-emerald-400"
-                        aria-label={`Edit ${meal.name}`}
-                      >
-                        <span aria-hidden="true">✎</span>
-                      </button>
-                      <button
-                        onClick={() => setConfirmDelete(meal.id)}
-                        className="text-xs text-ink-faint hover:text-rose-400"
-                        aria-label={`Delete ${meal.name}`}
-                      >
-                        <span aria-hidden="true">✕</span>
-                      </button>
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-      </div>
+      <MealList
+        meals={meals}
+        error={error}
+        onRetry={load}
+        isToday={isToday}
+        showTimes={settings?.show_meal_times ?? true}
+        trackCarbs={settings?.track_carbs ?? false}
+        trackFat={settings?.track_fat ?? false}
+        onLog={() => openLog('start', { date: forDay })}
+        held={
+          held && {
+            ...held,
+            onUndo: () => {
+              undo()
+              setHeldNote(`"${held.meal.name}" is back.`)
+            },
+          }
+        }
+      />
 
       {/* The three daily trackers.
 

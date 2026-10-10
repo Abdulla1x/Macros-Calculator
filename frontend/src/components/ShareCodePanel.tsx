@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import Card from './ui/Card'
-import Button from './ui/Button'
+import { Button } from '@/ui/button'
+import { CloseIcon } from '@/ui/icons'
 
 /** Shows a meal code and helps the user get it into a message.
  *
@@ -53,43 +53,37 @@ export default function ShareCodePanel({
   }
 
   return (
-    <Card as="section" tone="brand" ref={box}>
-      <div className="mb-1 flex items-start justify-between gap-3">
-        <h2 className="font-semibold">Meal code for “{label}”</h2>
+    <section ref={box} aria-label="Meal code" className="grid grid-cols-[minmax(0,1fr)] gap-2.5 border-y border-rule py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0 font-semibold">Meal code for “{label}”</h2>
         <button
+          type="button"
           onClick={onClose}
-          aria-label="Close the meal code panel"
-          className="text-xs text-ink-faint hover:text-slate-200"
+          aria-label="Close the meal code"
+          className="-mt-2 -mr-2 grid size-11 shrink-0 place-items-center rounded-control text-ink-2 hover:bg-ink/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
-          ✕
+          <CloseIcon size={18} />
         </button>
       </div>
-      <p className="mb-3 text-sm text-slate-400">
-        Send this to someone and they can load this meal into their own log and edit
-        it. Anyone with the code can read these numbers and the meal name. It is not
-        a link to your account, and there is nothing to take back once you have sent
-        it — correcting or deleting this meal later does nothing to a code that is
-        already out there.
+      <p className="text-small text-ink-2">
+        Anyone with this code can load the meal into their own log: its name and numbers, nothing else. It is a copy,
+        not a link, so later edits to this meal don't travel with it.
       </p>
       <textarea
         readOnly
         value={code}
         rows={3}
         spellCheck={false}
+        aria-label="The code"
         onFocus={(event) => event.currentTarget.select()}
-        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-base break-all text-slate-300 sm:text-xs"
+        className="w-full rounded-control border-[1.5px] border-rule bg-field px-3 py-2 font-mono text-base break-all text-ink sm:text-small"
       />
-      <div className="mt-3 flex items-center gap-3">
-        <Button
-          onClick={copy}
-          className="px-4 py-2"
-        >
-          Copy code
-        </Button>
-        <span className="text-xs text-slate-400">
-          {copied ? 'Copied ✓' : 'Or select the text above and copy it.'}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={copy}>Copy code</Button>
+        <span role="status" className="text-small text-ink-2">
+          {copied ? 'Copied.' : 'Or select the text above and copy it.'}
         </span>
       </div>
-    </Card>
+    </section>
   )
 }

@@ -7,6 +7,7 @@ import {
   dayHeading,
   dayTotals,
   litSegments,
+  mealTimeLabel,
   planCaption,
   viewedDay,
 } from '../src/lib/today.ts'
@@ -103,4 +104,14 @@ test('only the digits that changed roll, rightmost first', () => {
   // Right-aligned: a number gaining a digit rolls in the new leading part.
   assert.deepEqual(changedDigits('980', '1,020'), [3, 2, 1, 0, null])
   assert.deepEqual(changedDigits('', '860'), [2, 1, 0])
+})
+
+test('a meal shows the time it was logged only when logged on its own day', () => {
+  // Built from local times, so the test holds in any timezone it runs in.
+  const at = (y: number, m: number, d: number, h: number, min: number) => new Date(y, m - 1, d, h, min).toISOString()
+  assert.match(mealTimeLabel({ date: '2026-10-10', created_at: at(2026, 10, 10, 8, 10) }, true) ?? '', /08.10|8.10/)
+  assert.equal(mealTimeLabel({ date: '2026-10-09', created_at: at(2026, 10, 10, 9, 5) }, true), null)
+  assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: null }, true), null)
+  assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: at(2026, 10, 10, 8, 10) }, false), null)
+  assert.equal(mealTimeLabel({ date: '2026-10-10', created_at: 'garbage' }, true), null)
 })

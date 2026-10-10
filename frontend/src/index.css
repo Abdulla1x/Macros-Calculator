@@ -126,6 +126,39 @@
   --animate-segment-on: segment-on 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-roll-up: roll-up 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-roll-down: roll-down 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+
+  /* Delete and Undo (DESIGN.md): the strike draws across a deleted meal
+   * (350ms), the Undo bar drains linearly over the full 10 seconds (the
+   * hook's UNDO_MS), and the line folds closed when it is gone (280ms). */
+  --animate-strike: strike 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-drain: drain 10s linear both;
+  --animate-fold: fold 280ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes strike {
+  from {
+    background-size: 0% 1.5px;
+  }
+  to {
+    background-size: 100% 1.5px;
+  }
+}
+@keyframes drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes fold {
+  from {
+    max-height: 3.5rem;
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+  }
 }
 
 @keyframes segment-on {
@@ -173,6 +206,10 @@
     --animate-segment-on: segment-on 120ms linear;
     --animate-roll-up: none;
     --animate-roll-down: none;
+    /* The strike is simply there. The drain stays: it is not decoration but
+     * the only sign of how long Undo lasts, and the window still applies. */
+    --animate-strike: none;
+    --animate-fold: none;
   }
 }
 

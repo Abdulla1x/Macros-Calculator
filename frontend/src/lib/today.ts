@@ -110,3 +110,17 @@ export function changedDigits(prev: string, next: string): (number | null)[] {
   }
   return turns
 }
+
+/** The time shown on a meal row, or null for none (owner, 2026-10-10).
+ *
+ *  It is when the meal was LOGGED, the only time the app records, so it is
+ *  shown only beside a meal logged on the day it was eaten, where the two are
+ *  close. A meal entered on a later day shows nothing rather than a time that
+ *  would be wrong (yesterday's dinner at "09:05"), and so does a meal from
+ *  before the server kept the time, or anyone who switched it off. */
+export function mealTimeLabel(meal: Pick<Meal, 'date' | 'created_at'>, show: boolean): string | null {
+  if (!show || !meal.created_at) return null
+  const logged = new Date(meal.created_at)
+  if (Number.isNaN(logged.getTime()) || localIsoDate(logged) !== meal.date) return null
+  return logged.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
