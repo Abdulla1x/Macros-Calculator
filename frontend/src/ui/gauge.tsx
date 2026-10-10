@@ -1,3 +1,4 @@
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
 
 const TONES = {
@@ -14,7 +15,13 @@ const TONES = {
  *
  *  Decorative to assistive technology: the number beside a gauge says the
  *  same thing in words, and twenty unnamed boxes would only be noise. Callers
- *  set the height. */
+ *  set the height.
+ *
+ *  Newly lit segments light one after another (DESIGN.md Motion: 220ms each,
+ *  35ms apart); segments going dark just go. Each lit segment is a fill laid
+ *  over its track, mounted only when it lights, so its CSS animation runs once
+ *  then and never again. Under reduced motion it is a short fade with no
+ *  stagger (index.css). */
 export default function Gauge({
   segments,
   lit,
@@ -29,6 +36,12 @@ export default function Gauge({
   className?: string
 }) {
   const colours = TONES[tone]
+  // How many were lit on the previous render: the ones beyond it are new.
+  const before = useRef(0)
+  const from = Math.min(before.current, lit)
+  useEffect(() => {
+    before.current = lit
+  }, [lit])
   return (
     <span
       aria-hidden="true"
@@ -39,7 +52,17 @@ export default function Gauge({
       }}
     >
       {Array.from({ length: segments }, (_, index) => (
-        <i key={index} data-lit={index < lit ? '' : undefined} className={index < lit ? colours.on : colours.off} />
+        <i key={index} data-lit={index < lit ? '' : undefined} className={cn('relative', colours.off)}>
+          {index < lit && (
+            <b
+              className={cn(
+                'absolute inset-0 animate-segment-on [animation-delay:var(--turn)] motion-reduce:[animation-delay:0ms]',
+                colours.on,
+              )}
+              style={{ '--turn': `${Math.max(0, index - from) * 35}ms` } as CSSProperties}
+            />
+          )}
+        </i>
       ))}
       {target && <i className={colours.plan} />}
     </span>

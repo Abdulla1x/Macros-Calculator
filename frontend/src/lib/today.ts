@@ -91,3 +91,22 @@ export function dayHeading(day: string, today: string, yesterday: string): strin
   if (day === yesterday) return `Yesterday, ${date}`
   return date
 }
+
+/** Which characters of a number changed, for rolling only those
+ *  (DESIGN.md Motion: only the digits that changed roll into place,
+ *  staggered from the right). The two strings are compared right-aligned, so
+ *  "980" to "1,020" compares units with units. One entry per character of
+ *  `next`, left to right: null if it is the same as before, otherwise its turn
+ *  in the stagger, 0 for the rightmost change. */
+export function changedDigits(prev: string, next: string): (number | null)[] {
+  const turns: (number | null)[] = new Array<number | null>(next.length).fill(null)
+  let turn = 0
+  for (let fromRight = 0; fromRight < next.length; fromRight += 1) {
+    const index = next.length - 1 - fromRight
+    if (next[index] !== prev[prev.length - 1 - fromRight]) {
+      turns[index] = turn
+      turn += 1
+    }
+  }
+  return turns
+}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { calorieBalance, litSegments, type DayTotals } from '../../lib/today'
 import Gauge from '@/ui/gauge'
+import RollingNumber from '@/ui/rolling-number'
 
 export interface BandTargets {
   calorie_goal: number
@@ -68,7 +69,9 @@ export default function CaloriesBand({
     >
       <h2 className="text-field-label text-band-ink-2">{over ? 'Kcal over' : 'Kcal left'}</h2>
       <p className="flex items-end gap-3">
-        <span className="text-display-number desk:text-[132px]">{n(amount)}</span>
+        <span className="text-display-number desk:text-[132px]">
+          <RollingNumber value={amount} />
+        </span>
         <span className="pb-1.5 text-small text-band-ink-2">
           of <b className="font-semibold text-band-ink">{n(targets.calorie_goal)}</b>
           <br />
@@ -100,11 +103,11 @@ export default function CaloriesBand({
       )}
       <div className="grid grid-cols-2 border-t border-band-rule">
         <Field label="Eaten">
-          {n(eaten.calories)}
+          <RollingNumber value={eaten.calories} />
           <Unit>kcal</Unit>
         </Field>
         <Field label="Protein" meter={macro(eaten.protein, targets.protein_goal)}>
-          {n(eaten.protein)}
+          <RollingNumber value={eaten.protein} />
           <Unit>/ {n(targets.protein_goal)} g</Unit>
         </Field>
       </div>
@@ -112,13 +115,13 @@ export default function CaloriesBand({
         <div className="-mt-2.5 grid grid-cols-2 border-t border-band-rule">
           {trackCarbs && (
             <Field label="Carbs" meter={macro(eaten.carbs, targets.carbs_goal)}>
-              {n(eaten.carbs)}
+              <RollingNumber value={eaten.carbs} />
               <Unit>/ {n(targets.carbs_goal)} g</Unit>
             </Field>
           )}
           {trackFat && (
             <Field label="Fat" meter={macro(eaten.fat, targets.fat_goal)}>
-              {n(eaten.fat)}
+              <RollingNumber value={eaten.fat} />
               <Unit>/ {n(targets.fat_goal)} g</Unit>
             </Field>
           )}

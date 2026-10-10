@@ -1,7 +1,15 @@
 // Run with `npm test` (see photoSize.test.ts for how).
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calorieBalance, dayHeading, dayTotals, litSegments, planCaption, viewedDay } from '../src/lib/today.ts'
+import {
+  calorieBalance,
+  changedDigits,
+  dayHeading,
+  dayTotals,
+  litSegments,
+  planCaption,
+  viewedDay,
+} from '../src/lib/today.ts'
 import type { Meal, PlanDay } from '../src/types.ts'
 
 const meal = (calories: number, protein: number, carbs: number | null, fat: number | null): Meal => ({
@@ -85,4 +93,13 @@ test('the date control says Today and Yesterday by name', () => {
   assert.match(dayHeading('2026-10-10', '2026-10-10', '2026-10-09'), /^Today, /)
   assert.match(dayHeading('2026-10-09', '2026-10-10', '2026-10-09'), /^Yesterday, /)
   assert.doesNotMatch(dayHeading('2026-10-07', '2026-10-10', '2026-10-09'), /Today|Yesterday/)
+})
+
+test('only the digits that changed roll, rightmost first', () => {
+  assert.deepEqual(changedDigits('1,240', '1,240'), [null, null, null, null, null])
+  assert.deepEqual(changedDigits('1,240', '1,250'), [null, null, null, 0, null])
+  assert.deepEqual(changedDigits('1,240', '1,256'), [null, null, null, 1, 0])
+  // Right-aligned: a number gaining a digit rolls in the new leading part.
+  assert.deepEqual(changedDigits('980', '1,020'), [3, 2, 1, 0, null])
+  assert.deepEqual(changedDigits('', '860'), [2, 1, 0])
 })
