@@ -58,7 +58,10 @@ interface AnalysisState {
   dismissUnchangedRerun: () => void
   progress: Progress
   audio: Audio
-  analyze: (refine: boolean, evenIfUnchanged?: boolean) => Promise<void>
+  /** `note` replaces the description for this send and stays in the box, so
+   *  what the model was told is what the user sees (the hidden-extras question
+   *  adds a line this way). */
+  analyze: (refine: boolean, evenIfUnchanged?: boolean, note?: string) => Promise<void>
   correctAssumption: (assumption: string) => void
   /** An estimate arrived while nothing was showing it (the Log button says
    *  "Ready" until it is looked at). */
@@ -294,15 +297,17 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setError(null)
   }
 
-  const analyze = async (refine: boolean, evenIfUnchanged = false) => {
-    if (files.length === 0 && !note.trim()) {
+  const analyze = async (refine: boolean, evenIfUnchanged = false, noteOverride?: string) => {
+    const text = noteOverride ?? note
+    if (noteOverride !== undefined) setNote(noteOverride)
+    if (files.length === 0 && !text.trim()) {
       setError('Describe the meal, record a voice note, or add a photo first.')
       return
     }
     // Pressing either button with nothing changed is a re-roll: one of the
     // day's AI calls for an answer that moves by the model's own noise (~3% in
     // the 2026-10-05 audit). Asked, not refused -- it is the user's call.
-    const inputs = { note, photos: files, foodIds: attached.map((food) => food.id) }
+    const inputs = { note: text, photos: files, foodIds: attached.map((food) => food.id) }
     if (!evenIfUnchanged && analysis && lastSent.current && sameInputs(inputs, lastSent.current)) {
       setUnchangedRerun(refine ? 'refine' : 'again')
       return
@@ -325,7 +330,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       // Ids only: the server reads the macros out of the library itself, so a
       // request cannot claim a saved food has numbers it does not have.
       attached.forEach((food) => form.append('food_id', String(food.id)))
-      if (note.trim()) form.append('text', note.trim())
+      if (text.trim()) form.append('text', text.trim())
       if (refine && analysis) form.append('prior_analysis', JSON.stringify(analysis))
       const result = await api.analyzeMeal(form, hooks)
       if (!mounted.current) return
