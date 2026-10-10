@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import CaloriesBand from '../components/today/CaloriesBand'
 import DateBar from '../components/today/DateBar'
@@ -156,24 +156,6 @@ export default function Today() {
           />
         )}
       </div>
-
-      {/* The entire discovery path for calorie planning, and deliberately a
-          plain standing link rather than something that appears when you go
-          over. A link that shows up only after an overage is still the app
-          offering, just wearing a quieter coat -- and being asked "shall we cut
-          the next four days?" every time you overshoot is the thing that turns
-          a planning tool into a loop. This is here whether the day went well or
-          badly, and it waits to be looked for. */}
-      {settings && (
-        <div className="text-right desk:col-span-2">
-          <Link
-            to={`/settings/goals?plan=${viewedDate}`}
-            className="text-small text-ink-2 underline underline-offset-3 hover:text-ink"
-          >
-            Plan a bigger day, or spread one you already had →
-          </Link>
-        </div>
-      )}
 
       <div className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
       {/* Directly above the meal list, which is now its only trigger on this

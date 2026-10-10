@@ -27,7 +27,8 @@ const under = (pathname: string, base: string) => pathname === base || pathname.
 /** Which tab is current for a path, or null for a page that belongs to none
  *  (Admin, an unknown address). */
 export function sectionFor(pathname: string): Section | null {
-  if (pathname === '/') return 'today'
+  // The day in detail and its meal screens are pushed from Today.
+  if (pathname === '/' || under(pathname, '/day')) return 'today'
   if (PROGRESS_PAGES.some((page) => under(pathname, page.to))) return 'progress'
   if (under(pathname, '/log')) return 'log'
   if (under(pathname, '/settings') || under(pathname, '/whats-new')) return 'you'
