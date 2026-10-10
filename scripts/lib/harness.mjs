@@ -400,9 +400,10 @@ export async function seed(token) {
 export const EXPAND_ON = {
   // Today's two shortcut cards (Saved meals, Recently logged) used to need a
   // click each here. They moved into the Log panel on 2026-10-10, where both
-  // lists are open on the start screen; only saved meals past six hide behind
-  // "Show all".
-  '/?log': ['button:has-text("Show all")'],
+  // lists are open on the start screen. Since the P40 fixes each shows three
+  // rows: saved meals past three hide behind "Show all", recent ones behind
+  // "Show more".
+  '/?log': ['button:has-text("Show all")', 'button:has-text("Show more")'],
   // The weigh-in card's edit form: the seed weighs in today, so the card shows
   // the weight and Edit, and the field is otherwise never in the DOM.
   '/': ['section[aria-label="Weigh-in"] button:has-text("Edit")'],
