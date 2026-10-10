@@ -304,7 +304,7 @@ Motion says what changed. Nothing moves for decoration. Animations are built wit
 
 **The catalogue:**
 - **Rolling numbers:** when a value changes, only the digits that changed roll into place (0.45em, 320ms, staggered 40ms from the right). They roll up when the value rises and down when it falls.
-- **Gauge fill:** newly lit segments light one after another (220ms each, 35ms apart).
+- **Gauge fill:** when a gauge first appears, its segments fade in one after another (220ms each, 35ms apart). When it grows afterwards (a meal logged, water added), each new segment lights in the action colour and settles to ink (760ms each, 45ms apart): a bright edge runs along the gauge and leaves the new total behind. It plays the same past the target. Never red.
 - **First target:** after setup, the calories number counts up from zero (900ms) and the gauge draws in.
 - **AI result:** rows arrive one by one (300ms, 90ms apart, rising 10px). The "Your food" tag snaps in with a small overshoot (scale 0.5 → 1.12 → 1).
 - **Save a meal:** the panel drops away, the new meal row opens into the list (360ms) with a brief action-tinted highlight, the gauge fills and the numbers roll.
