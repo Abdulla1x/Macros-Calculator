@@ -7,6 +7,7 @@ import { useSettings } from '../../settings/SettingsContext'
 import { Chip } from '@/ui/chip'
 import { NextIcon } from '@/ui/icons'
 import { logDate } from './logPanelUrl'
+import { RecentMeals, SavedMeals } from './MealShortcuts'
 import { useLogPanel } from './useLogPanel'
 
 const ROW =
@@ -14,7 +15,8 @@ const ROW =
 
 /** The Log panel's first screen (overhaul 0a): which day the meal is for, then
  *  the AI box first, because AI is the largest single way meals are logged,
- *  then the other ways in. */
+ *  then saved and recent meals, which carry most of the rest, then the other
+ *  ways in. */
 export default function LogStart() {
   const { search } = useLocation()
   const { settings } = useSettings()
@@ -68,6 +70,9 @@ export default function LogStart() {
         alwaysOpen
         onApply={() => open('hand', { state: { fromEstimate: true } })}
       />
+
+      <SavedMeals />
+      <RecentMeals />
 
       <div className="divide-y divide-rule border-y border-rule">
         <button type="button" onClick={() => open('hand')} className={ROW}>

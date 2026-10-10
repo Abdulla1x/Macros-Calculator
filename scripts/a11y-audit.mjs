@@ -174,13 +174,16 @@ for (const { width, route, violations } of findings) {
   }
 }
 
+// Counted, not written in: the route list grows (the Log panel added /?log on
+// 2026-10-10), and a hard-coded 18 then reports routes it never visited.
+const ROUTE_COUNT = PUBLIC_ROUTES.length + PRIVATE_ROUTES.length
 const totalNodes = [...byRule.values()].reduce((total, rule) => total + rule.nodes.length, 0)
 
 console.log(`\n${'='.repeat(72)}`)
 if (byRule.size === 0) {
-  console.log('No WCAG 2.1 A/AA violations across 18 routes at both widths.')
+  console.log(`No WCAG 2.1 A/AA violations across ${ROUTE_COUNT} routes at both widths.`)
 } else {
-  console.log(`${byRule.size} rules violated, ${totalNodes} nodes, across 18 routes at both widths\n`)
+  console.log(`${byRule.size} rules violated, ${totalNodes} nodes, across ${ROUTE_COUNT} routes at both widths\n`)
   const ranked = [...byRule.entries()].sort((a, b) => b[1].nodes.length - a[1].nodes.length)
   for (const [id, rule] of ranked) {
     console.log(`\n▶ ${id}  (${rule.impact}, ${rule.nodes.length} nodes)`)

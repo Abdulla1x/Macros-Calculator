@@ -143,6 +143,10 @@ export const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-p
 // breaking or landing somewhere else.
 export const PRIVATE_ROUTES = [
   '/',
+  // The Log panel's start screen over Today (2026-10-10): the AI box, saved
+  // and recent meals. /log below redirects to the panel too, but its expanders
+  // walk on to the by-hand form, so this one keeps the start screen in view.
+  '/?log',
   '/log',
   '/weight',
   '/analytics',
@@ -261,7 +265,7 @@ const SEED_MEAL_NAMES = [
 ]
 
 /** Meals and weigh-ins for the last SEED_DAYS days, so every chart has
- *  something to draw, plus saved meals so the dashboard's Saved meals renders.
+ *  something to draw, plus saved meals so the Log panel's Saved meals renders.
  *  Values are a deterministic ramp, not random.
  *
  *  The templates matter as much as the charts: Saved meals is hidden entirely
@@ -384,24 +388,11 @@ export async function seed(token) {
 // state has hidden a section here, and it was found the same way as the other
 // five: by noticing after the fact that a change had produced no diff.
 export const EXPAND_ON = {
-  // Both dashboard shortcut cards -- Saved meals and Recently logged -- collapse
-  // by default, so without these two clicks twelve tappable cells drop out of
-  // every snapshot and every axe run, and the a11y report comes back clean
-  // because it never saw them. Written in the same commit that collapsed them:
-  // the first entry in this map added BEFORE a missing diff pointed at it
-  // rather than after, which is the whole lesson the six above recorded.
-  //
-  // Matched on the headings, which carry a count that moves with the seed.
-  '/': [
-    'button:has-text("Saved meals")',
-    'button:has-text("Recently logged")',
-  ],
-  // /log redirects to the Log panel over Today (2026-10-10). Its first screen
-  // shows the AI box open, so that needs no click any more; the food search
-  // lives one step in, behind "Enter it by hand". Without that click the
-  // suggestion list below silently dropped out of every run, because the
-  // expanders are skipped when their selector is absent -- the seventh time a
-  // hidden state went unaudited, caught here only by reading this list.
+  // Today's two shortcut cards (Saved meals, Recently logged) used to need a
+  // click each here. They moved into the Log panel on 2026-10-10, where both
+  // lists are open on the start screen; only saved meals past six hide behind
+  // "Show all".
+  '/?log': ['button:has-text("Show all")'],
   '/log': [
     'button:has-text("Enter it by hand")',
     // "egg" matches exactly the two seeded egg rows, in a fixed order (neither

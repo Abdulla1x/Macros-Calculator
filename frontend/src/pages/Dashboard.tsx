@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
 import MacroRing from '../components/MacroRing'
 import ShareCodePanel from '../components/ShareCodePanel'
 import StepsCard from '../components/StepsCard'
@@ -17,18 +16,12 @@ import {
   tooltipLabelStyle,
   tooltipStyle,
 } from '../lib/chartTheme'
-import {
-  isSectionExpanded,
-  setSectionExpanded,
-} from '../lib/dashboardSections'
-import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
-import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
+import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
-import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
+import type { AnalyticsSummary, Meal, PlanDay } from '../types'
 import Card from '../components/ui/Card'
-import TextInput from '../components/ui/TextInput'
 import { primaryButtonClass } from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
@@ -62,66 +55,11 @@ function planCaption(plan: PlanDay | null, failed: boolean): string | undefined 
     : `${moved} — making up ${when}`
 }
 
-// Which day a recent meal came from, as something readable at a glance.
-//
-// Deliberately NOT Admin.tsx's relativeDay, which looks like the same function
-// and is not: that one takes a TIMESTAMP and calls `new Date(iso)`, which parses
-// a date-only string as UTC -- the off-by-one-near-midnight bug parseIsoDate
-// exists to avoid, and a meal date is a calendar date. Sharing it would import
-// the bug rather than the behaviour.
-//
-// A weekday inside the last week, a date beyond it: "Tue" is how you remember a
-// meal you ate three days ago, and it stops meaning anything once a second
-// Tuesday has passed.
-function relativeDayLabel(iso: string, today: string): string {
-  const days = daysBetween(iso, today)
-  if (days <= 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) {
-    return parseIsoDate(iso).toLocaleDateString(undefined, { weekday: 'short' })
-  }
-  return parseIsoDate(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-// How many saved-meal buttons show before the rest are folded away. Six fills
-// three rows of two on a phone and two rows of three from `sm` up.
-//
-// This is no longer a fold budget -- the card is collapsed by default, so
-// nothing here is competing with the meal list for the first screen. It is what
-// an OPENED card shows before asking, which is still worth bounding: the server
-// caps a listing at 50 and nothing caps how many you can create.
-const SAVED_MEALS_VISIBLE = 6
-
-// How many recently-logged meals are offered. Matches SAVED_MEALS_VISIBLE because
-// the two grids are stacked and one breaking at six while the next breaks at
-// eight would read as a bug in whichever you saw second -- the same reason
-// ShowAllToggle's COLLAPSED_ROWS is shared by the two library lists. No "browse
-// all" here: the server has already reduced a whole history to one row per
-// name, so this list is short by construction rather than capped.
-const RECENTLY_LOGGED_VISIBLE = 6
-
 export default function Dashboard() {
   const { settings } = useSettings()
-  const { user } = useAuth()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
-  const [templates, setTemplates] = useState<MealTemplate[]>([])
-  const [recent, setRecent] = useState<Meal[]>([])
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
-  const [browsingTemplates, setBrowsingTemplates] = useState(false)
-  const [templateFilter, setTemplateFilter] = useState('')
-  // Read once on mount rather than on every render: localStorage is a
-  // synchronous disk read, and the value only ever changes through the two
-  // toggles below, which write it back themselves.
-  const [savedMealsOpen, setSavedMealsOpen] = useState(() =>
-    isSectionExpanded('savedMeals'),
-  )
-  const [recentlyLoggedOpen, setRecentlyLoggedOpen] = useState(() =>
-    isSectionExpanded('recentlyLogged'),
-  )
   // Lifted here rather than held per-row so only one panel is ever open,
   // the same reason confirmDelete above is a single id and not a set.
   const [shareCode, setShareCode] = useState<{ label: string; code: string } | null>(
@@ -204,18 +142,6 @@ export default function Dashboard() {
         setPlanDay(null)
         setPlanFailed(true)
       })
-    // Saved meals is a shortcut, not content: if it fails to load the panel is
-    // simply absent, the same way a failed trend leaves the chart out. Raising
-    // an error banner for it would be louder than the feature is important.
-    api.getMealTemplates().then(setTemplates).catch(() => setTemplates([]))
-    // Same reasoning as Saved meals above, and the same failure mode: this is a
-    // shortcut, so if it fails to load the card is simply absent. Asked for by
-    // count rather than trimmed here -- the server has already collapsed the
-    // history to one row per name, so there is nothing to fold away.
-    api
-      .getRecentMeals(RECENTLY_LOGGED_VISIBLE, viewedDate)
-      .then(setRecent)
-      .catch(() => setRecent([]))
   }, [viewedDate])
 
   useEffect(() => {
@@ -265,44 +191,6 @@ export default function Dashboard() {
   // takes the right response to arrive.
   const dayPlan = planDay?.date === viewedDate ? planDay : null
   const goals = dayPlan ?? settings
-
-  // Ordered by what this device last logged, so the six that show are the six
-  // being used rather than the six most recently created. Read once per mount:
-  // tapping one writes to storage and navigates away, and the new order is
-  // there when the dashboard comes back.
-  const ordered = useMemo(
-    () => (user ? byRecentUse(templates, user.id) : templates),
-    [templates, user],
-  )
-
-  // Collapsed shows the first six; expanded shows everything, filtered.
-  // Collapsing clears the filter too, so reopening never presents a list
-  // mysteriously shorter than the count printed on the button that opened it.
-  const shownTemplates = useMemo(() => {
-    if (!browsingTemplates) return ordered.slice(0, SAVED_MEALS_VISIBLE)
-    const needle = templateFilter.trim().toLowerCase()
-    if (needle === '') return ordered
-    return ordered.filter((template) => template.name.toLowerCase().includes(needle))
-  }, [ordered, browsingTemplates, templateFilter])
-
-  const toggleBrowsing = () => {
-    setTemplateFilter('')
-    setBrowsingTemplates((open) => !open)
-  }
-
-  const toggleSavedMeals = () => {
-    setSavedMealsOpen((open) => {
-      setSectionExpanded('savedMeals', !open)
-      return !open
-    })
-  }
-
-  const toggleRecentlyLogged = () => {
-    setRecentlyLoggedOpen((open) => {
-      setSectionExpanded('recentlyLogged', !open)
-      return !open
-    })
-  }
 
 
   return (
@@ -417,188 +305,6 @@ export default function Dashboard() {
             Plan a bigger day, or spread one you already had →
           </Link>
         </div>
-      )}
-
-      {/* Hidden entirely until there is something to log. The entry point is
-          the "Save as template" button on Log Meal; a permanent empty-state
-          card would spend prime screen space explaining a feature once.
-
-          Collapsed by default, and above the meal list rather than below it.
-          Both halves of that are the same judgement: this card is a shortcut,
-          so it should be reachable without scrolling and should not cost a
-          screen to skip. Expanded it is twelve cells with Recently logged
-          below, which is what put today's meals five screens down a 390px
-          phone -- the tracker grid is `sm:grid-cols-2`, so under 640px those
-          three "columns" are three full-width cards too.
-
-          A grid of plain buttons, not the segmented pill this used to be. That
-          pill welded a share and a delete onto the thing you were trying to
-          tap: the delete was px-2 text-xs, far under the 44px minimum, and
-          confirming it grew the pill to four buttons in place and reflowed the
-          whole flex-wrap row. Management moved to Settings -> Library, where
-          you are reading a list rather than aiming at one. A fixed grid never
-          reflows and every cell is a full-width target.
-
-          Six, then the rest unfold in place. Unfolding rather than a modal is
-          deliberate: the two modals this app already has lack Escape, a focus
-          trap and scroll lock, and a third would deepen a debt that the
-          primitive migration may never be run to pay off. The whole list is
-          already in memory, so the filter costs no round trip. */}
-      {templates.length > 0 && (
-        <Card as="section">
-          <h2>
-            <button
-              type="button"
-              onClick={toggleSavedMeals}
-              aria-expanded={savedMealsOpen}
-              className="flex w-full items-center justify-between gap-3 text-left font-semibold"
-            >
-              Saved meals
-              <span className="text-xs font-normal text-ink-muted">
-                {templates.length}{' '}
-                <span aria-hidden="true">{savedMealsOpen ? '▴' : '▾'}</span>
-              </span>
-            </button>
-          </h2>
-
-          {savedMealsOpen && (
-            <div className="mt-3">
-            {browsingTemplates && (
-              <TextInput
-                value={templateFilter}
-                onChange={(event) => setTemplateFilter(event.target.value)}
-                placeholder="Filter by name…"
-                aria-label="Filter saved meals"
-                className="mb-3 w-full"
-              />
-            )}
-
-            {shownTemplates.length === 0 ? (
-              <p className="text-sm text-ink-faint">
-                Nothing matches “{templateFilter.trim()}”.
-              </p>
-            ) : (
-              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {shownTemplates.map((template) => (
-                  <li key={template.id}>
-                    {/* Carries the viewed date, not today's: a template tapped
-                        while looking at yesterday must land on yesterday. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (user) rememberTemplate(user.id, template.id)
-                        openLog('hand', { date: forDay, state: { template } })
-                      }}
-                      className="flex w-full flex-col rounded-lg border border-slate-700 px-3 py-2.5 text-left hover:border-emerald-500 hover:text-emerald-300"
-                    >
-                      <span className="truncate text-sm font-medium text-slate-200">
-                        {template.name}
-                      </span>
-                      <span className="mt-0.5 truncate text-xs text-ink-faint">
-                        {Math.round(template.calories)} kcal ·{' '}
-                        {Math.round(template.protein)} g
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {templates.length > SAVED_MEALS_VISIBLE && (
-              <button
-                onClick={toggleBrowsing}
-                aria-expanded={browsingTemplates}
-                className="mt-3 w-full rounded-lg px-3 py-2 text-center text-xs text-ink-faint hover:bg-slate-800 hover:text-slate-300"
-              >
-                {browsingTemplates
-                  ? 'Show fewer ▴'
-                  : `Browse all (${templates.length}) ▾`}
-              </button>
-            )}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* "Recently logged" -- the meal you ate on Tuesday and did not think to
-          save. Directly below Saved meals, and collapsed by default for the
-          same reason, because the two are the same gesture
-          from opposite directions, and NOT merged into it because they answer
-          different questions: a template is "I eat this often" and had to be
-          saved in advance, while this is "I ate this recently" and needs no
-          forethought at all. Saved meals is also hidden until an account has a
-          template, so before this card someone who had logged twenty meals and
-          saved none had no one-tap path to any of them.
-
-          Rows come deduplicated by name from the server, newest first, so an
-          account that logs "Breakfast" daily gets one Breakfast rather than
-          six. The day each one came from is printed beside its macros because
-          the numbers are the NEWEST meal under that name and Monday's breakfast
-          was not Tuesday's -- the label is what stops that being a silent
-          substitution.
-
-          Same grid and same cell as Saved meals above, deliberately: two
-          different-looking lists of tappable meals stacked on one screen would
-          imply a difference that is not there. */}
-      {recent.length > 0 && (
-        <Card as="section">
-          <h2>
-            <button
-              type="button"
-              onClick={toggleRecentlyLogged}
-              aria-expanded={recentlyLoggedOpen}
-              className="flex w-full items-center justify-between gap-3 text-left font-semibold"
-            >
-              Recently logged
-              <span className="text-xs font-normal text-ink-muted">
-                {recent.length}{' '}
-                <span aria-hidden="true">{recentlyLoggedOpen ? '▴' : '▾'}</span>
-              </span>
-            </button>
-          </h2>
-
-          {recentlyLoggedOpen && (
-            <div className="mt-3">
-              <p className="mb-3 text-xs text-ink-faint">
-                Opens the form filled in, so you can change the portion before saving.
-              </p>
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {recent.map((meal) => (
-                <li key={meal.id}>
-                  {/* The viewed date, not today's, for the reason the Saved meals
-                      link above carries: a meal copied while looking at yesterday
-                      must land on yesterday. The source meal's own date is never
-                      used -- a copy is a new meal eaten on the day you are
-                      looking at, and `created_at` is stamped by the server. */}
-                  <button
-                    type="button"
-                    onClick={() => openLog('hand', { date: forDay, state: { copyMeal: meal } })}
-                    className="flex w-full flex-col rounded-lg border border-slate-700 px-3 py-2.5 text-left hover:border-emerald-500 hover:text-emerald-300"
-                  >
-                    <span className="truncate text-sm font-medium text-slate-200">
-                      {meal.name}
-                    </span>
-                    <span className="mt-0.5 truncate text-xs text-ink-faint">
-                      {Math.round(meal.calories)} kcal · {Math.round(meal.protein)} g
-                    </span>
-                    {/* The day gets its own line rather than joining the macros
-                        above. At 390 px a two-column cell has about 150 px of
-                        text, and "430 kcal · 23 g · Yesterday" truncated to
-                        "· Ye…" there -- losing the one word that says these
-                        numbers belong to a particular day. It costs a third line
-                        against Saved meals's two, which is the right trade: the
-                        label is what stops the newest meal under a name being
-                        presented as the name's. */}
-                    <span className="truncate text-xs text-ink-faint">
-                      {relativeDayLabel(meal.date, realToday)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            </div>
-          )}
-        </Card>
       )}
 
       {/* Directly above the meal list, which is now its only trigger on this
