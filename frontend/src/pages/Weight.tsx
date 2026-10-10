@@ -390,7 +390,7 @@ export default function Weight() {
                   <p className="text-sm font-medium">
                     {formatWeight(entry.weight_kg, unit)} {label}
                   </p>
-                  <p className="text-xs text-slate-400">{entry.date}</p>
+                  <p className="text-xs text-slate-400">{shortDate(entry.date)}</p>
                 </div>
                 {confirmDelete === entry.id ? (
                   <span className="flex items-center gap-2 text-xs">
@@ -425,14 +425,14 @@ export default function Weight() {
                         window.scrollTo({ top: 0, behavior: 'smooth' })
                       }}
                       className="text-xs text-ink-faint hover:text-emerald-400"
-                      aria-label={`Edit the weigh-in from ${entry.date}`}
+                      aria-label={`Edit the weigh-in from ${shortDate(entry.date)}`}
                     >
                       <span aria-hidden="true">✎</span>
                     </button>
                     <button
                       onClick={() => setConfirmDelete(entry.id)}
                       className="text-xs text-ink-faint hover:text-rose-400"
-                      aria-label={`Delete the weigh-in from ${entry.date}`}
+                      aria-label={`Delete the weigh-in from ${shortDate(entry.date)}`}
                     >
                       <span aria-hidden="true">✕</span>
                     </button>
