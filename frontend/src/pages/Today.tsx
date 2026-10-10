@@ -17,6 +17,7 @@ import {
   tooltipStyle,
 } from '../lib/chartTheme'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
+import { dayTotals, planCaption } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
@@ -25,37 +26,7 @@ import Card from '../components/ui/Card'
 import { primaryButtonClass } from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
-// What the caption under the calorie ring says, if anything.
-//
-// Only the calorie ring gets one. Protein does not move under a plan at all,
-// and captioning carbs and fat with the same sentence three times would be
-// noise around a fact that belongs to the day, not to each macro.
-function planCaption(plan: PlanDay | null, failed: boolean): string | undefined {
-  if (failed) {
-    return "Couldn't check for a plan on this day — showing your usual target."
-  }
-  if (!plan || plan.calorie_delta === null) return undefined
-
-  const sign = plan.calorie_delta > 0 ? '+' : '−'
-  const moved = `${sign}${Math.abs(Math.round(plan.calorie_delta))} kcal`
-  // The event day of a planned group is one of its own adjusted days, so this
-  // is the day being planned for rather than a day funding one.
-  if (plan.event_date === plan.date) return `${moved} — a day you planned for`
-
-  const when = plan.event_date
-    ? parseIsoDate(plan.event_date).toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      })
-    : null
-  if (!when) return moved
-  return plan.kind === 'planned'
-    ? `${moved} — funding ${when}`
-    : `${moved} — making up ${when}`
-}
-
-export default function Dashboard() {
+export default function Today() {
   const { settings } = useSettings()
   const [meals, setMeals] = useState<Meal[]>([])
   const [week, setWeek] = useState<AnalyticsSummary | null>(null)
@@ -176,12 +147,7 @@ export default function Dashboard() {
     }
   }
 
-  const consumed = {
-    calories: meals.reduce((sum, meal) => sum + meal.calories, 0),
-    protein: meals.reduce((sum, meal) => sum + meal.protein, 0),
-    carbs: meals.reduce((sum, meal) => sum + (meal.carbs ?? 0), 0),
-    fat: meals.reduce((sum, meal) => sum + (meal.fat ?? 0), 0),
-  }
+  const consumed = dayTotals(meals)
 
   // Checked at render rather than trusted from state. Two day-switches in
   // quick succession can land their responses out of order, and the late one

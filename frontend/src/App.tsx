@@ -104,7 +104,7 @@ const router = createBrowserRouter(
             </SettingsProvider>
           }
         >
-          <Route index lazy={page(() => import('./pages/Dashboard'))} />
+          <Route index lazy={page(() => import('./pages/Today'))} />
           {/* Log is a panel over the current page now (components/log/), not a
               page; the address only redirects there. */}
           <Route path="/log" element={<LogRedirect />} />
