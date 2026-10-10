@@ -32,6 +32,9 @@ export { XIcon as CloseIcon } from '@phosphor-icons/react/dist/csr/X'
 export { CheckIcon as DoneIcon } from '@phosphor-icons/react/dist/csr/Check'
 // Not in DESIGN.md's mapping: the AI box's collapsed row, when editing a meal.
 export { SparkleIcon as EstimateIcon } from '@phosphor-icons/react/dist/csr/Sparkle'
+// Not in DESIGN.md's mapping either: the Log panel's search over saved and
+// recent meals.
+export { MagnifyingGlassIcon as SearchIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlass'
 // Not in DESIGN.md's mapping either: the steps tracker, which replaced its 👟.
 export { FootprintsIcon as StepsIcon } from '@phosphor-icons/react/dist/csr/Footprints'
 

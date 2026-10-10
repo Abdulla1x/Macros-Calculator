@@ -6,7 +6,7 @@ import { localIsoDate } from '../../lib/dates'
 import { NextIcon } from '@/ui/icons'
 import DayChips from './DayChips'
 import { logDate } from './logPanelUrl'
-import { RecentMeals, SavedMeals } from './MealShortcuts'
+import MealShortcuts from './MealShortcuts'
 import { useLogPanel } from './useLogPanel'
 
 const ROW =
@@ -38,8 +38,7 @@ export default function LogStart() {
         onApply={() => open('hand', { state: { fromEstimate: true } })}
       />
 
-      <SavedMeals />
-      <RecentMeals />
+      <MealShortcuts />
 
       <div className="divide-y divide-rule border-y border-rule">
         <button type="button" onClick={() => open('hand')} className={ROW}>
