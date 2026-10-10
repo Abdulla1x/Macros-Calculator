@@ -21,3 +21,8 @@ test('pages outside the four tabs light none of them', () => {
 test('every tab’s home is a page of that tab', () => {
   for (const [section, home] of Object.entries(SECTION_HOME)) assert.equal(sectionFor(home), section)
 })
+
+test('the day in detail and its meal screens belong to Today', () => {
+  for (const path of ['/day/2026-10-09', '/day/2026-10-09/meal/12']) assert.equal(sectionFor(path), 'today', path)
+  assert.equal(sectionFor('/days'), null)
+})

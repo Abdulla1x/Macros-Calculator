@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { calorieBalance, litSegments, type DayTotals } from '../../lib/today'
 import Gauge from '@/ui/gauge'
+import { NextIcon } from '@/ui/icons'
 import RollingNumber from '@/ui/rolling-number'
 
 export interface BandTargets {
@@ -34,6 +35,8 @@ function Unit({ children }: { children: ReactNode }) {
  *  tick, then Eaten and Protein as fields; carbs and fat join them only when
  *  tracked, and are never mentioned otherwise.
  *
+ *  Tapping anywhere on it opens the day in detail, where calorie plans live.
+ *
  *  Going over is drawn calmly: the label changes to "Kcal over", the gauge is
  *  simply full, and one plain line offers a way to spread it. No red, no
  *  motion (the No Red Rule, the Never Punish Rule). */
@@ -65,9 +68,22 @@ export default function CaloriesBand({
   return (
     <section
       aria-label="Calories"
-      className="-mx-4 grid grid-cols-[minmax(0,1fr)] gap-2.5 border-b border-band-rule bg-band px-4 pt-3.5 text-band-ink desk:mx-0 desk:px-7 desk:pt-5"
+      className="relative -mx-4 grid grid-cols-[minmax(0,1fr)] gap-2.5 border-b border-band-rule bg-band px-4 pt-3.5 text-band-ink desk:mx-0 desk:px-7 desk:pt-5"
     >
-      <h2 className="text-field-label text-band-ink-2">{over ? 'Kcal over' : 'Kcal left'}</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-field-label text-band-ink-2">{over ? 'Kcal over' : 'Kcal left'}</h2>
+        {/* The whole band opens the day in detail: this link's hit area is
+            stretched over it (after:inset-0), so the band is one big target
+            with one short, honest name, rather than a link whose name would
+            be every number on it. */}
+        <Link
+          to={`/day/${day}`}
+          className="flex items-center gap-0.5 text-field-label text-band-ink-2 after:absolute after:inset-0 after:content-[''] hover:text-band-ink focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-action"
+        >
+          Day in detail
+          <NextIcon size={14} aria-hidden="true" />
+        </Link>
+      </div>
       <p className="flex items-end gap-3">
         <span className="text-display-number desk:text-[132px]">
           <RollingNumber value={amount} />
@@ -90,9 +106,10 @@ export default function CaloriesBand({
           {over && (
             <p>
               Over is fine. The week evens out.{' '}
+              {/* Above the band's stretched link, so it is its own target. */}
               <Link
-                to={`/settings/goals?plan=${day}`}
-                className="font-semibold text-band-ink underline underline-offset-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                to={`/settings/goals?plan=${day}&kind=compensating`}
+                className="relative z-10 font-semibold text-band-ink underline underline-offset-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
                 Spread it
               </Link>
