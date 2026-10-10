@@ -365,8 +365,8 @@ export async function seed(token) {
 // Panels that render nothing until they are opened, and are therefore invisible
 // to anything that only visits a route in its default state.
 //
-// /log's AI analyzer is collapsed to a single button until it is clicked, so
-// its entire contents -- the description box, the photo picker, the library
+// /log's AI analyzer WAS collapsed to a single button until it was clicked
+// (it is always open in the Log panel now), so its entire contents -- the description box, the photo picker, the library
 // picker, the estimate card -- had never once been compared, and neither had
 // any change ever made to them. That is the same hole meal templates left
 // before this harness seeded them: an empty or collapsed state does not make a
@@ -396,8 +396,14 @@ export const EXPAND_ON = {
     'button:has-text("Saved meals")',
     'button:has-text("Recently logged")',
   ],
+  // /log redirects to the Log panel over Today (2026-10-10). Its first screen
+  // shows the AI box open, so that needs no click any more; the food search
+  // lives one step in, behind "Enter it by hand". Without that click the
+  // suggestion list below silently dropped out of every run, because the
+  // expanders are skipped when their selector is absent -- the seventh time a
+  // hidden state went unaudited, caught here only by reading this list.
   '/log': [
-    'button:has-text("Estimate macros with AI")',
+    'button:has-text("Enter it by hand")',
     // "egg" matches exactly the two seeded egg rows, in a fixed order (neither
     // is a prefix match, so /api/foods/search falls through to name order), so
     // the panel is deterministic. Two characters is the threshold; this clears
@@ -438,6 +444,10 @@ export async function visitRoutes(context, routes, onRoute) {
     const expanders = [EXPAND_ON[route] ?? []].flat()
     for (const expander of expanders) {
       const selector = typeof expander === 'string' ? expander : expander.fill
+      // A short wait first: an expander can reveal a screen whose code is
+      // fetched on demand (the Log panel's "Enter it by hand"), so the next
+      // selector may not exist for a moment. Absent after that means absent.
+      await page.locator(selector).first().waitFor({ timeout: 2_000 }).catch(() => undefined)
       // Guarded rather than asserted: a route legitimately has no expander
       // before its data is seeded, and a hard failure there would make the
       // harness unusable on a fresh account.
@@ -449,6 +459,10 @@ export async function visitRoutes(context, routes, onRoute) {
         // sets the value in one event that the debounce never sees.
         await page.locator(selector).click()
         await page.locator(selector).type(expander.text, { delay: 30 })
+        // The field waits for a pause in typing before it searches, so the
+        // network can look idle before the search has even started. Wait for
+        // the list itself; a typed expander exists only to open one.
+        await page.getByRole('listbox').first().waitFor({ timeout: 3_000 }).catch(() => undefined)
       }
       // /log's panel fetches the food library when it opens, and the
       // autocomplete fetches again when it has two characters -- so wait, or the

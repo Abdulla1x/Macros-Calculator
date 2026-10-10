@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import { useAnalysis } from '../analysis/AnalysisContext'
-import MealCodeInput from '../components/MealCodeInput'
+import { useLogPanel } from '../components/log/useLogPanel'
+import { announceMealsChanged } from '../lib/mealEvents'
+import { useToast } from '../ui/toast'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
@@ -234,9 +236,15 @@ function SavedNumbersOffer({
   )
 }
 
+/** The Log panel's "Enter it by hand" screen, which is also where a meal is
+ *  edited, a saved meal or a recent one is adjusted, and a pasted code or an
+ *  AI estimate is checked before saving. It was the whole Log page until the
+ *  panel (overhaul 0a); the AI box and the code box moved to the panel's start
+ *  screen, and what they produce arrives here through router state. */
 export default function LogMeal() {
-  const navigate = useNavigate()
   const location = useLocation()
+  const { close } = useLogPanel()
+  const toast = useToast()
   // Set when the dashboard's edit button navigated here; absent on a normal log.
   const editMeal = (location.state as { editMeal?: Meal } | null)?.editMeal ?? null
   // Set when navigating from a dashboard day-view, so a new meal defaults to the
@@ -266,6 +274,10 @@ export default function LogMeal() {
     (location.state as { sharedMeal?: SharedMeal } | null)?.sharedMeal ?? null
   const sharedCode =
     (location.state as { sharedCode?: string } | null)?.sharedCode ?? null
+  // Set when the start screen's "Use these ingredients" brought the AI
+  // estimate here. The estimate itself stays in AnalysisProvider.
+  const fromEstimate =
+    (location.state as { fromEstimate?: boolean } | null)?.fromEstimate ?? false
 
   const { settings } = useSettings()
   const [rows, setRows] = useState<Row[]>([emptyRow()])
@@ -289,7 +301,12 @@ export default function LogMeal() {
   const [analysisId, setAnalysisId] = useState<number | null>(null)
   // The AI estimate lives in AnalysisProvider, not here, so it outlasts this
   // page; reset() clears it once its meal is saved.
-  const { reset: resetAnalysis } = useAnalysis()
+  const { reset: resetAnalysis, analysis: estimate, attached, library } = useAnalysis()
+  // Read by the effect below without being one of its triggers: the estimate is
+  // copied into the form once, when this screen opens for it, and never again --
+  // re-copying when the library finished loading would wipe the user's edits.
+  const estimateRef = useRef({ estimate, attached, library })
+  estimateRef.current = { estimate, attached, library }
   // Whether what is currently in the form came out of a meal code, which is not
   // the same question as whether location.state holds one. The state survives a
   // save -- nothing clears a history entry -- so keying the notice off `shared`
@@ -344,6 +361,12 @@ export default function LogMeal() {
     setFromCode(Boolean(shared))
     setCopiedFrom(copyMeal?.date ?? null)
     setMessage(null)
+    // Below the resets on purpose: the estimate brings its own analysisId and
+    // library, which the lines above would otherwise clear.
+    const pending = estimateRef.current
+    if (fromEstimate && pending.estimate && !editMeal && !shared && !template && !copyMeal) {
+      applyAnalysis(pending.estimate, { attached: pending.attached, library: pending.library })
+    }
     // Switching what this page is for -- a new meal, an edit, a template --
     // must take the analyzer with it. Without this, opening a meal to edit
     // leaves the previous meal's photos and estimate sitting above the form.
@@ -366,7 +389,9 @@ export default function LogMeal() {
     if (lastContext.current !== context) {
       lastContext.current = context
     }
-  }, [editMeal, shared, sharedCode, template, copyMeal, logDate])
+    // applyAnalysis only calls state setters, so it cannot go stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMeal, shared, sharedCode, template, copyMeal, logDate, fromEstimate])
 
   // Every edit to a row passes through here, so this is the one place the
   // provenance rule lives: change a number and the figures are the user's own
@@ -487,27 +512,18 @@ export default function LogMeal() {
           ),
       )
 
-      if (editMeal) {
-        // The estimate outlives this page now, so one that went into the
-        // edited meal is cleared here; an unrelated one is left alone.
-        if (usedEstimate) resetAnalysis()
-        navigate('/', { replace: true })
-        return
-      }
-      setMessage({ kind: 'success', text: `Saved "${mealName.trim()}" ✓` })
-      setRows([emptyRow()])
-      setMealName('')
-      // Clear the estimate for the next meal: photos, previews, note, the
-      // estimate and the "Use these ingredients" button. Leaving it standing
-      // meant the next meal opened with the last one's photos still attached,
-      // and tapping apply again pushed the previous meal's ingredients into a
-      // blank form. reset() also clears the note's draft, which would otherwise
-      // hand the next meal the description of the one just saved.
-      resetAnalysis()
-      // The numbers it described are no longer on screen.
-      setFromCode(false)
-      setCopiedFrom(null)
-      setLibraryFoods([])
+      // The estimate outlives this screen, so one that went into this meal is
+      // cleared (photos, note, the estimate itself), or the next meal would
+      // open with this one's photos still attached. An unrelated one -- an
+      // estimate still running for lunch while a snack is typed by hand -- is
+      // left alone. reset() also clears the note's draft.
+      if (usedEstimate) resetAnalysis()
+      // The page under the panel never remounted, so it is told to reload.
+      announceMealsChanged()
+      // DESIGN.md: saving closes the panel. The toast is the confirmation the
+      // inline "Saved ✓" used to be, and it lands on the page the meal is on.
+      toast.show({ text: editMeal ? `Updated "${meal.name}".` : `Saved "${meal.name}".` })
+      close()
     } catch (error) {
       setMessage({
         kind: 'error',
@@ -584,30 +600,6 @@ export default function LogMeal() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">{editMeal ? 'Edit meal' : 'Log a meal'}</h1>
-        <p className="text-sm text-slate-400">
-          {editMeal
-            ? 'Adjust the details below — saving updates the existing entry.'
-            : 'Start typing an ingredient — your food library and open food tables fill in the macros.'}
-        </p>
-      </header>
-
-      <MealCodeInput
-        onLoaded={(sharedMeal, code) =>
-          // Navigate rather than setRows: the effect above is the single place
-          // that decides what this form holds, and it also resets the analyzer
-          // and clears analysisId. That last one matters -- applyAnalysis sets
-          // analysisId, and saving with a stale one would link an AI estimate
-          // to a meal it never produced, quietly corrupting the calibration
-          // figures on the Analytics page.
-          navigate(`/log?date=${mealDate}`, {
-            state: { sharedMeal, sharedCode: code },
-            replace: true,
-          })
-        }
-      />
-
       {fromCode && (
         <Card as="p" tone="warn" pad="sm" className="text-sm">
           These numbers came from whoever sent you the code. The app has not checked
@@ -631,7 +623,10 @@ export default function LogMeal() {
         </Card>
       )}
 
-      <MealAnalyzer settings={settings} onApply={applyAnalysis} />
+      {/* Only when editing: a new meal starts from the AI box on the panel's
+          first screen, but re-estimating a meal already logged happens here,
+          where the form it fills is right below. */}
+      {editMeal && <MealAnalyzer settings={settings} onApply={applyAnalysis} />}
 
       <section className="space-y-4">
         {rows.map((row, index) => (

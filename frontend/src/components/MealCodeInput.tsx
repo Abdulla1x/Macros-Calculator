@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { SharedMeal } from '../types'
 import Card from './ui/Card'
@@ -22,10 +22,23 @@ import { useLiveMessage } from '../hooks/useLiveMessage'
  */
 export default function MealCodeInput({
   onLoaded,
+  startOpen = false,
+  onCancel,
 }: {
   onLoaded: (shared: SharedMeal, code: string) => void
+  /** Open on mount, for a screen that shows its own "Paste a meal code" row
+   *  and renders this only once that row is tapped. */
+  startOpen?: boolean
+  /** Called when the box is closed, so such a screen can show its row again. */
+  onCancel?: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(startOpen)
+  // Focus the box when it opens on a tap (startOpen): the tap was the request
+  // to paste, so the caret should already be there.
+  const box = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (startOpen) box.current?.focus()
+  }, [startOpen])
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   useLiveMessage(error)
@@ -35,6 +48,7 @@ export default function MealCodeInput({
     setOpen(false)
     setCode('')
     setError(null)
+    onCancel?.()
   }
 
   const load = async () => {
@@ -79,6 +93,7 @@ export default function MealCodeInput({
         you, and they are not told you used it.
       </p>
       <textarea
+        ref={box}
         value={code}
         onChange={(event) => setCode(event.target.value)}
         rows={3}

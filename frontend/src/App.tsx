@@ -12,6 +12,7 @@ import {
 import Announcer from './components/Announcer'
 import { CrashScreen } from './components/ErrorBoundary'
 import Layout from './components/Layout'
+import LogRedirect from './components/log/LogRedirect'
 import RequireAdmin from './components/RequireAdmin'
 import RequireAuth from './components/RequireAuth'
 import ForgotPassword from './pages/ForgotPassword'
@@ -104,7 +105,9 @@ const router = createBrowserRouter(
           }
         >
           <Route index lazy={page(() => import('./pages/Dashboard'))} />
-          <Route path="/log" lazy={page(() => import('./pages/LogMeal'))} />
+          {/* Log is a panel over the current page now (components/log/), not a
+              page; the address only redirects there. */}
+          <Route path="/log" element={<LogRedirect />} />
           <Route path="/weight" lazy={page(() => import('./pages/Weight'))} />
           <Route path="/analytics" lazy={page(() => import('./pages/Analytics'))} />
           {/* In the tab bar, unlike /whats-new below. It was kept out at first on

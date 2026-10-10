@@ -24,6 +24,8 @@ import {
 import { addDays, daysBetween, localIsoDate, parseIsoDate } from '../lib/dates'
 import { byRecentUse, rememberTemplate } from '../lib/recentTemplates'
 import { useSettings } from '../settings/SettingsContext'
+import { useLogPanel } from '../components/log/useLogPanel'
+import { onMealsChanged } from '../lib/mealEvents'
 import type { AnalyticsSummary, Meal, MealTemplate, PlanDay } from '../types'
 import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
@@ -135,6 +137,11 @@ export default function Dashboard() {
   const todayRef = useRef(localIsoDate())
   const realToday = localIsoDate()
   const isToday = viewedDate === realToday
+  // The Log panel opens over this page. A meal logged from here is for the day
+  // being viewed, so a tap while looking at yesterday lands on yesterday; today
+  // is the panel's default and is left out of the address.
+  const { open: openLog } = useLogPanel()
+  const forDay = isToday ? null : viewedDate
 
   // When the tab regains focus past midnight, roll the view forward — but only
   // if the user is still on "today", so a day they deliberately navigated to
@@ -214,6 +221,9 @@ export default function Dashboard() {
   useEffect(() => {
     load()
   }, [load])
+
+  // A save in the Log panel happens over this page, which never remounts.
+  useEffect(() => onMealsChanged(load), [load])
 
   const remove = async (id: number) => {
     try {
@@ -344,12 +354,13 @@ export default function Dashboard() {
             />
           </div>
         </div>
-        <Link
-          to={`/log?date=${viewedDate}`}
+        <button
+          type="button"
+          onClick={() => openLog('start', { date: forDay })}
           className={`${primaryButtonClass} px-5 py-2.5`}
         >
           + Log a meal
-        </Link>
+        </button>
       </header>
 
       {settings && goals && (
@@ -472,11 +483,13 @@ export default function Dashboard() {
                   <li key={template.id}>
                     {/* Carries the viewed date, not today's: a template tapped
                         while looking at yesterday must land on yesterday. */}
-                    <Link
-                      to={`/log?date=${viewedDate}`}
-                      state={{ template }}
-                      onClick={() => user && rememberTemplate(user.id, template.id)}
-                      className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (user) rememberTemplate(user.id, template.id)
+                        openLog('hand', { date: forDay, state: { template } })
+                      }}
+                      className="flex w-full flex-col rounded-lg border border-slate-700 px-3 py-2.5 text-left hover:border-emerald-500 hover:text-emerald-300"
                     >
                       <span className="truncate text-sm font-medium text-slate-200">
                         {template.name}
@@ -485,7 +498,7 @@ export default function Dashboard() {
                         {Math.round(template.calories)} kcal ·{' '}
                         {Math.round(template.protein)} g
                       </span>
-                    </Link>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -557,10 +570,10 @@ export default function Dashboard() {
                       must land on yesterday. The source meal's own date is never
                       used -- a copy is a new meal eaten on the day you are
                       looking at, and `created_at` is stamped by the server. */}
-                  <Link
-                    to={`/log?date=${viewedDate}`}
-                    state={{ copyMeal: meal }}
-                    className="flex flex-col rounded-lg border border-slate-700 px-3 py-2.5 hover:border-emerald-500 hover:text-emerald-300"
+                  <button
+                    type="button"
+                    onClick={() => openLog('hand', { date: forDay, state: { copyMeal: meal } })}
+                    className="flex w-full flex-col rounded-lg border border-slate-700 px-3 py-2.5 text-left hover:border-emerald-500 hover:text-emerald-300"
                   >
                     <span className="truncate text-sm font-medium text-slate-200">
                       {meal.name}
@@ -579,7 +592,7 @@ export default function Dashboard() {
                     <span className="truncate text-xs text-ink-faint">
                       {relativeDayLabel(meal.date, realToday)}
                     </span>
-                  </Link>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -625,7 +638,15 @@ export default function Dashboard() {
           {meals.length === 0 ? (
             !error && (
               <p className="py-6 text-center text-sm text-ink-faint">
-                Nothing logged yet — <Link to={`/log?date=${viewedDate}`} className="text-emerald-400 underline">log your first meal</Link>.
+                Nothing logged yet —{' '}
+                <button
+                  type="button"
+                  onClick={() => openLog('start', { date: forDay })}
+                  className="text-emerald-400 underline"
+                >
+                  log your first meal
+                </button>
+                .
               </p>
             )
           ) : (
@@ -665,14 +686,14 @@ export default function Dashboard() {
                       >
                         <span aria-hidden="true">📋</span>
                       </button>
-                      <Link
-                        to="/log"
-                        state={{ editMeal: meal }}
+                      <button
+                        type="button"
+                        onClick={() => openLog('hand', { date: null, state: { editMeal: meal } })}
                         className="text-xs text-ink-faint hover:text-emerald-400"
                         aria-label={`Edit ${meal.name}`}
                       >
                         <span aria-hidden="true">✎</span>
-                      </Link>
+                      </button>
                       <button
                         onClick={() => setConfirmDelete(meal.id)}
                         className="text-xs text-ink-faint hover:text-rose-400"

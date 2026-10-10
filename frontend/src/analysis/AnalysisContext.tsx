@@ -17,6 +17,7 @@ import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '../lib/draft'
 import { downscaleForUpload } from '../lib/photoDownscale'
 import type { Food, MealAnalysisResponse } from '../types'
 import { useToast } from '../ui/toast'
+import { useLogPanel } from '../components/log/useLogPanel'
 
 // Mirrors MAX_IMAGES in backend/app/routers/ai.py, which is the real limit --
 // this copy exists only so the UI can stop you before a round trip does. If the
@@ -86,6 +87,12 @@ const AnalysisContext = createContext<AnalysisState | null>(null)
  *  account's meal is left for the next. */
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const toast = useToast()
+  // The toasts' "View" opens the Log panel over whatever page is showing when
+  // it is pressed, which may not be the one showing when the toast appeared;
+  // the ref always holds the opener for the current page.
+  const { open: openLog } = useLogPanel()
+  const openLogRef = useRef(openLog)
+  openLogRef.current = openLog
   const [note, setNote] = useState(readNoteDraft)
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const [files, setFiles] = useState<File[]>([])
@@ -334,7 +341,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         setUnseen(true)
         readyToast.current = toast.show({
           text: 'Your estimate is ready.',
-          action: { label: 'View', to: '/log' },
+          action: { label: 'View', onSelect: () => openLogRef.current() },
         })
       }
     } catch (err) {
@@ -345,7 +352,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       if (watchers.current === 0) {
         toast.show({
           text: "The estimate didn't come through.",
-          action: { label: 'See why', to: '/log' },
+          action: { label: 'See why', onSelect: () => openLogRef.current() },
         })
       }
     } finally {
