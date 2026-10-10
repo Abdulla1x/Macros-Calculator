@@ -4,9 +4,8 @@ import { MAX_FOOD_NAME, validateFood } from '../lib/limits'
 import { findByName, foodFromAnalyzedItem } from '../lib/libraryMatch'
 import { num } from '../lib/parse'
 import type { AnalyzedItem, Food } from '../types'
-import Button from './ui/Button'
-import Field from './ui/Field'
-import TextInput from './ui/TextInput'
+import { Button } from '@/ui/button'
+import { FIELD } from '@/ui/field'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** "Save this ingredient to my library", on one item of an AI estimate.
@@ -89,7 +88,7 @@ export default function SaveIngredientToLibrary({
 
   if (savedAs !== null) {
     return (
-      <p className="mt-1.5 text-xs text-brand">
+      <p className="mt-1 text-small text-fact">
         {savedAs === item.name
           ? 'Saved to your food library ✓'
           : `Saved to your food library as “${savedAs}” ✓`}
@@ -105,7 +104,7 @@ export default function SaveIngredientToLibrary({
           setDraft(draftFor(item))
         }}
         aria-expanded={false}
-        className="mt-1.5 text-xs text-ink-muted underline decoration-dotted hover:text-brand"
+        className="mt-1 min-h-11 text-left text-small font-semibold text-action underline underline-offset-3"
       >
         Save “{item.name}” to my food library
       </button>
@@ -152,70 +151,70 @@ export default function SaveIngredientToLibrary({
   }
 
   const macroField = (key: 'calories' | 'protein' | 'carbs' | 'fat', label: string) => (
-    <Field size="xs" label={<>{label}</>}>
-      <TextInput
+    <label className="grid gap-1">
+      <span className="text-small text-ink-2">{label}</span>
+      <input
         type="number"
         inputMode="decimal"
         min={0}
-        pad="sm"
         value={draft[key]}
         onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
         aria-label={`${label} per 100 g`}
-        className="w-full"
+        className={`${FIELD} tabular-nums`}
       />
-    </Field>
+    </label>
   )
 
   return (
-    <div className="mt-2 space-y-2 rounded-control border border-line-strong bg-app px-3 py-2">
-      <Field size="xs" label={<>Name</>}>
-        <TextInput
+    <div className="mt-2 grid gap-3 rounded-control border-[1.5px] border-rule p-3">
+      <label className="grid gap-1">
+        <span className="text-small text-ink-2">Name</span>
+        <input
           value={draft.name}
           onChange={(event) => setDraft({ ...draft, name: event.target.value })}
           maxLength={MAX_FOOD_NAME}
-          pad="sm"
           aria-label="Food name"
-          className="w-full"
+          className={FIELD}
         />
-      </Field>
+      </label>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2">
         {macroField('calories', 'Calories')}
         {macroField('protein', 'Protein (g)')}
         {macroField('carbs', 'Carbs (g)')}
         {macroField('fat', 'Fat (g)')}
       </div>
 
-      <p className="text-xs text-ink-faint">
-        Stored <strong className="text-ink-muted">per 100 g</strong>, scaled from
-        the {Math.round(item.portion_grams)} g this estimate assumed — so it works
-        at any weight next time. Blank carbs or fat means “not recorded”, which is
-        not the same as zero.
+      <p className="text-small text-ink-2">
+        Stored <b className="text-ink">per 100 g</b>, scaled from the {Math.round(item.portion_grams)} g
+        this estimate assumed, so it works at any weight next time. Blank carbs or fat means “not
+        recorded”, which is not the same as zero.
       </p>
 
+      {/* Ink and words, never a warning colour (DESIGN.md, the No Red Rule). */}
       {replaces && (
-        <p className="rounded-control bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300">
-          You already have a food called “{replaces.name}”. Saving replaces its
-          numbers with these, and there is no undo — rename this one to keep both.
+        <p className="border-l-2 border-ink pl-3 text-small">
+          You already have a food called “{replaces.name}”. Saving replaces its numbers with these,
+          and there is no undo. Rename this one to keep both.
         </p>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={busy} className="px-3 py-1.5 text-sm">
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={save} disabled={busy}>
           {busy ? 'Saving…' : replaces ? 'Replace it' : 'Save to library'}
         </Button>
-        <button
+        <Button
+          variant="ghost"
           onClick={() => {
             setDraft(null)
             setError('')
           }}
-          className="text-sm text-ink-muted hover:text-ink"
         >
           Cancel
-        </button>
+        </Button>
       </div>
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="border-l-2 border-ink pl-3 text-small">{error}</p>}
     </div>
   )
 }

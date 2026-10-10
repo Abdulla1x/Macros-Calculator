@@ -6,7 +6,7 @@ import { useAnalysis } from '../analysis/AnalysisContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { announceMealsChanged } from '../lib/mealEvents'
 import { useToast } from '../ui/toast'
-import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
+import { localIsoDate, parseIsoDate } from '../lib/dates'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { findByName } from '../lib/libraryMatch'
 import {
@@ -31,9 +31,10 @@ import type {
   MealTemplate,
   SharedMeal,
 } from '../types'
-import Card from '../components/ui/Card'
-import TextInput from '../components/ui/TextInput'
-import Button from '../components/ui/Button'
+import { Button } from '@/ui/button'
+import { FIELD } from '@/ui/field'
+import { DeleteIcon, KeepIcon, LogIcon } from '@/ui/icons'
+import DayChips from '../components/log/DayChips'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 /** "Use your saved numbers", when a row's name is one of the user's foods.
@@ -74,10 +75,10 @@ function SavedNumbersOffer({
     <button
       type="button"
       onClick={() => onUse(match)}
-      className="mt-3 flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-control border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-left text-xs text-emerald-300 hover:bg-emerald-500/10"
+      className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-control border-[1.5px] border-fact px-3 py-2 text-left text-small hover:bg-fact/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
     >
-      <span>Use your saved numbers for “{match.name}”</span>
-      <span className="text-ink-faint">
+      <span className="font-semibold text-fact">Use your saved numbers for “{match.name}”</span>
+      <span className="text-ink-2 tabular-nums">
         {match.calories} kcal · {match.protein} g P / {match.serving_size} g
       </span>
     </button>
@@ -132,14 +133,6 @@ export default function LogMeal() {
   const [mealName, setMealName] = useState('')
   const [mealDate, setMealDate] = useState(localIsoDate())
 
-  // '' is unreachable through the input (the change handler drops it), but the
-  // fallback keeps addDays away from a malformed date if it ever becomes so.
-  const shiftMealDate = (delta: number) =>
-    setMealDate((current) => addDays(current || localIsoDate(), delta))
-  const dateChips = [
-    { label: 'Today', date: localIsoDate() },
-    { label: 'Yesterday', date: addDays(localIsoDate(), -1) },
-  ]
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   // Both outcomes live in one state here, so one call covers the save
   // confirmation and every validation refusal.
@@ -345,20 +338,20 @@ export default function LogMeal() {
   const saveAsTemplate = async () => {
     const name = mealName.trim()
     if (!name) {
-      setMessage({ kind: 'error', text: 'Name the meal before saving it as a template.' })
+      setMessage({ kind: 'error', text: 'Name the meal before keeping it as a saved meal.' })
       return
     }
     if (validRows.length === 0) {
       setMessage({
         kind: 'error',
-        text: 'Add at least one complete ingredient before saving a template.',
+        text: 'Add at least one complete ingredient before keeping it as a saved meal.',
       })
       return
     }
     if (validRows.length > MAX_TEMPLATE_ITEMS) {
       setMessage({
         kind: 'error',
-        text: `A template can hold at most ${MAX_TEMPLATE_ITEMS} ingredients.`,
+        text: `A saved meal can hold at most ${MAX_TEMPLATE_ITEMS} ingredients.`,
       })
       return
     }
@@ -371,13 +364,13 @@ export default function LogMeal() {
         // Saving over a food corrects it; saving over a template throws away an
         // ingredient list, and there is no undo — so say which one happened.
         text: saved.created
-          ? `Saved "${name}" as a template ☆`
-          : `Replaced your existing "${name}" template ☆`,
+          ? `Kept "${name}" as a saved meal.`
+          : `Replaced your saved meal "${name}".`,
       })
     } catch (error) {
       setMessage({
         kind: 'error',
-        text: error instanceof Error ? error.message : 'Saving the template failed',
+        text: error instanceof Error ? error.message : 'Saving the meal failed.',
       })
     } finally {
       setSavingTemplate(false)
@@ -385,29 +378,50 @@ export default function LogMeal() {
   }
 
 
+  // One number field, in the redesign's look (DESIGN.md Inputs).
+  const numberField = (
+    row: Row,
+    key: 'weight' | 'servingSize' | 'calories' | 'protein' | 'carbs' | 'fat',
+    label: string,
+    min = 0,
+  ) => (
+    <label className="grid gap-1">
+      <span className="text-small text-ink-2">{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={min}
+        value={row[key]}
+        onChange={(e) => updateRow(row.key, { [key]: e.target.value })}
+        className={`${FIELD} tabular-nums`}
+      />
+    </label>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="grid gap-5">
+      {/* Ink and words, never a coloured box (DESIGN.md): a rule on the left
+          sets a notice apart from the form it is about. */}
       {fromCode && (
-        <Card as="p" tone="warn" pad="sm" className="text-sm">
-          These numbers came from whoever sent you the code. The app has not checked
-          them and cannot — they may have been weighed, estimated or guessed. Change
-          anything that looks wrong before you save; this is your copy now.
-        </Card>
+        <p className="border-l-2 border-ink pl-3 text-small">
+          These numbers came from whoever sent you the code. The app has not checked them and
+          cannot: they may have been weighed, estimated or guessed. Change anything that looks
+          wrong before you save; this is your copy now.
+        </p>
       )}
 
       {copiedFrom && (
-        <Card as="p" tone="brand" pad="sm" className="text-sm text-ink-muted">
+        <p className="border-l-2 border-ink pl-3 text-small">
           Copied from your{' '}
-          <span className="text-slate-200">
+          <b>
             {parseIsoDate(copiedFrom).toLocaleDateString(undefined, {
               weekday: 'long',
               month: 'short',
               day: 'numeric',
             })}
-          </span>{' '}
-          log. Saving adds a new meal on the date below — the one you copied
-          stays where it is.
-        </Card>
+          </b>{' '}
+          log. Saving adds a new meal on the day below; the one you copied stays where it is.
+        </p>
       )}
 
       {/* Only when editing: a new meal starts from the AI box on the panel's
@@ -415,106 +429,49 @@ export default function LogMeal() {
           where the form it fills is right below. */}
       {editMeal && <MealAnalyzer onApply={applyAnalysis} />}
 
-      <section className="space-y-4">
+      <ol className="grid border-t border-rule">
         {rows.map((row, index) => (
-          <Card pad="sm" key={row.key}>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-300">
+          <li key={row.key} className="grid gap-3 border-b border-rule py-4">
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <h3 className="flex flex-wrap items-center gap-2 text-field-label text-ink-2">
                 {rows.length === 1 ? 'Ingredient' : `Ingredient ${index + 1}`}
                 {row.fromLibrary ? (
-                  <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] uppercase text-emerald-300">
-                    from library
+                  <span className="rounded-tag border-[1.5px] border-fact px-1.5 text-[11px] font-bold tracking-[0.04em] text-fact normal-case">
+                    Your food
                   </span>
                 ) : (
                   row.source !== 'user' && (
-                    <span className="ml-2 rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] uppercase text-sky-300">
+                    <span className="rounded-tag border-[1.5px] border-ink-2 px-1.5 text-[11px] font-bold tracking-[0.04em] normal-case">
                       from {SOURCE_NAME[row.source]}
                     </span>
                   )
                 )}
-              </h2>
+              </h3>
               {rows.length > 1 && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
-                  className="text-xs text-ink-faint hover:text-rose-400"
+                  aria-label={`Remove ${row.name.trim() || `ingredient ${index + 1}`}`}
                 >
-                  Remove
-                </button>
+                  <DeleteIcon size={18} aria-hidden />
+                </Button>
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <FoodAutocomplete
-                  value={row.name}
-                  onChange={(name) => updateRow(row.key, { name, fromLibrary: false })}
-                  onSelect={(food, fromLibrary) => selectFood(row.key, food, fromLibrary)}
-                />
-              </div>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-slate-400">Weight eaten (g)</span>
-                <TextInput
-                  type="number"
-                  min={0}
-                  value={row.weight}
-                  onChange={(e) => updateRow(row.key, { weight: e.target.value })}
-                  className="w-full"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-slate-400">Serving size (g)</span>
-                <TextInput
-                  type="number"
-                  min={1}
-                  value={row.servingSize}
-                  onChange={(e) => updateRow(row.key, { servingSize: e.target.value })}
-                  className="w-full"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-slate-400">Calories / serving</span>
-                <TextInput
-                  type="number"
-                  min={0}
-                  value={row.calories}
-                  onChange={(e) => updateRow(row.key, { calories: e.target.value })}
-                  className="w-full"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-slate-400">Protein / serving (g)</span>
-                <TextInput
-                  type="number"
-                  min={0}
-                  value={row.protein}
-                  onChange={(e) => updateRow(row.key, { protein: e.target.value })}
-                  className="w-full"
-                />
-              </label>
-              {settings?.track_carbs && (
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs text-slate-400">Carbs / serving (g)</span>
-                  <TextInput
-                    type="number"
-                    min={0}
-                    value={row.carbs}
-                    onChange={(e) => updateRow(row.key, { carbs: e.target.value })}
-                    className="w-full"
-                  />
-                </label>
-              )}
-              {settings?.track_fat && (
-                <label className="block text-sm">
-                  <span className="mb-1 block text-xs text-slate-400">Fat / serving (g)</span>
-                  <TextInput
-                    type="number"
-                    min={0}
-                    value={row.fat}
-                    onChange={(e) => updateRow(row.key, { fat: e.target.value })}
-                    className="w-full"
-                  />
-                </label>
-              )}
+            <FoodAutocomplete
+              value={row.name}
+              onChange={(name) => updateRow(row.key, { name, fromLibrary: false })}
+              onSelect={(food, fromLibrary) => selectFood(row.key, food, fromLibrary)}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              {numberField(row, 'weight', 'Weight eaten (g)')}
+              {numberField(row, 'servingSize', 'Serving size (g)', 1)}
+              {numberField(row, 'calories', 'Calories per serving')}
+              {numberField(row, 'protein', 'Protein per serving (g)')}
+              {settings?.track_carbs && numberField(row, 'carbs', 'Carbs per serving (g)')}
+              {settings?.track_fat && numberField(row, 'fat', 'Fat per serving (g)')}
             </div>
 
             {!row.fromLibrary && (
@@ -526,175 +483,82 @@ export default function LogMeal() {
             )}
 
             {!row.fromLibrary && row.name.trim() !== '' && (
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 text-small">
                 <input
                   type="checkbox"
                   checked={row.saveToLibrary}
                   onChange={(e) => updateRow(row.key, { saveToLibrary: e.target.checked })}
-                  className="h-3.5 w-3.5 accent-emerald-500"
+                  className="size-5 shrink-0 accent-[var(--action)]"
                 />
                 Save “{row.name.trim()}” to my food library for next time
               </label>
             )}
 
             {rowIsValid(row) && (
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="text-small text-ink-2 tabular-nums">
                 This ingredient: {Math.round(rowTotals(row).calories)} kcal ·{' '}
                 {Math.round(rowTotals(row).protein * 10) / 10} g protein
               </p>
             )}
-          </Card>
+          </li>
         ))}
+      </ol>
 
-        <button
-          onClick={() => setRows((current) => [...current, emptyRow()])}
-          className="w-full rounded-xl border border-dashed border-slate-700 py-3 text-sm text-slate-400 hover:border-emerald-500 hover:text-emerald-300"
-        >
-          + Add another ingredient
-        </button>
-      </section>
+      <Button
+        variant="ghost"
+        onClick={() => setRows((current) => [...current, emptyRow()])}
+        className="justify-self-start"
+      >
+        <LogIcon size={18} aria-hidden />
+        Add another ingredient
+      </Button>
 
-      <Card as="section">
-        <h2 className="mb-3 font-semibold">Meal details</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs text-slate-400">Meal name</span>
-            <TextInput
-              type="text"
-              value={mealName}
-              onChange={(e) => setMealName(e.target.value)}
-              placeholder="e.g. Chicken & rice bowl"
-              className="w-full"
-            />
-          </label>
-          {/* Nearly every meal is logged today or yesterday, so a chip is fewer
-              taps than any picker, and the steppers cover the rest of the week.
-              Mirrors the Dashboard header's controls rather than inventing a
-              second idiom for the same job.
+      <label className="grid gap-1">
+        <span className="text-small text-ink-2">Meal name</span>
+        <input
+          type="text"
+          value={mealName}
+          onChange={(e) => setMealName(e.target.value)}
+          placeholder="e.g. Chicken & rice bowl"
+          className={FIELD}
+        />
+      </label>
 
-              The label cannot wrap the control here -- the steppers sit beside
-              the input, and interactive content inside a <label> has murky
-              click-forwarding behaviour. htmlFor/id instead, which is the first
-              explicit association in this codebase; everything else wraps. */}
-          <div>
-            <label htmlFor="meal-date" className="mb-1 block text-xs text-slate-400">
-              Date
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => shiftMealDate(-1)}
-                aria-label="Previous day"
-                className="shrink-0 rounded-control border border-line bg-surface px-2.5 py-2 text-slate-300 hover:bg-raised"
-              >
-                ◀
-              </button>
-              <TextInput
-                id="meal-date"
-                type="date"
-                value={mealDate}
-                max={localIsoDate()}
-                // Ignore a cleared field rather than storing ''. addDays throws on
-                // a malformed date by design, so an empty value would turn the
-                // very next stepper tap into an exception. Dashboard's picker
-                // already guards the same way.
-                onChange={(e) => e.target.value && setMealDate(e.target.value)}
-                className="w-full flex-1"
-              />
-              <button
-                type="button"
-                onClick={() => shiftMealDate(1)}
-                disabled={mealDate >= localIsoDate()}
-                aria-label="Next day"
-                className="shrink-0 rounded-control border border-line bg-surface px-2.5 py-2 text-slate-300 hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ▶
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {dateChips.map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => setMealDate(chip.date)}
-                  aria-pressed={mealDate === chip.date}
-                  className={`rounded-full px-2.5 py-0.5 text-xs ${
-                    mealDate === chip.date
-                      ? 'bg-emerald-500/15 text-emerald-300'
-                      : 'bg-raised text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      <DayChips legend="Day" value={mealDate} onChange={setMealDate} />
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-800/60 px-4 py-3">
-          <p className="text-sm">
-            <span className="font-semibold text-amber-400">{Math.round(totals.calories)} kcal</span>
-            <span className="mx-2 text-ink-faint">·</span>
-            <span className="font-semibold text-emerald-400">
-              {Math.round(totals.protein * 10) / 10} g protein
-            </span>
-            {settings?.track_carbs && totals.carbs !== null && (
-              <>
-                <span className="mx-2 text-ink-faint">·</span>
-                <span className="font-semibold text-sky-400">
-                  {Math.round(totals.carbs * 10) / 10} g carbs
-                </span>
-              </>
-            )}
-            {settings?.track_fat && totals.fat !== null && (
-              <>
-                <span className="mx-2 text-ink-faint">·</span>
-                <span className="font-semibold text-rose-400">
-                  {Math.round(totals.fat * 10) / 10} g fat
-                </span>
-              </>
-            )}
-            <span className="ml-2 text-xs text-ink-faint">
-              ({validRows.length} of {rows.length} ingredient{rows.length === 1 ? '' : 's'} counted)
-            </span>
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Disabled while in flight, and that is load-bearing rather than
-                cosmetic: the save is a read-then-write upsert with no lock, so
-                two taps in quick succession would both find nothing, both
-                insert, and collide on the unique index. */}
-            <button
-              onClick={saveAsTemplate}
-              disabled={savingTemplate || saving}
-              title="Save these ingredients to re-log in one tap"
-              className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm text-slate-300 hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-60"
-            >
-              {savingTemplate ? (
-                'Saving…'
-              ) : (
-                <>
-                  <span aria-hidden="true">☆</span> Save as template
-                </>
-              )}
-            </button>
-            <Button
-              onClick={save}
-              disabled={saving || savingTemplate}
-              className="px-6 py-2.5"
-            >
-              {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
-            </Button>
-          </div>
-        </div>
+      {message && (
+        <p className="border-l-2 border-ink pl-3 text-small">{message.text}</p>
+      )}
 
-        {message && (
-          <p
-            className={`mt-3 text-sm ${message.kind === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}
+      {/* The panel's footer, as on the AI result: the totals and Save always
+          in reach, however many ingredients sit above. */}
+      <div className="sticky bottom-0 -mx-4 grid gap-2 border-t border-rule bg-ground px-4 py-3 desk:-mx-7 desk:px-7">
+        <p className="text-small text-ink-2 tabular-nums">
+          <b className="text-ink">{Math.round(totals.calories)} kcal</b> ·{' '}
+          {Math.round(totals.protein * 10) / 10} g protein
+          {settings?.track_carbs && totals.carbs !== null && ` · ${Math.round(totals.carbs * 10) / 10} g carbs`}
+          {settings?.track_fat && totals.fat !== null && ` · ${Math.round(totals.fat * 10) / 10} g fat`}
+          {' '}({validRows.length} of {rows.length} ingredient{rows.length === 1 ? '' : 's'} counted)
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {/* Disabled while in flight, and that is load-bearing rather than
+              cosmetic: the save is a read-then-write upsert with no lock, so
+              two taps in quick succession would both find nothing, both
+              insert, and collide on the unique index. */}
+          <Button
+            variant="secondary"
+            onClick={saveAsTemplate}
+            disabled={savingTemplate || saving}
+            title="Save these ingredients to re-log in one tap"
           >
-            {message.text}
-          </p>
-        )}
-      </Card>
+            <KeepIcon size={18} aria-hidden />
+            {savingTemplate ? 'Saving…' : 'Keep as a saved meal'}
+          </Button>
+          <Button onClick={save} disabled={saving || savingTemplate} className="flex-1">
+            {saving ? 'Saving…' : editMeal ? 'Update meal' : 'Save meal'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
