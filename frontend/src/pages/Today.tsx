@@ -118,7 +118,7 @@ export default function Today() {
   }, [load])
 
   // A save in the Log panel happens over this page, which never remounts.
-  useEffect(() => onMealsChanged(load), [load])
+  useEffect(() => onMealsChanged(() => load()), [load])
 
   // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
   // with the meal in router state; it is held, struck through, for ten

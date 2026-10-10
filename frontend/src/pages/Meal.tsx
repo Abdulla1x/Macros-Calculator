@@ -62,7 +62,7 @@ export default function Meal() {
   // Always re-read, even when the row handed the meal over: the state can be
   // older than the server (another tab, an edit made through the Log panel).
   useEffect(load, [load])
-  useEffect(() => onMealsChanged(load), [load])
+  useEffect(() => onMealsChanged(() => load()), [load])
 
   if (loaded.kind !== 'found') {
     return (
@@ -103,7 +103,7 @@ export default function Meal() {
         carbs: meal.carbs,
         fat: meal.fat,
       })
-      announceMealsChanged()
+      announceMealsChanged({ date: today })
       toast.show({ text: `Logged "${meal.name}" again for today.` })
       navigate('/')
     } catch (err) {
