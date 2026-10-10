@@ -37,7 +37,7 @@ export default function WeighInReminderSection({
         Your weigh-ins are not just a chart — they are what the trend line, your
         measured daily burn and (if you have them switched on) your automatic
         targets are all worked out from. Skipped days make every one of those
-        thinner. Set a time and this will say so.{' '}
+        thinner. Set a time and the weigh-in card on Today says when one is due.{' '}
         <strong className="text-slate-300">
           It only speaks while the app is open on this device, and nothing here
           will notify your phone

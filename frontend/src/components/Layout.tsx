@@ -5,7 +5,6 @@ import { useAnnouncements } from '../hooks/useAnnouncements'
 import { useSettings } from '../settings/SettingsContext'
 import AnnouncementsModal from './AnnouncementsModal'
 import StatusBanner from './StatusBanner'
-import WeighInNudge from './WeighInNudge'
 import WakingNotice from './WakingNotice'
 import { RailNav, TabBar } from './shell/AppNav'
 import ProgressSubnav from './shell/ProgressSubnav'
@@ -96,11 +95,6 @@ export default function Layout() {
       >
         <div className={`mx-auto ${wide ? 'max-w-7xl' : 'max-w-5xl'}`}>
           <StatusBanner banner={announcements?.banner ?? null} />
-          {/* Below the status banner on purpose: an outage notice outranks a
-              reminder. Above the outlet so it reaches someone who never
-              navigates to /weight, which is the whole point of it. Renders
-              nothing at all unless the reminder has been switched on. */}
-          <WeighInNudge />
           {coldStart && (
             <WakingNotice
               startedAt={waitStartedAt.current}
