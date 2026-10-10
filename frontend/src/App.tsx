@@ -22,6 +22,8 @@ import Signup from './pages/Signup'
 import { DURATION, EASE, loadMotionFeatures } from './lib/motion'
 import { isReloadingForNewVersion, isStaleChunkError, reloadForNewVersion } from './lib/staleChunk'
 import { SettingsProvider } from './settings/SettingsContext'
+import { AnalysisProvider } from './analysis/AnalysisContext'
+import { ToastProvider } from './ui/toast'
 
 /** The route errorElement: the same crash screen ErrorBoundary shows.
  *
@@ -87,10 +89,17 @@ const router = createBrowserRouter(
         {/* Inside RequireAuth, so the settings fetch only ever runs with a
             token in hand; outside Layout's children, so all five pages read
             one shared copy instead of fetching their own. */}
+        {/* AnalysisProvider holds the AI estimate for the whole session, so it
+            survives moving between pages (overhaul 0a); it tells the user an
+            estimate is ready through the toast, hence the order. */}
         <Route
           element={
             <SettingsProvider>
-              <Layout />
+              <ToastProvider>
+                <AnalysisProvider>
+                  <Layout />
+                </AnalysisProvider>
+              </ToastProvider>
             </SettingsProvider>
           }
         >
