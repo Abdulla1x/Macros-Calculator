@@ -226,6 +226,7 @@ Nearly square. Controls have a 5px radius, the Log button 7px, tags 3px, checkbo
 
 ### Gauges and meters
 - **Style:** square segments, filled in ink, unfilled in track. The calories gauge has 20 segments plus the target tick; protein and water have 10.
+- **Tracker figures** (water, steps) roll their changed digits like the calories number, and their meters fill like the calories gauge, so a tap on +250 is seen as well as counted.
 - **Never** rings. Progress is always segmented bars.
 
 ### Buttons
