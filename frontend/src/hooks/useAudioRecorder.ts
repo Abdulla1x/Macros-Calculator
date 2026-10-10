@@ -84,7 +84,10 @@ export function useAudioRecorder() {
     setRecording(true)
   }
 
-  const stop = () => recorderRef.current?.stop()
+  // Stable, and a no-op when nothing is recording, so a screen can call it on
+  // its way out: the recorder lives in AnalysisProvider, which outlasts the
+  // screen, and the mic would otherwise stay live on whatever page came next.
+  const stop = useCallback(() => recorderRef.current?.stop(), [])
 
   const toggle = () => {
     if (recording) stop()
@@ -102,5 +105,5 @@ export function useAudioRecorder() {
     setError(null)
   }, [])
 
-  return { supported, recording, blob, durationMs, error, toggle, clear }
+  return { supported, recording, blob, durationMs, error, toggle, stop, clear }
 }

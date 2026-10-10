@@ -3,9 +3,9 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
+import { useAnalysis } from '../analysis/AnalysisContext'
 import MealCodeInput from '../components/MealCodeInput'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
-import { clearNoteDraft } from '../lib/draft'
 import type { LibraryContext } from '../lib/libraryMatch'
 import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
 import type { FoodSource } from '../lib/foodSources'
@@ -287,10 +287,9 @@ export default function LogMeal() {
   const [saving, setSaving] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [analysisId, setAnalysisId] = useState<number | null>(null)
-  // Bumped to remount MealAnalyzer. Its state is deliberately its own -- the
-  // parent has no business reaching into ten pieces of it -- so a key is both
-  // the smallest and the most complete way to reset it.
-  const [analyzerNonce, setAnalyzerNonce] = useState(0)
+  // The AI estimate lives in AnalysisProvider, not here, so it outlasts this
+  // page; reset() clears it once its meal is saved.
+  const { reset: resetAnalysis } = useAnalysis()
   // Whether what is currently in the form came out of a meal code, which is not
   // the same question as whether location.state holds one. The state survives a
   // save -- nothing clears a history entry -- so keying the notice off `shared`
@@ -366,7 +365,6 @@ export default function LogMeal() {
     const context = `${editMeal?.id ?? ''}|${sharedCode ?? ''}|${template?.name ?? ''}|${copyMeal?.id ?? ''}|${logDate ?? ''}`
     if (lastContext.current !== context) {
       lastContext.current = context
-      setAnalyzerNonce((n) => n + 1)
     }
   }, [editMeal, shared, sharedCode, template, copyMeal, logDate])
 
@@ -458,6 +456,9 @@ export default function LogMeal() {
         ? await api.updateMeal(editMeal.id, payload)
         : await api.createMeal(payload)
 
+      // Whether the estimate in AnalysisProvider went into this meal (read
+      // before the link below clears analysisId).
+      const usedEstimate = analysisId !== null
       // Best-effort: remember which AI analysis this meal came from.
       if (analysisId !== null) {
         await api.linkAnalysis(analysisId, meal.id).catch(() => null)
@@ -487,31 +488,26 @@ export default function LogMeal() {
       )
 
       if (editMeal) {
+        // The estimate outlives this page now, so one that went into the
+        // edited meal is cleared here; an unrelated one is left alone.
+        if (usedEstimate) resetAnalysis()
         navigate('/', { replace: true })
         return
       }
       setMessage({ kind: 'success', text: `Saved "${mealName.trim()}" ✓` })
       setRows([emptyRow()])
       setMealName('')
-      // Remount the analyzer, which is the only way to clear all of its state
-      // at once -- photos, previews, note, the estimate and the "Use these
-      // ingredients" button. Leaving it standing meant the next meal opened
-      // with the last one's photos still attached, and tapping apply again
-      // pushed the previous meal's ingredients into a blank form.
-      //
-      // A remount rather than a pile of setters because MealAnalyzer's cleanup
-      // effect revokes its object URLs; clearing the state by hand and
-      // forgetting that leaks every preview blob for the life of the tab.
-      //
-      // The draft is cleared here too, and must be: the note is restored on
-      // mount, so a remount that left it behind would hand the next meal the
-      // description of the one just saved.
-      clearNoteDraft()
+      // Clear the estimate for the next meal: photos, previews, note, the
+      // estimate and the "Use these ingredients" button. Leaving it standing
+      // meant the next meal opened with the last one's photos still attached,
+      // and tapping apply again pushed the previous meal's ingredients into a
+      // blank form. reset() also clears the note's draft, which would otherwise
+      // hand the next meal the description of the one just saved.
+      resetAnalysis()
       // The numbers it described are no longer on screen.
       setFromCode(false)
       setCopiedFrom(null)
       setLibraryFoods([])
-      setAnalyzerNonce((n) => n + 1)
     } catch (error) {
       setMessage({
         kind: 'error',
@@ -635,7 +631,7 @@ export default function LogMeal() {
         </Card>
       )}
 
-      <MealAnalyzer key={analyzerNonce} settings={settings} onApply={applyAnalysis} />
+      <MealAnalyzer settings={settings} onApply={applyAnalysis} />
 
       <section className="space-y-4">
         {rows.map((row, index) => (
