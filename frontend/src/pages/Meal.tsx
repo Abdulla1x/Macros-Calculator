@@ -11,7 +11,8 @@ import { mealTimeLabel, viewedDay } from '../lib/today'
 import { useSettings } from '../settings/SettingsContext'
 import type { Meal as MealType } from '../types'
 import Block from '@/ui/block'
-import { EditIcon, KeepIcon, LogAgainIcon, ShareIcon } from '@/ui/icons'
+import { Button } from '@/ui/button'
+import { DeleteIcon, EditIcon, KeepIcon, LogAgainIcon, ShareIcon } from '@/ui/icons'
 import { RowButton } from '@/ui/row'
 import { Stat, StatGrid } from '@/ui/stat'
 import { useToast } from '@/ui/toast'
@@ -208,6 +209,17 @@ export default function Meal() {
           />
           <RowButton icon={<KeepIcon size={18} />} label="Keep as a saved meal" onClick={keep} />
         </div>
+        {/* No "are you sure?": Today holds the deletion for ten seconds with
+            Undo, which is a better answer to a mis-tap than a question asked
+            every time. */}
+        <Button
+          variant="ghost"
+          className="mt-2 w-full"
+          onClick={() => navigate(back, { state: { deleteMeal: meal } })}
+        >
+          <DeleteIcon size={18} aria-hidden="true" />
+          Delete
+        </Button>
       </Block>
     </div>
   )

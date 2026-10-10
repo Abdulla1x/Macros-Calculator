@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { mealTimeLabel } from '../../lib/today'
 import type { Meal } from '../../types'
@@ -19,7 +19,7 @@ export default function MealList({
   trackCarbs,
   trackFat,
   onLog,
-  children,
+  held,
 }: {
   /** Null while the day is still loading. */
   meals: Meal[] | null
@@ -30,8 +30,9 @@ export default function MealList({
   trackCarbs: boolean
   trackFat: boolean
   onLog: () => void
-  /** Rows that are not meals, after them: the Undo line of a deletion. */
-  children?: ReactNode
+  /** A meal being deleted, still undoable: drawn struck through in its own
+   *  place, with Undo and the draining bar, and left out of the totals. */
+  held?: { meal: Meal; folding: boolean; onUndo: () => void } | null
 }) {
   if (meals === null && !error) {
     return (
@@ -44,7 +45,8 @@ export default function MealList({
       </Block>
     )
   }
-  const list = meals ?? []
+  const all = meals ?? []
+  const list = all.filter((meal) => meal.id !== held?.meal.id)
   const total = list.reduce((sum, meal) => sum + meal.calories, 0)
   const times = list.map((meal) => mealTimeLabel(meal, showTimes))
   // One column for the time only when some row has one, so a list without
@@ -63,7 +65,7 @@ export default function MealList({
             Retry
           </button>
         </p>
-      ) : list.length === 0 && !children ? (
+      ) : all.length === 0 ? (
         <div className="grid gap-2 py-1">
           {isToday ? (
             <>
@@ -86,7 +88,10 @@ export default function MealList({
         </div>
       ) : (
         <ul className="divide-y divide-rule">
-          {list.map((meal, index) => {
+          {all.map((meal) => {
+            if (meal.id === held?.meal.id)
+              return <HeldRow key={meal.id} meal={meal} folding={held.folding} onUndo={held.onUndo} />
+            const index = list.indexOf(meal)
             const detail = [
               `${Math.round(meal.protein)} g protein`,
               trackCarbs && meal.carbs !== null && `${Math.round(meal.carbs)} g carbs`,
@@ -114,9 +119,41 @@ export default function MealList({
               </li>
             )
           })}
-          {children}
         </ul>
       )}
     </Block>
+  )
+}
+
+/** A deleted meal while Undo is still offered (DESIGN.md: Delete and Undo):
+ *  its name struck through, Undo, and a bar draining over the window. Undo
+ *  takes focus when it appears, since the user just asked for the deletion
+ *  and is the one who might take it back. */
+function HeldRow({ meal, folding, onUndo }: { meal: Meal; folding: boolean; onUndo: () => void }) {
+  const undo = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    undo.current?.focus({ preventScroll: false })
+  }, [])
+  return (
+    <li
+      className={`relative flex items-center gap-3 overflow-hidden ${folding ? 'animate-fold' : 'min-h-14 py-2'}`}
+    >
+      <span className="min-w-0 flex-1 truncate text-ink-2">
+        <span className="sr-only">Deleted: </span>
+        <span className="animate-strike bg-[linear-gradient(currentColor,currentColor)] bg-[length:100%_1.5px] bg-[position:0_55%] bg-no-repeat">
+          {meal.name}
+        </span>
+      </span>
+      <Button
+        ref={undo}
+        variant="ghost"
+        onClick={onUndo}
+        disabled={folding}
+        aria-label={`Undo deleting ${meal.name}`}
+      >
+        Undo
+      </Button>
+      <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-0.5 origin-left animate-drain bg-ink-2" />
+    </li>
   )
 }

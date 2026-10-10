@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import CaloriesBand from '../components/today/CaloriesBand'
 import DateBar from '../components/today/DateBar'
@@ -13,6 +13,7 @@ import { useSettings } from '../settings/SettingsContext'
 import { useLogPanel } from '../components/log/useLogPanel'
 import { onMealsChanged } from '../lib/mealEvents'
 import type { Meal, PlanDay } from '../types'
+import { useHeldDelete } from '../hooks/useHeldDelete'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 export default function Today() {
@@ -97,7 +98,29 @@ export default function Today() {
   // A save in the Log panel happens over this page, which never remounts.
   useEffect(() => onMealsChanged(load), [load])
 
-  const consumed = dayTotals(meals ?? [])
+  // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
+  // with the meal in router state; it is held, struck through, for ten
+  // seconds before anything is sent (hooks/useHeldDelete.ts).
+  const { held, hold, undo } = useHeldDelete((failure) => {
+    if (failure) setError(failure)
+    load()
+  })
+  const [heldNote, setHeldNote] = useState<string | null>(null)
+  useLiveMessage(heldNote)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const arriving = (location.state as { deleteMeal?: Meal } | null)?.deleteMeal
+  useEffect(() => {
+    if (!arriving) return
+    hold(arriving)
+    setHeldNote(`Deleted "${arriving.name}". Undo is there for ten seconds.`)
+    // Spent: a reload or the back button must not delete it a second time.
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
+  }, [arriving, hold, navigate, location.pathname, location.search])
+
+  // Out of the totals the moment it is deleted, not ten seconds later.
+  const counted = (meals ?? []).filter((meal) => meal.id !== held?.meal.id)
+  const consumed = dayTotals(counted)
 
   // Checked at render rather than trusted from state. Two day-switches in
   // quick succession can land their responses out of order, and the late one
@@ -136,6 +159,15 @@ export default function Today() {
         trackCarbs={settings?.track_carbs ?? false}
         trackFat={settings?.track_fat ?? false}
         onLog={() => openLog('start', { date: forDay })}
+        held={
+          held && {
+            ...held,
+            onUndo: () => {
+              undo()
+              setHeldNote(`"${held.meal.name}" is back.`)
+            },
+          }
+        }
       />
 
       {/* The three daily trackers.
