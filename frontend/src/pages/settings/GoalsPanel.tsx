@@ -75,6 +75,28 @@ export default function GoalsPanel() {
         </div>
       </Card>
 
+      {/* What Today shows, beside the macros it tracks. A setting like any
+          other, so it goes through the draft and the Save bar; the Library
+          tab, the other natural home, has no Save bar at all. */}
+      <Card as="section">
+        <h2 className="mb-3 font-semibold">Meal list</h2>
+        <OptionChip block>
+          <input
+            type="checkbox"
+            checked={settings.show_meal_times}
+            onChange={(event) => update({ show_meal_times: event.target.checked })}
+            className="mt-0.5 h-4 w-4 accent-emerald-500"
+          />
+          <span>
+            Show the time each meal was logged
+            <span className="mt-1 block text-xs text-ink-muted">
+              On Today, beside meals logged on the day they were eaten. It is when you logged it, not
+              when you ate it.
+            </span>
+          </span>
+        </OptionChip>
+      </Card>
+
       <Card as="section">
         <h2 className="mb-4 font-semibold">Daily goals</h2>
 
