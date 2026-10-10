@@ -18,6 +18,7 @@ import { onMealsChanged } from '../lib/mealEvents'
 import type { Meal, PlanDay } from '../types'
 import { useHeldDelete } from '../hooks/useHeldDelete'
 import { useLiveMessage } from '../hooks/useLiveMessage'
+import { useToast } from '../ui/toast'
 
 export default function Today() {
   const { settings } = useSettings()
@@ -122,8 +123,13 @@ export default function Today() {
   // Delete and Undo (DESIGN.md). The meal screen's Delete comes back here
   // with the meal in router state; it is held, struck through, for ten
   // seconds before anything is sent (hooks/useHeldDelete.ts).
+  // A refused delete is reported in a toast, not in the list's error slot:
+  // that slot replaces the whole list, and the reload below clears it in the
+  // same moment anyway, which is how the message used to vanish unseen. The
+  // reload puts the meal back, so the toast and the list agree.
+  const toast = useToast()
   const { held, gone, hold, undo, prune } = useHeldDelete((failure) => {
-    if (failure) setError(failure)
+    if (failure) toast.show({ text: failure })
     load()
   })
   useEffect(() => {
