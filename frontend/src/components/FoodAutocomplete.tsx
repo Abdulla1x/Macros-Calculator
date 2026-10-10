@@ -289,7 +289,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
                         The visible badge is a short code; the full name goes to
                         screen readers, for whom "FR" alone says little. */}
                     {suggestion.kind === 'local' ? (
-                      <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase text-slate-400">
+                      <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase text-slate-200">
                         <span aria-hidden="true">
                           {suggestion.food.source === 'user' ? 'library' : SOURCE_BADGE[suggestion.food.source]}
                         </span>
