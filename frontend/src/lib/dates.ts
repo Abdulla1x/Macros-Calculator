@@ -74,3 +74,18 @@ export function daysBetween(from: string, to: string): number {
   const ms = parseIsoDate(to).getTime() - parseIsoDate(from).getTime()
   return Math.round(ms / 86_400_000)
 }
+
+// A date as people read it: "Sep 28", in the device's own language and order
+// (so "28 Sept" on a phone set to British English), with the year added only
+// when it is not this year's. Every list and chart label goes through here, so
+// no screen shows a raw "2026-09-28" or the "09-28" charts used to cut from it.
+//
+// `now` and `locale` exist for the tests; the app passes neither.
+export function shortDate(iso: string, now: Date = new Date(), locale?: string): string {
+  const date = parseIsoDate(iso)
+  return date.toLocaleDateString(locale, {
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  })
+}

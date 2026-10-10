@@ -261,7 +261,7 @@ export default function Analytics() {
               <tbody className="divide-y divide-slate-800/60">
                 {[...summary.days].reverse().map((day) => (
                   <tr key={day.date} className="hover:bg-slate-800/40">
-                    <td className="px-4 py-2.5">{day.date}</td>
+                    <td className="px-4 py-2.5">{shortDate(day.date)}</td>
                     <td className="px-4 py-2.5">{Math.round(day.calories)}</td>
                     <td className="px-4 py-2.5">{Math.round(day.protein * 10) / 10}</td>
                     {settings?.track_carbs && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import type { BodyTargets } from '../../types'
+import { shortDate } from '../../lib/dates'
 import Card from '../ui/Card'
 
 // Field name → what to ask the user for. Keyed on what the API returns so a
@@ -111,7 +112,7 @@ export default function BodyTargetsCard({
       caption:
         targets.weight_date === null
           ? 'No weigh-in in the last 90 days, so nothing here can be calculated.'
-          : `Your smoothed trend weight as of ${targets.weight_date}.`,
+          : `Your smoothed trend weight as of ${shortDate(targets.weight_date)}.`,
     },
   ]
 

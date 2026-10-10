@@ -1,3 +1,5 @@
+import { shortDate as shortDateLabel } from './dates'
+
 // The colours and shapes every chart in this app shares.
 //
 // Spelled out here rather than read from index.css, and duplicated from it
@@ -80,8 +82,16 @@ export const chartMargin = { top: 5, right: 5, bottom: 0, left: -20 }
  *  are not corners. */
 export const barRadius: [number, number, number, number] = [4, 4, 0, 0]
 
-/** Drop the year, matching every other chart in the app. */
-export const shortDate = (value: string) => value.slice(5)
+/** An axis date as "Sep 28" (lib/dates.ts). A tick formatter runs inside
+ *  render, where a throw would take the whole chart down, so anything that is
+ *  not a YYYY-MM-DD date is shown as it came. */
+export const shortDate = (value: string) => {
+  try {
+    return shortDateLabel(value)
+  } catch {
+    return value
+  }
+}
 
 /** The dot that appears under the cursor, ringed in the card colour so it
  *  reads as raised rather than as an extra data point. */
