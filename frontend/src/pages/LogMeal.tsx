@@ -317,7 +317,7 @@ export default function LogMeal() {
       // left alone. reset() also clears the note's draft.
       if (usedEstimate) resetAnalysis()
       // The page under the panel never remounted, so it is told to reload.
-      announceMealsChanged()
+      announceMealsChanged({ date: meal.date })
       // DESIGN.md: saving closes the panel. The toast is the confirmation the
       // inline "Saved ✓" used to be, and it lands on the page the meal is on.
       toast.show({ text: editMeal ? `Updated "${meal.name}".` : `Saved "${meal.name}".` })

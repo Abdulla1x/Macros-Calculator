@@ -9,12 +9,19 @@
 
 const EVENT = 'trackaholic:meals-changed'
 
-export function announceMealsChanged() {
-  window.dispatchEvent(new Event(EVENT))
+/** What changed: the day the saved meal is on, so a page showing that day can
+ *  bring it into view, and a page showing another day only refreshes. */
+export interface MealsChange {
+  date: string
+}
+
+export function announceMealsChanged(change: MealsChange) {
+  window.dispatchEvent(new CustomEvent<MealsChange>(EVENT, { detail: change }))
 }
 
 /** Returns the cleanup, so it drops straight into a useEffect. */
-export function onMealsChanged(listener: () => void): () => void {
-  window.addEventListener(EVENT, listener)
-  return () => window.removeEventListener(EVENT, listener)
+export function onMealsChanged(listener: (change: MealsChange) => void): () => void {
+  const handle = (event: Event) => listener((event as CustomEvent<MealsChange>).detail)
+  window.addEventListener(EVENT, handle)
+  return () => window.removeEventListener(EVENT, handle)
 }

@@ -97,7 +97,7 @@ export default function EstimateResult({
       })
       // The estimate went into this meal, so it is spent: photos, note and all.
       reset()
-      announceMealsChanged()
+      announceMealsChanged({ date: meal.date })
       toast.show({ text: `Saved "${meal.name}".` })
       close()
     } catch (err) {
