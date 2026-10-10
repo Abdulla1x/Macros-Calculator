@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { localIsoDate } from '../lib/dates'
-import { trackerHues } from '../lib/chartTheme'
 import type { SupplementDay, SupplementSlot } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
-import Card from './ui/Card'
+import Tracker from './today/Tracker'
+import { SupplementsIcon, DoneIcon } from '@/ui/icons'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
@@ -113,12 +113,11 @@ export default function SupplementsCard({ date }: Props) {
 
   if (error && !day) {
     return (
-      <Card>
-        <h2 className="font-semibold">
-          <span className="mr-2" aria-hidden="true">💊</span>Supplements
-        </h2>
-        <p className="mt-3 text-xs text-ink-faint">{error}</p>
-      </Card>
+      <Tracker icon={<SupplementsIcon size={22} />} title="Supplements">
+        <p role="alert" className="border-l-2 border-ink pl-3 text-small">
+          {error}
+        </p>
+      </Tracker>
     )
   }
 
@@ -141,53 +140,58 @@ export default function SupplementsCard({ date }: Props) {
 
   return (
     <DailyTrackerCard
-      icon="💊"
+      icon={<SupplementsIcon size={22} />}
       label="Supplements"
       value={day.taken}
       goal={day.scheduled}
       unit="doses"
-      color={trackerHues.supplements}
+      // A count of a list that is right below: no meter, and never a
+      // percentage of a "goal" (doses are not one, UA-12).
+      meter={false}
+      valueText={
+        <span className="font-semibold">
+          {day.taken >= day.scheduled ? 'All done' : `${day.taken} of ${day.scheduled}`}
+        </span>
+      }
       error={error}
       caption={<DoseCaption day={day} isToday={isToday} overdue={overdue.length} next={next} />}
       actions={
-        <ul className="space-y-1">
+        <ul className="divide-y divide-rule">
           {day.slots.map((slot) => {
             const key = `${slot.supplement_id}-${slot.time}`
             const isOverdue = overdue.includes(slot)
             return (
               <li key={key}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-sm hover:bg-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={slot.taken}
-                    onChange={() => toggle(slot)}
-                    className="h-4 w-4 shrink-0 accent-amber-400"
-                  />
-                  <span className="shrink-0 tabular-nums text-xs text-ink-faint">
-                    {slot.time}
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 py-1.5">
+                  {/* A square 24px box (DESIGN.md: checkboxes 4px radius),
+                      the native input underneath for keyboard and screen
+                      readers, the tick drawn over it. */}
+                  <span className="relative grid size-6 shrink-0 place-items-center">
+                    <input
+                      type="checkbox"
+                      checked={slot.taken}
+                      onChange={() => toggle(slot)}
+                      className="peer size-6 cursor-pointer appearance-none rounded-[4px] border-[1.5px] border-rule checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                    />
+                    <DoneIcon
+                      size={16}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute hidden text-ground peer-checked:block"
+                    />
                   </span>
-                  <span
-                    className={`truncate ${
-                      slot.taken ? 'text-ink-faint line-through' : 'text-slate-200'
-                    }`}
-                  >
-                    {slot.name}
-                    {slot.dose && (
-                      <span className="ml-1.5 text-xs text-ink-faint">{slot.dose}</span>
-                    )}
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className={slot.taken ? 'text-ink-2 line-through' : ''}>{slot.name}</span>
+                    {slot.dose && <span className="ml-1.5 text-small text-ink-2">{slot.dose}</span>}
                   </span>
-                  {isOverdue && (
-                    <span className="ml-auto shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
-                      due
-                    </span>
-                  )}
+                  <span className="shrink-0 text-small text-ink-2 tabular-nums">{slot.time}</span>
+                  {isOverdue && <span className="shrink-0 text-small font-semibold text-action">Due</span>}
                   {/* Marked rather than hidden: this dose was ticked on a day
                       it was scheduled, and the schedule has since moved. It is
                       history, and dropping it would turn a day that was fully
                       taken into one with a miss in it. */}
                   {slot.off_schedule && !isOverdue && (
                     <span
-                      className="ml-auto shrink-0 text-xs text-ink-faint"
+                      className="shrink-0 text-small text-ink-2"
                       title="Not on your current schedule — shown because you ticked it on this day"
                     >
                       was scheduled
@@ -234,13 +238,13 @@ function DoseCaption({
   if (overdue > 0) {
     return (
       <>
-        <span className="text-amber-300">
+        <span className="font-semibold text-ink">
           {overdue} {overdue === 1 ? 'dose' : 'doses'} overdue
         </span>
         {next && <> · next at {next.time}</>}
       </>
     )
   }
-  if (day.taken >= day.scheduled) return <>All done for today.</>
+  if (day.taken >= day.scheduled) return <>All doses done. Your future self says thanks.</>
   return <>{next ? <>Next at {next.time}.</> : <>Nothing outstanding right now.</>}</>
 }

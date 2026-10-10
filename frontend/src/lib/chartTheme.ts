@@ -101,16 +101,6 @@ export const macroHues = {
   fat: '#fb7185',
 } as const
 
-/** Per-tracker hues, mirroring --color-water/steps/supplements. `water` is the
- *  same sky as `carbs` on purpose: they never share a chart, and forcing them
- *  apart would mean one of the two stopped matching its ring. Kept as separate
- *  names so that stays a decision rather than an accident. */
-export const trackerHues = {
-  water: '#38bdf8',
-  steps: '#a78bfa',
-  supplements: '#fbbf24',
-} as const
-
 // Emphasis form: the trend line is the subject, the raw weigh-ins are context.
 // One accent hue plus the de-emphasis gray — validated against this app's chart
 // surface (#0f172a) for lightness band, CVD separation and contrast.
@@ -124,9 +114,8 @@ export const RAW_COLOR = '#64748b'
  *  separate cleanly. It is drawn dashed as well as coloured, so the line reads
  *  as a target rather than as a third series even before colour is considered.
  *
- *  The same value as macroHues.calories, and kept as its own name for the
- *  reason trackerHues.water is: they never share a chart, and a retune of one
- *  has no reason to move the other. */
+ *  The same value as macroHues.calories, and kept as its own name: they never
+ *  share a chart, and a retune of one has no reason to move the other. */
 export const GOAL_COLOR = '#f59e0b'
 
 // Validated against this app's chart surface (#0f172a) for lightness band,

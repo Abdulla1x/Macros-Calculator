@@ -55,6 +55,10 @@ export default function MealList({
 
   return (
     <Block
+      // Packed at the top: on desktop this column is stretched to the
+      // trackers' height so both end on one line, and the rows must not be
+      // spread down it.
+      className="content-start"
       label={list.length ? `Meals · ${list.length}` : 'Meals'}
       value={list.length ? `${Math.round(total).toLocaleString()} kcal` : undefined}
     >

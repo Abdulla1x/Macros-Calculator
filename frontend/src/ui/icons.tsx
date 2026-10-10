@@ -32,6 +32,8 @@ export { XIcon as CloseIcon } from '@phosphor-icons/react/dist/csr/X'
 export { CheckIcon as DoneIcon } from '@phosphor-icons/react/dist/csr/Check'
 // Not in DESIGN.md's mapping: the AI box's collapsed row, when editing a meal.
 export { SparkleIcon as EstimateIcon } from '@phosphor-icons/react/dist/csr/Sparkle'
+// Not in DESIGN.md's mapping either: the steps tracker, which replaced its 👟.
+export { FootprintsIcon as StepsIcon } from '@phosphor-icons/react/dist/csr/Footprints'
 
 /** The weigh-in scale. Phosphor has no bathroom scale, so this one is drawn on
  *  Phosphor's 256 grid at its 16-unit line weight (DESIGN.md, Iconography), to
