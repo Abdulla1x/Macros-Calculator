@@ -399,7 +399,7 @@ export default function LogMeal() {
   )
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       {/* Ink and words, never a coloured box (DESIGN.md): a rule on the left
           sets a notice apart from the form it is about. */}
       {fromCode && (
