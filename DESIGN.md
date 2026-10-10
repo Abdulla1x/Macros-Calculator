@@ -186,7 +186,7 @@ Restrained: a tinted neutral ground, ink, one action colour and one plan colour.
 - **Title** (750, 16px, width 112%): screen titles in the app bar and the date bar.
 - **Body** (400, 15px, line-height 1.4): rows, descriptions, form text. Prose capped at about 70 characters per line.
 - **Small** (400, 13px): captions, helper text, ranges.
-- **Label** (650, 11px, letter-spacing 0.09em, uppercase, width 110%): field labels and section labels ("KCAL LEFT", "MEALS · 3").
+- **Label** (650, 11px, letter-spacing 0.09em, uppercase, width 110%): field labels, section labels ("KCAL LEFT", "MEALS · 3") and tracker titles ("WATER", with the tracker's icon at 18px beside it). Every heading inside a screen uses it, so the page has one heading style; the figure at the right of a tracker stays in body type, because it is data.
 - **Label-style title** (Libre Franklin 900, 40px phone / 56px desktop, letter-spacing -0.03em): the heading of a nutrition-label block.
 
 ### Named Rules
