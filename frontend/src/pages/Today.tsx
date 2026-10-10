@@ -152,7 +152,7 @@ export default function Today() {
 
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 desk:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] desk:gap-x-10">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-y-2 desk:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] desk:gap-x-10 desk:gap-y-4">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3 desk:col-span-2">
         <DateBar day={viewedDate} today={realToday} onChange={showDay} />
         {!settings || !goals || meals === null ? (
@@ -189,7 +189,7 @@ export default function Today() {
         }
       />
 
-      {/* The three daily trackers.
+      {/* The daily trackers, one per row, full width (0a).
 
           The right-hand column from 900px, below the meals on a phone. They
           sit below the calories because those are the primary targets, and
@@ -207,7 +207,7 @@ export default function Today() {
           `viewedDate`, not today: the date bar's ◀ ▶ already move the whole page
           through time, and a tracker that ignored them would be the only part
           of this screen showing a different day from the rest. */}
-      <div className="grid content-start grid-cols-[minmax(0,1fr)] gap-4">
+      <div className="grid content-start grid-cols-[minmax(0,1fr)]">
         {/* First: the one tracker every account has, and the one with a
             reminder. */}
         <WeighInCard day={viewedDate} today={realToday} />

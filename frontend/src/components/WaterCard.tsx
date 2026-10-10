@@ -6,10 +6,13 @@ import {
   WATER_ML_PER_KG,
 } from '../lib/limits'
 import { useSettings } from '../settings/SettingsContext'
-import { trackerHues } from '../lib/chartTheme'
 import type { WaterDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
-import Card from './ui/Card'
+import Tracker from './today/Tracker'
+import { Button } from '@/ui/button'
+import { FIELD } from '@/ui/field'
+import { cn } from '@/lib/utils'
+import { WaterIcon } from '@/ui/icons'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
@@ -91,14 +94,9 @@ export default function WaterCard({ date }: Props) {
 
   if (!day) {
     return (
-      <Card>
-        <h2 className="font-semibold">
-          <span className="mr-2" aria-hidden="true">💧</span>Water
-        </h2>
-        <p className="mt-3 text-xs text-ink-faint">
-          {error ?? 'Loading…'}
-        </p>
-      </Card>
+      <Tracker icon={<WaterIcon size={22} />} title="Water">
+        <p className="text-small text-ink-2">{error ?? 'Loading…'}</p>
+      </Tracker>
     )
   }
 
@@ -108,25 +106,19 @@ export default function WaterCard({ date }: Props) {
 
   return (
     <DailyTrackerCard
-      icon="💧"
+      icon={<WaterIcon size={22} />}
       label="Water"
       value={day.total_ml}
       goal={day.goal_ml}
       unit="ml"
-      color={trackerHues.water}
       error={error}
       caption={<GoalCaption day={day} />}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {quickAdds.map((ml) => (
-            <button
-              key={ml}
-              onClick={() => add(ml)}
-              disabled={busy}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:border-sky-500 hover:text-sky-300 disabled:opacity-40"
-            >
+            <Button key={ml} variant="ghost" onClick={() => add(ml)} disabled={busy} className="tabular-nums">
               +{ml}
-            </button>
+            </Button>
           ))}
           <div className="flex items-stretch">
             <input
@@ -142,21 +134,22 @@ export default function WaterCard({ date }: Props) {
               }}
               placeholder="ml"
               aria-label="Custom amount in ml"
-              className="w-20 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200"
+              className={cn(FIELD, 'w-20 rounded-r-none tabular-nums')}
             />
-            <button
+            <Button
+              variant="ghost"
               onClick={addCustom}
               disabled={busy || custom.trim() === ''}
-              className="rounded-r-lg border border-l-0 border-slate-700 px-2.5 text-sm text-slate-400 hover:text-sky-300 disabled:opacity-40"
+              className="h-auto rounded-l-none border-l-0"
             >
               Add
-            </button>
+            </Button>
           </div>
           {lastEntry && (
             <button
               onClick={undo}
               disabled={busy}
-              className="ml-auto text-xs text-ink-faint hover:text-slate-300 disabled:opacity-40"
+              className="ml-auto min-h-11 px-1 text-small text-ink-2 underline underline-offset-3 hover:text-ink disabled:opacity-45"
             >
               Undo last (−{Math.round(lastEntry.ml)})
             </button>

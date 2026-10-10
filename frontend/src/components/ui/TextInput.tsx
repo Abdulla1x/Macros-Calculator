@@ -22,9 +22,9 @@ import type { ComponentPropsWithRef, ElementType } from 'react'
  *         nothing on screen; shrinking them to match 'sm' would.
  *
  * `accent` formalises a system that already existed rather than flattening it:
- * Water and Steps carry a per-tracker focus hue matching the `color` props on
- * WaterCard and StepsCard, which read trackerHues from lib/chartTheme.ts.
- * Note the focus borders are the 500 shades while trackerHues are the 400s --
+ * Water and Steps carry a per-tracker focus hue matching the colours their
+ * Today cards had before the redesign (the 400 shades).
+ * Note the focus borders are the 500 shades while those were the 400s --
  * a deliberate step deeper for a 3:1 non-text target, and the reason these stay
  * literals rather than pointing at --color-water / --color-steps.
  *

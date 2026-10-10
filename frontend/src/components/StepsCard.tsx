@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { MAX_STEPS_PER_DAY } from '../lib/limits'
-import { trackerHues } from '../lib/chartTheme'
 import type { StepDay } from '../types'
 import DailyTrackerCard from './DailyTrackerCard'
-import Card from './ui/Card'
+import Tracker from './today/Tracker'
+import { Button } from '@/ui/button'
+import { FIELD } from '@/ui/field'
+import { cn } from '@/lib/utils'
+import { StepsIcon } from '@/ui/icons'
 import { useLiveMessage } from '../hooks/useLiveMessage'
 
 interface Props {
@@ -86,23 +89,19 @@ export default function StepsCard({ date }: Props) {
 
   if (!day) {
     return (
-      <Card>
-        <h2 className="font-semibold">
-          <span className="mr-2" aria-hidden="true">👟</span>Steps
-        </h2>
-        <p className="mt-3 text-xs text-ink-faint">{error ?? 'Loading…'}</p>
-      </Card>
+      <Tracker icon={<StepsIcon size={22} />} title="Steps">
+        <p className="text-small text-ink-2">{error ?? 'Loading…'}</p>
+      </Tracker>
     )
   }
 
   return (
     <DailyTrackerCard
-      icon="👟"
+      icon={<StepsIcon size={22} />}
       label="Steps"
       value={day.steps}
       goal={day.goal}
       unit="steps"
-      color={trackerHues.steps}
       error={error}
       caption={<StepsCaption day={day} />}
       actions={
@@ -121,21 +120,22 @@ export default function StepsCard({ date }: Props) {
               }}
               placeholder="steps"
               aria-label="Step count for this day"
-              className="w-24 rounded-l-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base sm:text-sm text-slate-200"
+              className={cn(FIELD, 'w-28 rounded-r-none tabular-nums')}
             />
-            <button
+            <Button
+              variant="ghost"
               onClick={save}
               disabled={busy || draft.trim() === ''}
-              className="rounded-r-lg border border-l-0 border-slate-700 px-2.5 text-sm text-slate-400 hover:text-violet-300 disabled:opacity-40"
+              className="h-auto rounded-l-none border-l-0"
             >
               Save
-            </button>
+            </Button>
           </div>
           {day.logged && (
             <button
               onClick={clear}
               disabled={busy}
-              className="ml-auto text-xs text-ink-faint hover:text-slate-300 disabled:opacity-40"
+              className="ml-auto min-h-11 px-1 text-small text-ink-2 underline underline-offset-3 hover:text-ink disabled:opacity-45"
             >
               Clear this day
             </button>
