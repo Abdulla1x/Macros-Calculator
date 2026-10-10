@@ -16,6 +16,7 @@ import { sameInputs } from '../lib/analysisInputs'
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '../lib/draft'
 import { downscaleForUpload } from '../lib/photoDownscale'
 import type { Food, MealAnalysisResponse } from '../types'
+import { useToast } from '../ui/toast'
 
 // Mirrors MAX_IMAGES in backend/app/routers/ai.py, which is the real limit --
 // this copy exists only so the UI can stop you before a round trip does. If the
@@ -58,6 +59,12 @@ interface AnalysisState {
   audio: Audio
   analyze: (refine: boolean, evenIfUnchanged?: boolean) => Promise<void>
   correctAssumption: (assumption: string) => void
+  /** An estimate arrived while nothing was showing it (the Log button says
+   *  "Ready" until it is looked at). */
+  unseen: boolean
+  /** Called by whatever shows the estimate, for as long as it is on screen.
+   *  Returns the cleanup. */
+  watch: () => () => void
   /** Clear everything for the next meal: note, photos, estimate, attachments. */
   reset: () => void
 }
@@ -72,11 +79,13 @@ const AnalysisContext = createContext<AnalysisState | null>(null)
  *  MealAnalyzer, so leaving the Log page threw away the photos, the call in
  *  flight and the answer it was about to give (only the note survived, through
  *  lib/draft.ts). Overhaul 0a made this a requirement: the analysis lives in
- *  app-level state, not in the Log screen.
+ *  app-level state, the Log button shows it working, and a note says when it
+ *  is ready on any tab.
  *
  *  Mounted inside RequireAuth, so signing out unmounts it and nothing from one
  *  account's meal is left for the next. */
 export function AnalysisProvider({ children }: { children: ReactNode }) {
+  const toast = useToast()
   const [note, setNote] = useState(readNoteDraft)
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const [files, setFiles] = useState<File[]>([])
@@ -96,6 +105,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   // Adding a food saved from this panel would make the page offer the estimate
   // back to itself a moment later, dressed up as an independent source.
   const [savedToLibrary, setSavedToLibrary] = useState<Record<string, string>>({})
+  const [unseen, setUnseen] = useState(false)
 
   // What the estimate on screen was built from, and -- when a button was
   // pressed with nothing changed since -- which one, so the question can run it
@@ -114,6 +124,21 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   const audio = useAudioRecorder()
   const { blob: recording, durationMs, clear: clearRecording } = audio
+
+  // How many screens are showing the estimate right now (the Log page, later
+  // the Log panel). Zero when the answer lands means nobody saw it arrive, so
+  // the Log button and a toast say so. A count, not a flag, so two mounts
+  // overlapping during a route transition cannot clear each other.
+  const watchers = useRef(0)
+  const readyToast = useRef<number | null>(null)
+  const watch = useCallback(() => {
+    watchers.current += 1
+    setUnseen(false)
+    if (readyToast.current !== null) toast.dismiss(readyToast.current)
+    return () => {
+      watchers.current -= 1
+    }
+  }, [toast])
 
   // Fetched each time a screen opens the picker, not once per session: foods
   // added in Settings since should be attachable without a reload. A failure is
@@ -277,6 +302,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     }
     setUnchangedRerun(null)
     setAnalyzing(true)
+    setUnseen(false)
     setError(null)
     // Photos are what make a body worth showing a bar for. A note-only analysis
     // uploads a few hundred bytes and goes straight to waiting on the model.
@@ -304,9 +330,24 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       // longer describe anything on screen. Refining in particular re-portions
       // and often renames, so even a name that survives is a different estimate.
       setSavedToLibrary({})
+      if (watchers.current === 0) {
+        setUnseen(true)
+        readyToast.current = toast.show({
+          text: 'Your estimate is ready.',
+          action: { label: 'View', to: '/log' },
+        })
+      }
     } catch (err) {
       if (!mounted.current) return
       setError(err instanceof Error ? err.message : 'Analysis failed')
+      // Nobody is looking at the Log page to see the error there, and the Log
+      // button has no "failed" state, so the toast is the only way they learn.
+      if (watchers.current === 0) {
+        toast.show({
+          text: "The estimate didn't come through.",
+          action: { label: 'See why', to: '/log' },
+        })
+      }
     } finally {
       if (mounted.current) {
         setAnalyzing(false)
@@ -335,6 +376,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     setSavedToLibrary({})
     setUnchangedRerun(null)
     setError(null)
+    setUnseen(false)
     lastSent.current = null
   }
 
@@ -372,6 +414,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
         audio,
         analyze,
         correctAssumption,
+        unseen,
+        watch,
         reset,
       }}
     >

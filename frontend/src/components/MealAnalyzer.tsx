@@ -63,6 +63,7 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
     audio,
     analyze,
     correctAssumption,
+    watch,
   } = useAnalysis()
   useLiveMessage(error)
 
@@ -72,6 +73,10 @@ export default function MealAnalyzer({ settings, onApply }: Props) {
   const [expanded, setExpanded] = useState(
     () => note !== '' || files.length > 0 || analyzing || analysis !== null,
   )
+
+  // While this is on screen the provider knows an estimate that lands has been
+  // seen, so it neither shows a toast nor puts "Ready" on the Log button.
+  useEffect(watch, [watch])
 
   // Leaving the page stops a recording in progress. The recorder lives in the
   // provider, so without this the mic would stay live on the next page; stopped,
