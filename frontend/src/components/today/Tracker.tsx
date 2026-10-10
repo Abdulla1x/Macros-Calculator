@@ -8,8 +8,8 @@ import type { ReactNode } from 'react'
  *
  *  The name is set in the section label, like KCAL LEFT, EATEN and MEALS, with
  *  its icon at 18 px. It used to be body-size bold, a second heading style on
- *  one page, and the owner found the page blurred together on the P40 (he
- *  picked this over four alternatives in a prototype). */
+ *  one page, and the page blurred together on a phone test (this was
+ *  picked over four alternatives in a prototype). */
 export default function Tracker({
   icon,
   title,

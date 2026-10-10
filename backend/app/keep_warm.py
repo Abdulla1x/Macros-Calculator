@@ -38,7 +38,7 @@ cron-job.org's pings used to wake a sleeping instance: measured 2026-09-04, a
 request abandoned at its 30 s cap still started the boot, and a request 60 s
 later answered in 0.89 s. Since 2026-09-11 the same job is refused with a ~1.3 s
 503 that starts nothing -- while an ordinary browser from a home connection
-still wakes it. On 2026-09-16 pings had been failing since 05:03 and the owner's
+still wakes it. On 2026-09-16 pings had been failing since 05:03 and my
 own page load woke the service at 08:05: same sleep duration, opposite outcome,
 so the discriminator is the CLIENT and not the waiting. A second pinger with a
 different client profile (`homecron`, a cron on an always-on home machine)
@@ -81,7 +81,7 @@ WINDOW_TZ_FALLBACK_OFFSET_HOURS = 4
 # The query markers a recognised pinger carries: /api/health?src=<marker>.
 #
 #   keepwarm   the cron-job.org job
-#   homecron   a cron on the owner's always-on home machine, added 2026-09-23
+#   homecron   a cron on my always-on home machine, added 2026-09-23
 #
 # An ALLOWLIST rather than "count whatever src happens to say". /api/health is
 # public and unauthenticated and `src` is deliberately unvalidated, so a dict

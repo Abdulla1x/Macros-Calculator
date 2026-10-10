@@ -124,7 +124,7 @@
    * right). A gauge first drawn fades its segments in (220ms); one that grows
    * afterwards sweeps: each new segment lights in the action colour and settles
    * to its fill (760ms, 45ms apart), so a bright edge runs along the gauge and
-   * leaves the new total behind (owner's pick from a prototype, after the P40
+   * leaves the new total behind (picked from a prototype, after a phone
    * test found the fade easy to miss). `backwards` keeps a delayed segment dark
    * until its turn instead of flashing on first. */
   --animate-segment-on: segment-on 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;

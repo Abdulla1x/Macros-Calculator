@@ -36,7 +36,7 @@ interface Props {
   /** A status line, always shown, small ("Next at 21:00"). */
   caption?: ReactNode
   /** Where the goal or a figure came from, behind "How is this worked out?"
-   *  (owner, P40 test: always-on explanations made the cards read as a
+   *  (after a phone test: always-on explanations made the cards read as a
    *  wall of text). */
   explanation?: ReactNode
   actions?: ReactNode
@@ -66,7 +66,7 @@ export default function DailyTrackerCard({
       value={
         valueText ?? (
           <span>
-            {/* Rolls like the calories figure (owner's pick, after the P40
+            {/* Rolls like the calories figure (picked after a phone
                 test found water and steps "static or sudden"). */}
             <span className="font-semibold">
               <RollingNumber value={value} />

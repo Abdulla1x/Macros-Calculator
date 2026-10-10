@@ -56,8 +56,8 @@ MAX_ATTACHED_FOODS = 10
 # app, failed attempts included (measured 2026-10-03/04 -- see
 # docs/ai-capacity-2026-10.md). These were 20 / 40 / 500, set for a tier ~25x
 # larger and never re-checked, which let one account's allowance equal the
-# whole app's day. Measured against the owner's own export (2026-10-04): at
-# most 10 analyses and 14 voice notes on his busiest days, so 12 and 16 leave
+# whole app's day. Measured against my own export (2026-10-04): at
+# most 10 analyses and 14 voice notes on my busiest days, so 12 and 16 leave
 # headroom without letting one account take the whole app's day.
 DEFAULT_DAILY_LIMIT = 12
 # Transcription is a cheaper call than analysis and a voice note usually

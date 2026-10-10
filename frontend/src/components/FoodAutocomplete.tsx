@@ -32,7 +32,7 @@ type Suggestion =
  * Canada), both as you type; then Open Food Facts for packaged products, on
  * request, because it is a slow third-party call with a shared rate limit.
  *
- * Picking a table or OFF row does NOT save it to the library any more (owner,
+ * Picking a table or OFF row does NOT save it to the library any more (decided
  * 2026-10-06): the tables are searched instantly anyway, and the library is
  * meant to hold foods the user chose. LogMeal offers the tick instead.
  *
@@ -182,7 +182,7 @@ export default function FoodAutocomplete({ value, onChange, onSelect }: Props) {
    *  back into the input from re-opening the panel it just closed.
    *
    *  Nothing is saved: an OFF pick used to be cached in the library here, and
-   *  that is what the owner turned off (see the component's docstring). */
+   *  that is what was turned off (see the component's docstring). */
   const choose = (suggestion: Suggestion) => {
     if (suggestion.kind === 'local') {
       pick(suggestion.food, true)

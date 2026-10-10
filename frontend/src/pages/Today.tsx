@@ -147,11 +147,11 @@ export default function Today() {
   // A save in the Log panel happens over this page, which never remounts.
   // A meal saved for the day on show is brought into view: the page goes to
   // the top, where the calories are, and only then takes the new meals, so the
-  // digits roll and the gauge fills where they can be seen (owner, P40: from
-  // further down the page the save changed nothing visible). The meals are
-  // fetched at once and held, not fetched after the scroll, so the wait is the
-  // longer of the two rather than both. A save for another day only refreshes:
-  // an edit can move a meal off the day on show.
+  // digits roll and the gauge fills where they can be seen (found on a phone
+  // test: from further down the page the save changed nothing visible). The
+  // meals are fetched at once and held, not fetched after the scroll, so the
+  // wait is the longer of the two rather than both. A save for another day
+  // only refreshes: an edit can move a meal off the day on show.
   useEffect(
     () => onMealsChanged((change) => load(change.date === viewedDate ? showTheTop() : undefined)),
     [load, viewedDate],
@@ -256,7 +256,7 @@ export default function Today() {
           through time, and a tracker that ignored them would be the only part
           of this screen showing a different day from the rest. */}
       <div className="grid content-start grid-cols-[minmax(0,1fr)]">
-        {/* Above the trackers on review day only (Mondays, owner 2026-10-10),
+        {/* Above the trackers on review day only (Mondays, decided 2026-10-10),
             and only while looking at today. */}
         {isToday && isReviewDay(realToday) && <ReviewCard today={realToday} />}
         {/* First: the one tracker every account has, and the one with a

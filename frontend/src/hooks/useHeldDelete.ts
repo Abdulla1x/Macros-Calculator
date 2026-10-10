@@ -12,7 +12,7 @@ const FOLD_MS = 280
  *  The server has no "restore": a deleted meal is gone. Deleting at once and
  *  having Undo re-create the meal would bring back a copy, with a new id, at
  *  the bottom of the list, and without its link to the AI estimate it came
- *  from (owner, 2026-10-10: hold it instead). So nothing is sent until the
+ *  from (decided 2026-10-10: hold it instead). So nothing is sent until the
  *  window ends, and Undo simply cancels.
  *
  *  The window also ends early, and the delete is sent, when the page that

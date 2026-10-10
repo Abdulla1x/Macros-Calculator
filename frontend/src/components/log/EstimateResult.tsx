@@ -33,7 +33,7 @@ const round = (value: number) => Math.round(value)
 /** An AI estimate, ready to save (DESIGN.md: AI estimate -> Result).
  *
  *  `save` mode is the Log panel: the result ends in "Save meal · N kcal", so an
- *  estimate that is right is saved without opening the form (owner,
+ *  estimate that is right is saved without opening the form (decided
  *  2026-10-10). "Check and edit first", or tapping any line, opens the by-hand
  *  form filled in, exactly as "Use these ingredients" did.
  *
