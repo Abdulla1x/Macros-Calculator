@@ -1,7 +1,7 @@
 import type { WeeklyReview } from '../types.ts'
 import { parseIsoDate } from './dates.ts'
 
-/** The review card's day (owner, 2026-10-10: Monday, the first day after a
+/** The review card's day (decided 2026-10-10: Monday, the first day after a
  *  full Monday-to-Sunday week). The review itself can be opened on any day;
  *  this only decides when Today brings it up. A setting for it is phase 3. */
 export function isReviewDay(today: string): boolean {

@@ -1,4 +1,4 @@
-// Teaching the AI box to be used well (UA-25, owner 2026-10-10: a nudge at the
+// Teaching the AI box to be used well (UA-25, decided 2026-10-10: a nudge at the
 // moment of a photo-only estimate, plus one dismissible tip card).
 //
 // Why it is worth a screen element at all, measured on the model evaluation:

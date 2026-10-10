@@ -253,7 +253,7 @@ export default function LogMeal() {
   }
 
   // A library pick is already saved, so the tick stays away. A table or Open
-  // Food Facts pick is NOT saved by picking (owner, 2026-10-06): the tick
+  // Food Facts pick is NOT saved by picking (decided 2026-10-06): the tick
   // appears for it, unticked, and saving it keeps the pick's source.
   const selectFood = (key: number, food: FoodCreate, fromLibrary: boolean) => {
     updateRow(key, {

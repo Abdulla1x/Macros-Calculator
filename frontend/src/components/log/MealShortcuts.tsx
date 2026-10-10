@@ -11,7 +11,7 @@ import { SearchIcon } from '@/ui/icons'
 import { logDate } from './logPanelUrl'
 import { useLogPanel } from './useLogPanel'
 
-// How many of each list show at first (owner, after the P40 test: six each
+// How many of each list show at first (after a phone test: six each
 // made the panel long, and a search reaches the rest). Three covers the meals
 // logged most often without pushing "Enter it by hand" off the first screen.
 const VISIBLE = 3
@@ -90,7 +90,7 @@ function MealRow({ name, detail, kcal, onPick }: { name: string; detail: string;
  *  a new meal on the panel's day; the original stays where it is.
  *
  *  Both lists start at three rows. The search is always there rather than
- *  behind "Show all" (owner, P40 test), and reaches every saved meal and the
+ *  behind "Show all" (after a phone test), and reaches every saved meal and the
  *  fifty most recent names, including the rows not on screen. Each list is
  *  hidden while it has nothing, and the whole block while both are empty. */
 export default function MealShortcuts() {

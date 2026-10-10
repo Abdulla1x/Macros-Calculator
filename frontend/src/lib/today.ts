@@ -32,7 +32,8 @@ export function dayTotals(meals: readonly Meal[]): DayTotals {
  *  sent until the server stops returning it. The held state ends when the
  *  line has folded away, 280 ms in, while the reload that drops the meal is
  *  still on its way: without the gone set, the meal counted again in that gap
- *  and the totals dropped, came back, then dropped again (owner, P40). */
+ *  and the totals dropped, came back, then dropped again (found on a phone
+ *  test). */
 export function shownMeals(meals: readonly Meal[], heldId: number | undefined, gone: ReadonlySet<number>): Meal[] {
   return meals.filter((meal) => meal.id === heldId || !gone.has(meal.id))
 }
@@ -127,7 +128,7 @@ export function changedDigits(prev: string, next: string): (number | null)[] {
   return turns
 }
 
-/** The time shown on a meal row, or null for none (owner, 2026-10-10).
+/** The time shown on a meal row, or null for none (decided 2026-10-10).
  *
  *  It is when the meal was LOGGED, the only time the app records, so it is
  *  shown only beside a meal logged on the day it was eaten, where the two are
