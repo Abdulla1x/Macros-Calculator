@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
-import { api } from '../api/client'
 import FoodAutocomplete from '../components/FoodAutocomplete'
 import MealAnalyzer from '../components/MealAnalyzer'
 import { useAnalysis } from '../analysis/AnalysisContext'
@@ -9,13 +8,22 @@ import { announceMealsChanged } from '../lib/mealEvents'
 import { useToast } from '../ui/toast'
 import { addDays, localIsoDate, parseIsoDate } from '../lib/dates'
 import type { LibraryContext } from '../lib/libraryMatch'
-import { findByName, matchItem, rowFieldsFromMatch } from '../lib/libraryMatch'
-import type { FoodSource } from '../lib/foodSources'
+import { findByName } from '../lib/libraryMatch'
+import {
+  emptyRow,
+  MAX_TEMPLATE_ITEMS,
+  mealTotals,
+  rowFromAnalyzedItem,
+  rowFromTotals,
+  rowIsValid,
+  rowsFromTemplate,
+  rowTotals,
+  type Row,
+} from '../lib/mealRows'
+import { saveMeal, saveTemplate } from '../lib/saveMeal'
 import { SOURCE_NAME, sourceAfterEdit } from '../lib/foodSources'
-import { num } from '../lib/parse'
 import { useSettings } from '../settings/SettingsContext'
 import type {
-  AnalyzedItem,
   Food,
   FoodCreate,
   Meal,
@@ -27,166 +35,6 @@ import Card from '../components/ui/Card'
 import TextInput from '../components/ui/TextInput'
 import Button from '../components/ui/Button'
 import { useLiveMessage } from '../hooks/useLiveMessage'
-
-interface Row {
-  key: number
-  name: string
-  weight: string
-  servingSize: string
-  calories: string
-  protein: string
-  carbs: string
-  fat: string
-  fromLibrary: boolean
-  saveToLibrary: boolean
-  /** Whose figures these are: a table or Open Food Facts when picked from the
-   *  autocomplete, else 'user'. Saved with the row if the tick is on, and
-   *  reset to 'user' by any number edit (updateRow). */
-  source: FoodSource
-}
-
-let rowCounter = 0
-const emptyRow = (): Row => ({
-  key: ++rowCounter,
-  name: '',
-  weight: '',
-  servingSize: '100',
-  calories: '',
-  protein: '',
-  carbs: '',
-  fat: '',
-  fromLibrary: false,
-  saveToLibrary: true,
-  source: 'user',
-})
-
-const rowIsValid = (row: Row) => {
-  const weight = num(row.weight)
-  const serving = num(row.servingSize)
-  const calories = num(row.calories)
-  const protein = num(row.protein)
-  const carbs = num(row.carbs)
-  const fat = num(row.fat)
-  return (
-    weight !== null && weight > 0 &&
-    serving !== null && serving > 0 &&
-    calories !== null && calories >= 0 &&
-    protein !== null && protein >= 0 &&
-    (row.carbs.trim() === '' || (carbs !== null && carbs >= 0)) &&
-    (row.fat.trim() === '' || (fat !== null && fat >= 0))
-  )
-}
-
-// Mirrors MAX_TEMPLATE_ITEMS in backend/app/schemas.py. Duplicated here only so
-// the user gets a sentence instead of a bare 422 — the server is the authority.
-const MAX_TEMPLATE_ITEMS = 30
-
-// Ingredients aren't persisted with a meal, so editing loads the stored totals
-// as one pass-through row: weight == serving size, so factor = 1 and the
-// macros come through unchanged (same trick applyAnalysis uses).
-//
-// Takes anything carrying a name and the four macros, which is a meal or a
-// template that has no items of its own.
-const rowFromTotals = (
-  source: Pick<Meal, 'name' | 'calories' | 'protein' | 'carbs' | 'fat'>,
-): Row => ({
-  ...emptyRow(),
-  name: source.name,
-  weight: '100',
-  servingSize: '100',
-  calories: String(source.calories),
-  protein: String(source.protein),
-  carbs: source.carbs == null ? '' : String(source.carbs),
-  fat: source.fat == null ? '' : String(source.fat),
-  saveToLibrary: false,
-})
-
-// Just the fields rowsFromTemplate actually reads, rather than a whole
-// MealTemplate -- the same narrowing rowFromTotals above already uses. It is
-// what lets a meal arriving in a share code, which has no id and was never a
-// row in this account, be applied by the identical function.
-type Applicable = Pick<
-  MealTemplate,
-  'name' | 'calories' | 'protein' | 'carbs' | 'fat' | 'items'
->
-
-// A template keeps its ingredient rows, so applying one restores each at the
-// weight it was saved at — which is the entire reason templates store items
-// rather than just totals: the rice stays adjustable on its own.
-//
-// A template saved while editing an existing meal has no items, only totals,
-// and so does every code made from a logged meal. Returning zero rows there
-// would open the form empty and then refuse to save, complaining about
-// ingredients the user never entered.
-const rowsFromTemplate = (template: Applicable): Row[] =>
-  template.items.length === 0
-    ? [rowFromTotals(template)]
-    : template.items.map((item) => ({
-        ...emptyRow(),
-        name: item.name,
-        weight: String(item.weight_grams),
-        servingSize: String(item.serving_size),
-        calories: String(item.calories),
-        protein: String(item.protein),
-        carbs: item.carbs == null ? '' : String(item.carbs),
-        fat: item.fat == null ? '' : String(item.fat),
-        saveToLibrary: false,
-      }))
-
-// One item of an AI estimate as a row. Two shapes, and which one you get is the
-// whole point of attaching a food:
-//
-//  * Unmatched -- the model estimated everything, so weight == serving size and
-//    factor = 1 passes its per-portion numbers through untouched (the same trick
-//    rowFromTotals uses).
-//  * Matched -- serving size and macros are the user's own saved figures while
-//    weight is the model's portion estimate, so rowTotals scales the one by the
-//    other. The AI estimated the portion; the library supplied the macros.
-const rowFromAnalyzedItem = (item: AnalyzedItem, attached: Food[]): Row => {
-  const matched = matchItem(item, attached)
-  if (!matched) {
-    return {
-      ...emptyRow(),
-      name: item.name,
-      weight: String(item.portion_grams),
-      servingSize: String(item.portion_grams),
-      calories: String(item.calories),
-      protein: String(item.protein),
-      carbs: item.carbs == null ? '' : String(item.carbs),
-      fat: item.fat == null ? '' : String(item.fat),
-      saveToLibrary: false,
-    }
-  }
-  const fields = rowFieldsFromMatch(item, matched)
-  return {
-    ...emptyRow(),
-    name: fields.name,
-    weight: String(fields.weight),
-    servingSize: String(fields.servingSize),
-    calories: String(fields.calories),
-    protein: String(fields.protein),
-    carbs: fields.carbs === null ? '' : String(fields.carbs),
-    fat: fields.fat === null ? '' : String(fields.fat),
-    // The row really did come from the library, so the badge it lights is true
-    // and the offer-to-cache tick correctly stays away: it is already saved.
-    fromLibrary: true,
-    saveToLibrary: false,
-  }
-}
-
-const rowTotals = (row: Row) => {
-  const factor = Number(row.weight) / Number(row.servingSize)
-  const scale = (value: string) => {
-    const parsed = num(value)
-    return parsed === null ? null : parsed * factor
-  }
-  return {
-    calories: (num(row.calories) ?? 0) * factor,
-    protein: (num(row.protein) ?? 0) * factor,
-    carbs: scale(row.carbs),
-    fat: scale(row.fat),
-  }
-}
 
 /** "Use your saved numbers", when a row's name is one of the user's foods.
  *
@@ -437,18 +285,7 @@ export default function LogMeal() {
   }
 
   const validRows = rows.filter(rowIsValid)
-  const totals = validRows.reduce(
-    (acc, row) => {
-      const t = rowTotals(row)
-      return {
-        calories: acc.calories + t.calories,
-        protein: acc.protein + t.protein,
-        carbs: t.carbs === null ? acc.carbs : (acc.carbs ?? 0) + t.carbs,
-        fat: t.fat === null ? acc.fat : (acc.fat ?? 0) + t.fat,
-      }
-    },
-    { calories: 0, protein: 0, carbs: null as number | null, fat: null as number | null },
-  )
+  const totals = mealTotals(rows)
 
   const save = async () => {
     if (!mealName.trim()) {
@@ -469,48 +306,16 @@ export default function LogMeal() {
     setSaving(true)
     setMessage(null)
     try {
-      const payload = {
+      const meal = await saveMeal({
+        rows,
+        name: mealName,
         date: mealDate,
-        name: mealName.trim(),
-        calories: Math.round(totals.calories * 100) / 100,
-        protein: Math.round(totals.protein * 100) / 100,
-        carbs: totals.carbs === null ? null : Math.round(totals.carbs * 100) / 100,
-        fat: totals.fat === null ? null : Math.round(totals.fat * 100) / 100,
-      }
-      const meal = editMeal
-        ? await api.updateMeal(editMeal.id, payload)
-        : await api.createMeal(payload)
-
-      // Whether the estimate in AnalysisProvider went into this meal (read
-      // before the link below clears analysisId).
+        editId: editMeal?.id ?? null,
+        analysisId,
+      })
+      // Whether the estimate in AnalysisProvider went into this meal.
       const usedEstimate = analysisId !== null
-      // Best-effort: remember which AI analysis this meal came from.
-      if (analysisId !== null) {
-        await api.linkAnalysis(analysisId, meal.id).catch(() => null)
-        setAnalysisId(null)
-      }
-
-      // Offer-to-cache: persist manually entered ingredients the user opted
-      // in on. Best-effort — the meal is already saved, and a failed library
-      // write must not surface as "Saving failed" (which would invite a
-      // duplicate re-save).
-      await Promise.all(
-        validRows
-          .filter((row) => !row.fromLibrary && row.saveToLibrary && row.name.trim())
-          .map((row) =>
-            api
-              .saveFood({
-                name: row.name.trim(),
-                serving_size: Number(row.servingSize),
-                calories: Number(row.calories),
-                protein: Number(row.protein),
-                carbs: num(row.carbs),
-                fat: num(row.fat),
-                source: row.source,
-              })
-              .catch(() => null),
-          ),
-      )
+      setAnalysisId(null)
 
       // The estimate outlives this screen, so one that went into this meal is
       // cleared (photos, note, the estimate itself), or the next meal would
@@ -560,25 +365,7 @@ export default function LogMeal() {
     setSavingTemplate(true)
     setMessage(null)
     try {
-      const saved = await api.saveMealTemplate({
-        name,
-        calories: Math.round(totals.calories * 100) / 100,
-        protein: Math.round(totals.protein * 100) / 100,
-        carbs: totals.carbs === null ? null : Math.round(totals.carbs * 100) / 100,
-        fat: totals.fat === null ? null : Math.round(totals.fat * 100) / 100,
-        items: validRows.map((row) => ({
-          // A row is valid without a name, but the API requires one on every
-          // item — so an unnamed ingredient gets a placeholder rather than a
-          // 422 the user has no way to interpret.
-          name: row.name.trim() || 'Ingredient',
-          weight_grams: Number(row.weight),
-          serving_size: Number(row.servingSize),
-          calories: Number(row.calories),
-          protein: Number(row.protein),
-          carbs: num(row.carbs),
-          fat: num(row.fat),
-        })),
-      })
+      const saved = await saveTemplate(rows, name)
       setMessage({
         kind: 'success',
         // Saving over a food corrects it; saving over a template throws away an
