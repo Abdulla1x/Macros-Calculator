@@ -1,4 +1,7 @@
+from app.db import get_engine
+from app.models import Meal as MealRow
 from app.routers.meals import RECENT_SCAN_ROWS
+from sqlalchemy.orm import Session
 from conftest import post_raw_json
 
 
@@ -115,6 +118,29 @@ def test_editing_does_not_rewrite_when_the_meal_was_logged(client):
     assert exported_after["created_at"] == exported_before["created_at"]
     assert exported_before["updated_at"] is None
     assert exported_after["updated_at"] is not None
+
+
+def test_a_meal_says_when_it_was_logged_in_utc(client):
+    created = client.post("/api/meals", json=_sample()).json()
+    # Returned with its zone, so a browser reads the right instant; a bare
+    # timestamp would be taken as local time and shift by the UTC offset.
+    assert created["created_at"].endswith("Z")
+    listed = client.get("/api/meals", params={"date": "2026-07-01"}).json()
+    assert listed[0]["created_at"] == created["created_at"]
+
+    # An edit moves updated_at, never the time it was logged.
+    edited = client.put(f"/api/meals/{created['id']}", json=_sample(calories=610)).json()
+    assert edited["created_at"] == created["created_at"]
+
+
+def test_a_meal_from_before_the_column_has_no_logged_time(client):
+    created = client.post("/api/meals", json=_sample()).json()
+    # Rows written before migration 0006 have no created_at, and none is made up.
+    with Session(get_engine()) as session:
+        session.get(MealRow, created["id"]).created_at = None
+        session.commit()
+    listed = client.get("/api/meals", params={"date": "2026-07-01"}).json()
+    assert listed[0]["created_at"] is None
 
 
 def test_update_meal_validates_and_404s(client):

@@ -1,5 +1,5 @@
 from datetime import date as date_type
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -115,6 +115,22 @@ class Meal(MealCreate):
     # silently reporting an unedited meal -- the from_attributes trap. Null is
     # the honest value for a meal with no recorded edit, not a missing one.
     updated_at: datetime | None
+    # When the row was written, which is when the meal was LOGGED -- not when
+    # it was eaten (that is `date`, and no time of eating is recorded). Today
+    # shows it beside a meal logged on its own day, where the two are close.
+    # Null for rows written before the column existed. No default, for the
+    # reason updated_at gives.
+    #
+    # Stored as naive UTC (models.utcnow); returned with its zone, so a client
+    # parsing it gets the right instant instead of reading it as local time.
+    created_at: datetime | None
+
+    @field_validator("created_at")
+    @classmethod
+    def created_at_is_utc(cls, value: datetime | None) -> datetime | None:
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=timezone.utc)
 
 
 # Bounds the size of MealTemplate.items_json. Named for the same reason

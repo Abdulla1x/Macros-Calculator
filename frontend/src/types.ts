@@ -313,9 +313,13 @@ export interface Meal {
    * silently make this a required field on every create form.
    */
   updated_at: string | null
+  /** When the meal was LOGGED (ISO, UTC), which is not when it was eaten:
+   *  only the day it was eaten is recorded. Null for meals logged before the
+   *  server kept this. Server-set, so omitted below too. */
+  created_at: string | null
 }
 
-export type MealCreate = Omit<Meal, 'id' | 'updated_at'>
+export type MealCreate = Omit<Meal, 'id' | 'updated_at' | 'created_at'>
 
 /** One ingredient row inside a saved template. */
 export interface TemplateItem {
