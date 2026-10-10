@@ -30,7 +30,7 @@ export const axisStroke = '#334155'
 export const gridStroke = '#1e293b'
 
 /** The next surface up: --color-raised, slate-800. The tooltip panel floats on
- *  it, and MacroRing's unfilled track is drawn in it.
+ *  it.
  *
  *  Identical to gridStroke today and kept as a separate name anyway, because
  *  index.css draws the same distinction: --color-line and --color-raised happen
@@ -93,7 +93,7 @@ export const activeDot = (fill: string) => ({
 })
 
 /** Per-macro hues, mirroring --color-calories/protein/carbs/fat. Consumed both
- *  as recharts props and as the plain `color` string MacroRing takes. */
+ *  as recharts props and as plain `color` strings. */
 export const macroHues = {
   calories: '#f59e0b',
   protein: '#34d399',

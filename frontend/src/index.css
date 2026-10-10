@@ -118,6 +118,32 @@
 
   /* The page changing: DESIGN.md's tab-change crossfade, 150ms. */
   --animate-route-in: route-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* DESIGN.md's catalogue, Today's two: a gauge segment lighting (220ms; the
+   * caller staggers them 35ms apart) and a changed digit rolling into place
+   * (320ms, 0.45em, 40ms apart from the right). `backwards` keeps a delayed
+   * segment dark until its turn instead of flashing on first. */
+  --animate-segment-on: segment-on 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-roll-up: roll-up 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-roll-down: roll-down 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes segment-on {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes roll-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+  }
+}
+@keyframes roll-down {
+  from {
+    opacity: 0;
+    transform: translateY(-0.45em);
+  }
 }
 
 @keyframes route-in {
@@ -143,6 +169,10 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --animate-route-in: route-in 120ms linear;
+    /* A short fade with no stagger, and numbers that simply change. */
+    --animate-segment-on: segment-on 120ms linear;
+    --animate-roll-up: none;
+    --animate-roll-down: none;
   }
 }
 
