@@ -243,7 +243,7 @@ Nearly square. Controls have a 5px radius, the Log button 7px, tags 3px, checkbo
 ### Blocks and rows
 - **Blocks:** no border, no background. A hairline rule along the bottom, with an optional section label and value in the label style.
 - **Rows:** at least 52px tall, with a chevron when they open something. Hairline rules between rows.
-- **Meal rows:** time (13px, ink 2) · name and detail · kcal (row number), 56px minimum. Tapping one opens the meal screen (Edit, Log it again, Share as a code, Keep as a saved meal, Delete).
+- **Meal rows:** time (13px, ink 2) · name and detail · kcal (row number), 56px minimum. The time is when the meal was **logged** (no time of eating is recorded), so it shows only beside a meal logged on the day it was eaten, and can be switched off; a list where no row has one carries no time column. Tapping one opens the meal screen (Edit, Log it again, Share as a code, Keep as a saved meal, Delete).
 
 ### Inputs
 - **Style:** field ground, 1.5px rule border, 5px radius, 44px tall. Number inputs use the condensed bold number face.
